@@ -6,21 +6,28 @@ Installed clients return structured patch proposals. Graph Engineering applies a
 
 ## Which AI can do what
 
-Graph Engineering uses an AI in five roles: a **worker** implements plan
+Graph Engineering uses an AI in six roles: a **worker** implements plan
 steps, the **tester** writes acceptance tests before them, the **reviewer**
 gates the finished change ([code review](code-review.md)), the **planner**
-breaks an objective into steps ([decomposition](decomposition.md)), and an
+breaks an objective into steps ([decomposition](decomposition.md)), the
+**auditor** runs `graph-engine security-audit` on a finished run (set with
+`graph-engine auditor <providerId>`; without one, the reviewer audits), and an
 **MCP client** retrieves project context while you work in it
 ([connecting an AI client](mcp-clients.md)). The current, honest position:
 
-| AI                                                              | Worker and tester                                                                                                              | Reviewer and planner                                           | MCP client                                                        |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Claude Code (installed)                                         | Yes. One bounded live proposal passed; a full Claude-managed repair is not claimed. Subscription mode fails closed on Windows. | No: installed agents cannot yet do it                          | Yes, with live retrieval recorded                                 |
-| Codex (installed)                                               | Not currently: installed `0.156.0` lacks the restricted read-root schema, so managed proposals are unavailable                 | No                                                             | Yes, with live retrieval recorded                                 |
-| Cursor (installed SDK)                                          | Adapter available behind an explicit `apiKeyEnv`; mocked fail-closed tests only, not live-tested                               | No                                                             | Yes; a direct stdio call passed, no in-app trace retained         |
-| Local OpenAI-compatible model (such as Qwen via oMLX or Ollama) | Yes; the worker path is live-tested with oMLX Qwen                                                                             | Yes                                                            | No: it is called by the engine, not itself an MCP client          |
-| OpenAI and Anthropic APIs                                       | Supported by the code as cloud providers; not live-tested here                                                                 | Supported by the code as cloud providers; not live-tested here | Not applicable                                                    |
-| Any other MCP client                                            | No                                                                                                                             | No                                                             | Yes, for retrieval; run tools only when the operator enables them |
+| AI                                                                      | Worker and tester                                                                                                              | Reviewer and planner                                            | Auditor                                                         | MCP client                                                        |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Claude Code (installed)                                                 | Yes. One bounded live proposal passed; a full Claude-managed repair is not claimed. Subscription mode fails closed on Windows. | No: installed agents cannot yet do it                           | No: installed agents cannot audit                               | Yes, with live retrieval recorded                                 |
+| Codex (installed)                                                       | Not currently: installed `0.156.0` lacks the restricted read-root schema, so managed proposals are unavailable                 | No                                                              | No                                                              | Yes, with live retrieval recorded                                 |
+| Cursor (installed SDK)                                                  | Adapter available behind an explicit `apiKeyEnv`; mocked fail-closed tests only, not live-tested                               | No                                                              | No                                                              | Yes; a direct stdio call passed, no in-app trace retained         |
+| Local OpenAI-compatible model (such as Qwen via oMLX or Ollama)         | Yes; the worker path is live-tested with oMLX Qwen                                                                             | Yes                                                             | Yes                                                             | No: it is called by the engine, not itself an MCP client          |
+| OpenAI and Anthropic APIs                                               | Supported by the code as cloud providers; not live-tested here                                                                 | Supported by the code as cloud providers; not live-tested here  | Supported by the code as cloud providers; not live-tested here  | Not applicable                                                    |
+| Any OpenAI-compatible chat API (`chat` kind, `--endpoint`, `apiKeyEnv`) | Supported by the code as a cloud provider; not live-tested here                                                                | Supported by the code as a cloud provider; not live-tested here | Supported by the code as a cloud provider; not live-tested here | Not applicable                                                    |
+| Any other MCP client                                                    | No                                                                                                                             | No                                                              | No                                                              | Yes, for retrieval; run tools only when the operator enables them |
+
+A `chat` provider is always treated as cloud, even at a loopback address: it
+needs an HTTPS endpoint on a host in `policy.allowedHosts` and a key in the
+environment variable `apiKeyEnv` names.
 
 Limits that apply across the table:
 
