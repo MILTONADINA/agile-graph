@@ -315,6 +315,12 @@ export interface SecurityAuditResult {
   reproducers: (ReproducerRun & { fingerprint: string })[];
   /** The threat model given to the hunter and verifiers, if one was found. */
   threatModel: { path: string; sha256: string } | null;
+  /**
+   * The run workspace's fingerprint when the audited diff was built. A
+   * reproducer runs only on that snapshot, never on a workspace changed
+   * after it.
+   */
+  snapshotHash: string;
   /** Records valid under Cloudflare's report schema, sorted by fingerprint. */
   findings: AuditRecord[];
   /** Verified candidates whose record failed the schema, and why. */
@@ -2191,6 +2197,9 @@ export class GraphEngine {
       policy,
       signal,
     });
+    // The snapshot the diff was built from: every reproducer must run on
+    // exactly this source, or it would test code the verifier never traced.
+    const auditedSnapshot = await workspaceFingerprint(run.workspace, policy);
     // A day's audits share one cost owner, so policy.maxTurns and
     // policy.maxCostUsd bound them apart from any run's own budget.
     const ownerId = `security-audit-${now().slice(0, 10)}`;
@@ -2326,6 +2335,7 @@ export class GraphEngine {
         workspace: run.workspace,
         written,
         auditor,
+        snapshot: auditedSnapshot,
         testFiles: sandbox?.testFiles ?? [...DEFAULT_TEST_FILES],
         signal,
       });
@@ -2439,6 +2449,7 @@ export class GraphEngine {
         threatModel: threatModel
           ? { path: threatModel.path, sha256: threatModel.sha256 }
           : null,
+        snapshotHash: auditedSnapshot,
         counts: {
           confirmed: findings.filter((item) => item.verdict === "confirmed")
             .length,
@@ -2483,12 +2494,13 @@ export class GraphEngine {
     workspace: string;
     written: string[];
     auditor: ProviderConfig;
+    /** The workspace fingerprint taken when the audited diff was built. */
+    snapshot: string;
     testFiles: string[];
     signal?: AbortSignal;
   }): (proposal: AuditReproducer) => Promise<ReproducerRun> {
-    const { workspace, written, auditor, testFiles, signal } = input;
+    const { workspace, written, auditor, snapshot, testFiles, signal } = input;
     let docker: Promise<boolean> | undefined;
-    let snapshot: string | undefined;
     return async (proposal) => {
       const policy = this.config.policy;
       const shown = {
@@ -2534,13 +2546,13 @@ export class GraphEngine {
           "Not run: Docker is not available, so the offline sandbox cannot run it.",
           { image: checked.image },
         );
-      const current = await workspaceFingerprint(workspace, policy);
-      snapshot ??= current;
-      if (current !== snapshot)
+      // Bound to the snapshot the audited diff was built from: a workspace
+      // edited or resumed since then holds code the verifier never traced.
+      if ((await workspaceFingerprint(workspace, policy)) !== snapshot)
         return done(
           "error",
-          "Not run: the run's workspace changed during the audit.",
-          { image: checked.image },
+          "Not run: the workspace changed since the audited diff was built, so the reproducer would not test the audited code.",
+          { image: checked.image, snapshotHash: snapshot },
         );
       try {
         const results = await (this.deps.verify ?? verifyInContainer)(
