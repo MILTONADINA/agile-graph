@@ -102,6 +102,7 @@ import {
   parseReviewedAssertions,
   reviewSupersession,
 } from "./memory-assertions.js";
+import { estimateTokens } from "../tokens.js";
 export { containsSecret } from "../policy.js";
 
 const execFileAsync = promisify(execFile);
@@ -120,9 +121,8 @@ const BUILTIN_EXCLUSIONS = [
   "**/.venv/**",
   "**/__pycache__/**",
 ];
-// A byte upper bound avoids claiming compatibility with a particular tokenizer.
-export const estimateTokens = (text: string): number =>
-  Buffer.byteLength(text, "utf8");
+// One conservative estimate for every token budget; see tokens.ts.
+export { estimateTokens };
 // Preserve portable path identity while still allowing .graph/project.json as
 // local context; worker policy separately protects execution-control metadata.
 const safePath = (path: string): boolean =>
