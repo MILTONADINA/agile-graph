@@ -39,6 +39,28 @@ type Lines = readonly string[];
 
 export const AGENT_CONFIG_TOOL = "agent-config";
 
+/**
+ * The OWASP MCP Top 10 (2025) risks each rule's findings bear on, carried as
+ * SARIF tags. The mapping, and what no rule covers, is in
+ * docs/mcp-security-coverage.md.
+ */
+export const AGENT_CONFIG_OWASP_MCP: Readonly<
+  Record<string, readonly string[]>
+> = Object.freeze({
+  "hook-command": ["MCP05:2025"],
+  "permission-widening": ["MCP02:2025", "MCP07:2025"],
+  "endpoint-override": ["MCP01:2025", "MCP04:2025"],
+  "mcp-server": ["MCP04:2025", "MCP09:2025"],
+  "auto-run-task": ["MCP05:2025"],
+  "prompt-injection": ["MCP03:2025", "MCP06:2025"],
+  "token-passthrough": ["MCP01:2025", "MCP07:2025"],
+});
+
+/** The tags a finding of `rule` carries: its OWASP MCP Top 10 IDs. */
+export const owaspMcpTags = (rule: string): string[] => [
+  ...(AGENT_CONFIG_OWASP_MCP[rule] ?? []),
+];
+
 export interface AgentConfigResult {
   findings: Finding[];
   /** Configuration files that could not be parsed, so were not checked. */
@@ -71,8 +93,14 @@ export function agentConfigFindings(
       });
       continue;
     }
-    for (const found of own.findings)
-      result.findings.push({ ...found, message: redact(found.message) });
+    for (const found of own.findings) {
+      const tags = owaspMcpTags(found.rule);
+      result.findings.push({
+        ...found,
+        message: redact(found.message),
+        ...(tags.length ? { tags } : {}),
+      });
+    }
     for (const entry of own.unscanned) result.unscanned.push(entry);
   }
   return result;
@@ -578,6 +606,55 @@ function serverIdentity(server: unknown): string {
   });
 }
 
+// Token passthrough: a server that hands the token its own caller presented
+// on to another server, so the downstream server accepts a credential that
+// was never issued for it (the MCP specification forbids this). Matched by
+// names only, conservatively: a variable named for an inbound authorization
+// header or token, used in a header or environment value, and keys or
+// command-line flags that name passthrough or forwarding of authorization.
+const INBOUND_TOKEN_NAME =
+  /^(?:HTTP_)?AUTHORIZATION$|^(?:INBOUND|INCOMING|CALLER|UPSTREAM|CLIENT|FORWARDED|PASSTHROUGH|PASS_THROUGH|REQUEST)_?(?:AUTH|AUTHORIZATION|BEARER|TOKEN|ACCESS_TOKEN|BEARER_TOKEN)$/i;
+const PLACEHOLDER =
+  /\$\{(?:env:|input:)?([A-Za-z_][A-Za-z0-9_]{0,99})\}|\$([A-Za-z_][A-Za-z0-9_]{0,99})/g;
+const PASSTHROUGH_KEY =
+  /^(?:pass[-_]?through|forward(?:ed)?)[-_]?(?:auth|authorization|token|tokens|bearer|headers?|credentials?)$|^(?:auth|authorization|token|bearer)[-_]?(?:pass[-_]?through|forwarding)$/i;
+const PASSTHROUGH_FLAG =
+  /^--?(?:pass-?through|forward)-(?:auth|authorization|token|tokens|bearer|headers?|credentials?)(?:=|$)|^--?(?:auth|token)-pass-?through(?:=|$)/i;
+
+/** The inbound-token variable names a value refers to. */
+function inboundTokenNames(value: unknown): string[] {
+  if (typeof value !== "string" || value.length > 2000) return [];
+  const names: string[] = [];
+  for (const match of value.matchAll(PLACEHOLDER)) {
+    const name = match[1] ?? match[2]!;
+    if (INBOUND_TOKEN_NAME.test(name)) names.push(name);
+  }
+  return names;
+}
+
+/** Why a server definition passes an inbound token on, or undefined. */
+export function tokenPassthrough(
+  server: Record<string, unknown>,
+): string | undefined {
+  for (const where of ["headers", "env"] as const) {
+    const values = server[where];
+    if (!isObject(values)) continue;
+    for (const [key, value] of Object.entries(values)) {
+      const names = inboundTokenNames(value);
+      if (names.length)
+        return `${where === "headers" ? "header" : "environment variable"} ${label(key)} carries the inbound token variable ${label(names[0]!)} (value not shown)`;
+    }
+  }
+  for (const [key, value] of Object.entries(server))
+    if (PASSTHROUGH_KEY.test(key) && value !== false && value !== null)
+      return `setting ${label(key)} forwards the caller's authorization`;
+  if (Array.isArray(server.args))
+    for (const arg of server.args)
+      if (typeof arg === "string" && PASSTHROUGH_FLAG.test(arg.slice(0, 100)))
+        return `argument ${label(arg.slice(0, 100).split("=")[0]!)} forwards the caller's authorization`;
+  return undefined;
+}
+
 function mcpFindings(file: string, lines: Lines, result: AgentConfigResult) {
   if (/\.toml$/i.test(file)) {
     for (const found of codexServers(file, lines)) result.findings.push(found);
@@ -605,17 +682,33 @@ function mcpFindings(file: string, lines: Lines, result: AgentConfigResult) {
     containers.push(["mcp", value.mcp, at.key("mcp")]);
   for (const [where, servers, keyLine] of containers) {
     if (!isObject(servers)) continue;
-    for (const [name, server] of Object.entries(servers))
+    for (const [name, server] of Object.entries(servers)) {
+      const line = at.key(name, undefined, keyLine - 1);
       result.findings.push(
         finding(
           "mcp-server",
           file,
-          at.key(name, undefined, keyLine - 1),
+          line,
           `MCP server ${label(name)} ${isObject(server) ? serverTarget(server) : "is declared"}`,
           `${where}.${label(name)}`,
           serverIdentity(server),
         ),
       );
+      const passthrough = isObject(server)
+        ? tokenPassthrough(server)
+        : undefined;
+      if (passthrough)
+        result.findings.push(
+          finding(
+            "token-passthrough",
+            file,
+            line,
+            `MCP server ${label(name)} passes an inbound authorization token on to the server it ${serverTarget(server as Record<string, unknown>).replace(/ \(arguments not shown\)$/, "")}: ${passthrough}. A server must use a token issued for it, not forward its caller's`,
+            `${where}.${label(name)}`,
+            serverIdentity(server),
+          ),
+        );
+    }
   }
 }
 
@@ -848,7 +941,7 @@ export function codexServers(file: string, lines: Lines): Finding[] {
         `${dotted[4]} = ${dotted[5]}`,
       );
   });
-  return [...servers].map(([name, { line, text: parts, env }]) => {
+  return [...servers].flatMap(([name, { line, text: parts, env }]) => {
     const text = parts.join("\n");
     const command = field("command", text);
     const url = field("url", text);
@@ -859,24 +952,45 @@ export function codexServers(file: string, lines: Lines): Finding[] {
       const key = TOML_ENV_KEY.exec(part);
       if (key) env.push(key[1] ?? key[2] ?? key[3]!);
     }
-    return finding(
-      "mcp-server",
-      file,
-      line,
-      `MCP server ${label(name)} ${serverTarget({
-        ...(command !== undefined ? { command } : {}),
-        ...(url !== undefined ? { url } : {}),
-      })}`,
-      `mcp_servers.${label(name)}`,
-      hash({
-        type: field("type", text) ?? null,
-        command: command ?? null,
-        args: bracketed("args", text, "[") ?? null,
-        url: url ?? null,
-        cwd: field("cwd", text) ?? null,
-        env: [...new Set(env)].sort(),
-      }),
-    );
+    const identity = hash({
+      type: field("type", text) ?? null,
+      command: command ?? null,
+      args: bracketed("args", text, "[") ?? null,
+      url: url ?? null,
+      cwd: field("cwd", text) ?? null,
+      env: [...new Set(env)].sort(),
+    });
+    const target = serverTarget({
+      ...(command !== undefined ? { command } : {}),
+      ...(url !== undefined ? { url } : {}),
+    });
+    const found = [
+      finding(
+        "mcp-server",
+        file,
+        line,
+        `MCP server ${label(name)} ${target}`,
+        `mcp_servers.${label(name)}`,
+        identity,
+      ),
+    ];
+    // Flags in args only; the env table's values are never read.
+    const flag = /["']\s*(--?[A-Za-z-]{1,60})(?:=[^"']*)?\s*["']/g;
+    for (const match of (bracketed("args", text, "[") ?? "").matchAll(flag))
+      if (PASSTHROUGH_FLAG.test(match[1]!)) {
+        found.push(
+          finding(
+            "token-passthrough",
+            file,
+            line,
+            `MCP server ${label(name)} passes an inbound authorization token on to the server it ${target.replace(/ \(arguments not shown\)$/, "")}: argument ${label(match[1]!)} forwards the caller's authorization. A server must use a token issued for it, not forward its caller's`,
+            `mcp_servers.${label(name)}`,
+            identity,
+          ),
+        );
+        break;
+      }
+    return found;
   });
 }
 

@@ -63,6 +63,12 @@ export interface McpCallRecord {
   tool: string;
   clientKind: "local" | "cloud";
   argsSha256: string;
+  /**
+   * SHA-256 of the called tool's definition (name, description and input
+   * schema) as the server exposed it; absent on entries logged before it was
+   * recorded.
+   */
+  definitionSha256?: string;
   outcome: McpCallOutcome | null;
   planId?: string;
   runId?: string;
@@ -73,6 +79,7 @@ interface McpCallRow {
   tool: string;
   client_kind: "local" | "cloud";
   args_sha256: string;
+  def_sha256?: string | null;
   outcome: McpCallOutcome | null;
   plan_id: string | null;
   run_id: string | null;
@@ -83,6 +90,7 @@ const mcpCallRecord = (row: McpCallRow): McpCallRecord => ({
   tool: row.tool,
   clientKind: row.client_kind,
   argsSha256: row.args_sha256,
+  ...(row.def_sha256 ? { definitionSha256: row.def_sha256 } : {}),
   outcome: row.outcome,
   ...(row.plan_id ? { planId: row.plan_id } : {}),
   ...(row.run_id ? { runId: row.run_id } : {}),
@@ -92,9 +100,11 @@ function selectMcpCalls(
   projectId: string,
   options: { limit: number; tool?: string },
 ): McpCallRecord[] {
+  // A log written before def_sha256 was added has no such column.
+  const definition = hasDefinitionColumn(db) ? ",def_sha256" : "";
   const rows = db
     .prepare(
-      `SELECT id,at,tool,client_kind,args_sha256,outcome,plan_id,run_id FROM mcp_calls WHERE project_id=?${options.tool === undefined ? "" : " AND tool=?"} ORDER BY seq DESC LIMIT ?`,
+      `SELECT id,at,tool,client_kind,args_sha256${definition},outcome,plan_id,run_id FROM mcp_calls WHERE project_id=?${options.tool === undefined ? "" : " AND tool=?"} ORDER BY seq DESC LIMIT ?`,
     )
     .all(
       ...(options.tool === undefined
@@ -102,6 +112,12 @@ function selectMcpCalls(
         : [projectId, options.tool, options.limit]),
     ) as McpCallRow[];
   return rows.map(mcpCallRecord);
+}
+
+function hasDefinitionColumn(db: Database.Database): boolean {
+  return (
+    db.prepare("PRAGMA table_info(mcp_calls)").all() as { name: string }[]
+  ).some((column) => column.name === "def_sha256");
 }
 
 /**
@@ -395,6 +411,10 @@ export class RunStore {
       CREATE TABLE IF NOT EXISTS mcp_calls(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,at TEXT NOT NULL,tool TEXT NOT NULL,client_kind TEXT NOT NULL,args_sha256 TEXT NOT NULL,outcome TEXT,plan_id TEXT,run_id TEXT);
       CREATE INDEX IF NOT EXISTS mcp_calls_tool ON mcp_calls(project_id,tool,seq);
       PRAGMA user_version = 5;`);
+        // Added within version 5 as a nullable column, so an older engine
+        // still opens and writes the same database.
+        if (!hasDefinitionColumn(this.db))
+          this.db.exec("ALTER TABLE mcp_calls ADD COLUMN def_sha256 TEXT");
       })
       .immediate();
     localProcessOwner();
@@ -1174,11 +1194,12 @@ export class RunStore {
     tool: string;
     clientKind: "local" | "cloud";
     argsSha256: string;
+    definitionSha256?: string;
   }): string {
     const callId = id();
     this.db
       .prepare(
-        "INSERT INTO mcp_calls(id,project_id,at,tool,client_kind,args_sha256,outcome,plan_id,run_id) VALUES(?,?,?,?,?,?,NULL,NULL,NULL)",
+        "INSERT INTO mcp_calls(id,project_id,at,tool,client_kind,args_sha256,def_sha256,outcome,plan_id,run_id) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL)",
       )
       .run(
         callId,
@@ -1187,6 +1208,7 @@ export class RunStore {
         entry.tool,
         entry.clientKind,
         entry.argsSha256,
+        entry.definitionSha256 ?? null,
       );
     return callId;
   }

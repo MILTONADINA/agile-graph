@@ -16,6 +16,8 @@ import {
   createMcpServer,
   enabledMcpTools,
   mcpArgsSha256,
+  mcpToolHashes,
+  mcpToolListingSha256,
   MCP_LIMITATION_NOTES,
   type McpLimitations,
   type McpServerOptions,
@@ -640,4 +642,72 @@ it("bounds a plan objective by MAX_PLAN_OBJECTIVE in plan_create, plan_decompose
   } finally {
     await app.close();
   }
+});
+
+it("hashes each exposed tool's name, description and input schema exactly as tools/list publishes them, and records the hash with each logged call", async () => {
+  const { engine, connect } = await fixture();
+  const options: McpServerOptions = { client: "local", allowRun: true };
+  const hashes = mcpToolHashes(createMcpServer(engine, options));
+  const client = await connect(options);
+  const { tools } = await client.listTools();
+  expect(Object.keys(hashes).sort()).toEqual(
+    tools.map((tool) => tool.name).sort(),
+  );
+  for (const tool of tools) {
+    expect(hashes[tool.name]).toMatch(/^[a-f0-9]{64}$/);
+    expect(hashes[tool.name]).toBe(mcpToolListingSha256(tool));
+  }
+  // A changed description is a changed definition.
+  const tool = tools.find((entry) => entry.name === "symbol_search")!;
+  expect(
+    mcpToolListingSha256({ ...tool, description: `${tool.description} ` }),
+  ).not.toBe(hashes.symbol_search);
+  await client.callTool({ name: "template_list", arguments: {} });
+  const [entry] = engine.store.mcpCalls({ limit: 1 });
+  expect(entry).toMatchObject({
+    tool: "template_list",
+    definitionSha256: hashes.template_list,
+  });
+});
+
+it("refuses to start when a pinned tool definition hash drifts or an exposed tool is unpinned, and ignores pins for tools not enabled", async () => {
+  const { engine } = await fixture();
+  const hashes = mcpToolHashes(createMcpServer(engine, { client: "cloud" }));
+  const all = mcpToolHashes(
+    createMcpServer(engine, { client: "local", allowRun: true }),
+  );
+  // Pins for optional tools this server does not enable are ignored.
+  expect(() =>
+    createMcpServer(engine, {
+      client: "cloud",
+      toolHashPins: [{ source: "pins", hashes: all }],
+    }),
+  ).not.toThrow();
+  expect(() =>
+    createMcpServer(engine, {
+      client: "cloud",
+      toolHashPins: [
+        { source: "pins", hashes: { ...hashes, context_get: "0".repeat(64) } },
+      ],
+    }),
+  ).toThrow(/Refusing to start.*pins; changed: context_get/);
+  const missing = Object.fromEntries(
+    Object.entries(hashes).filter(([name]) => name !== "symbol_search"),
+  );
+  expect(() =>
+    createMcpServer(engine, {
+      client: "cloud",
+      toolHashPins: [{ source: "pins", hashes: missing }],
+    }),
+  ).toThrow(/not pinned: symbol_search/);
+  // Every set must hold: a good project set does not excuse a bad flag set.
+  expect(() =>
+    createMcpServer(engine, {
+      client: "cloud",
+      toolHashPins: [
+        { source: "project", hashes },
+        { source: "--tool-hashes", hashes: missing },
+      ],
+    }),
+  ).toThrow(/--tool-hashes/);
 });

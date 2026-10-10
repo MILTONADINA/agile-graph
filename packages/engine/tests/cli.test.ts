@@ -1216,7 +1216,7 @@ describe("command line", () => {
     const mcpFailure = "stub: the MCP transport failed to connect";
     await writeFile(
       path.join(stubs, "mcp.mjs"),
-      `export async function serveMcp() { throw new Error(${JSON.stringify(mcpFailure)}); }\n`,
+      `export async function serveMcp() { throw new Error(${JSON.stringify(mcpFailure)}); }\nexport function createMcpServer() {}\nexport function mcpToolHashes() { return {}; }\n`,
     );
     // tsx registers in-thread hooks, and later ones resolve first.
     const failingMcp = path.join(stubs, "register.mjs");
@@ -1332,6 +1332,45 @@ describe("command line", () => {
     const refused = await graph("mcp", "--allow-tool", "run_delete");
     expect(refused.code).not.toBe(0);
     expect(refused.stderr).toContain("--allow-tool does not know run_delete");
+  }, 120_000);
+
+  it("lists tool definition hashes with mcp-tools --hashes and refuses to start mcp when a pinned hash in --tool-hashes or mcp.toolHashes drifts", async () => {
+    const { graph, root } = await project();
+    await graph("init");
+    const names = await graph("mcp-tools");
+    expect(names.code).toBe(0);
+    expect(JSON.parse(names.stdout)).toEqual(
+      expect.arrayContaining(["context_get", "symbol_search"]),
+    );
+    const listed = await graph("mcp-tools", "--hashes");
+    expect(listed.code).toBe(0);
+    const hashes = JSON.parse(listed.stdout) as Record<string, string>;
+    expect(hashes.context_get).toMatch(/^[a-f0-9]{64}$/);
+    // Optional tools count only when allowed, as for mcp.
+    expect(hashes.run_start).toBeUndefined();
+    const allowed = JSON.parse(
+      (await graph("mcp-tools", "--hashes", "--allow-tool", "run_start"))
+        .stdout,
+    ) as Record<string, string>;
+    expect(allowed.run_start).toMatch(/^[a-f0-9]{64}$/);
+    const drifted = { ...hashes, context_get: "0".repeat(64) };
+    const pins = path.join(root, "pins.json");
+    await writeFile(pins, JSON.stringify(drifted));
+    const refused = await graph("mcp", "--tool-hashes", pins);
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toContain("Refusing to start the MCP server");
+    expect(refused.stderr).toContain("--tool-hashes; changed: context_get");
+    const file = path.join(root, ".graph/project.json");
+    const config = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(
+      file,
+      JSON.stringify({ ...config, mcp: { toolHashes: drifted } }),
+    );
+    const projectRefused = await graph("mcp");
+    expect(projectRefused.code).not.toBe(0);
+    expect(projectRefused.stderr).toContain(
+      ".graph/project.json mcp.toolHashes; changed: context_get",
+    );
   }, 120_000);
 
   // A run database this engine refuses to open must end the command, not

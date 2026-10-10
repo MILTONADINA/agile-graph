@@ -107,6 +107,13 @@ Teams need security tools chosen for what their repository actually contains, wi
   - Test: packages/engine/tests/execution.test.ts :: warns when a run starts that a changed lockfile would stop it for want of a dependency database
 - AC28: A scan error names no host path: the scan's temporary work directory, the data directory holding the OSV database and the repository root (each also in its resolved form) are replaced with `<tmp>`, `<data>` and `<repo>` before the error is stored or exported, so a tool that writes no report leaves no absolute path in the SARIF.
   - Test: packages/engine/tests/security-scan-redaction.test.ts :: leaves no absolute host path in the scan errors or the SARIF
+- AC29: Every `agent-config` finding carries `tags`, the OWASP MCP Top 10 (2025) IDs its rule bears on (such as `MCP05:2025` for `hook-command`), and SARIF output carries them in each result's `properties.tags` and in its rule's `properties.tags`. Tags are not part of the fingerprint. `docs/mcp-security-coverage.md` maps every rule and MCP server guard to MCP01 through MCP10, with the gaps of each.
+  - Test: packages/engine/tests/security-owasp-mcp.test.ts :: tags every agent-config finding with its rule's OWASP MCP Top 10 IDs and carries them into SARIF results and rules
+  - Test: packages/engine/tests/security-owasp-mcp.test.ts :: maps every agent-config rule in docs/mcp-security-coverage.md, with every OWASP MCP ID listed
+- AC30: Rule `token-passthrough` reports, as its own finding beside the server's `mcp-server` finding, an MCP server that forwards its caller's authorization: a header or environment value referring to an inbound-token variable (`AUTHORIZATION`, `HTTP_AUTHORIZATION`, or a name such as `INBOUND_TOKEN` or `CALLER_AUTHORIZATION`), a passthrough or forwarding setting (such as `forwardAuthorization: true`), or a passthrough flag in its arguments (such as `--pass-through-auth` or `--forward-token`, also in `.codex/config.toml`). It names the server, the header, variable, setting or flag and the downstream host only, never a value; a server's own API key variable, an unrelated variable or a setting set to false is not reported.
+  - Test: packages/engine/tests/security-owasp-mcp.test.ts :: flags a server forwarding an inbound authorization header, passthrough setting or flag, naming no value
+  - Test: packages/engine/tests/security-owasp-mcp.test.ts :: stays quiet on a server using its own key or an unrelated variable
+  - Test: packages/engine/tests/security-owasp-mcp.test.ts :: flags a passthrough flag in a Codex config.toml server's args
 
 ## Security considerations
 

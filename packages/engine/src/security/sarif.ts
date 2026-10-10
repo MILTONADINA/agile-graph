@@ -12,7 +12,7 @@ export const SARIF_SOURCE_ROOT = "%SRCROOT%";
 
 type SarifFinding = Pick<
   SecurityFinding,
-  "tool" | "rule" | "path" | "line" | "message" | "fingerprint"
+  "tool" | "rule" | "path" | "line" | "message" | "fingerprint" | "tags"
 >;
 
 /**
@@ -49,13 +49,22 @@ export function toSarif(
     unscanned?: readonly { path: string; reason: string }[];
   } = {},
 ) {
-  const rules: { id: string; name: string }[] = [];
+  const rules: {
+    id: string;
+    name: string;
+    properties?: { tags: string[] };
+  }[] = [];
   const ruleIds = new Set<string>();
   const results = findings.map((finding) => {
     const ruleId = `${finding.tool}/${finding.rule}`;
+    const tags = finding.tags?.length ? [...finding.tags] : undefined;
     if (!ruleIds.has(ruleId)) {
       ruleIds.add(ruleId);
-      rules.push({ id: ruleId, name: finding.rule });
+      rules.push({
+        id: ruleId,
+        name: finding.rule,
+        ...(tags ? { properties: { tags } } : {}),
+      });
     }
     return {
       ruleId,
@@ -79,7 +88,7 @@ export function toSarif(
               : ("unchanged" as const),
           }
         : {}),
-      properties: { tool: finding.tool },
+      properties: { tool: finding.tool, ...(tags ? { tags } : {}) },
     };
   });
   const errors = options.errors ?? [];
