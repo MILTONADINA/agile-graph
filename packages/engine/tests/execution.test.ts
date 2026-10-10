@@ -30,6 +30,7 @@ import {
 import { GraphEngine } from "../src/service.js";
 import { applyProposal } from "../src/execution/workspace.js";
 import { invokeApiWorker } from "../src/workers/api.js";
+import { findingId } from "../src/workers/review.js";
 import { checked, writeJson } from "../src/util.js";
 import * as util from "../src/util.js";
 import { RunStore } from "../src/store.js";
@@ -2228,6 +2229,76 @@ describe("security gate", () => {
     expect(events.at(-1)?.type).toBeDefined();
   });
 
+  it("summarizes security findings past the first 20 and records which earlier findings were fixed", async () => {
+    const feedback: (string | undefined)[] = [];
+    // Scanner fingerprints are hex digests; they must survive storage as
+    // they are to be compared on the next scan.
+    const print = (index: number) => index.toString(16).padStart(32, "a");
+    const many = Array.from({ length: 23 }, (_, index) => ({
+      ...finding(print(index)),
+      rule: index < 21 ? "javascript.eval-detected" : "javascript.other",
+    }));
+    let scans = 0;
+    const { result, events } = await run(
+      ["accepted"],
+      async () => ({
+        tools: ["semgrep"],
+        findings: ++scans === 1 ? many : [many[0]!],
+        errors: [],
+        unscanned: [],
+      }),
+      2,
+      async (input) => {
+        feedback.push(input.feedback);
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            requests: [],
+            changes: [
+              feedback.length === 1
+                ? { path: "math.cjs", before: "a - b", after: "a + b" }
+                : {
+                    path: "math.cjs",
+                    before: "a + b;",
+                    after: "a + b; // no eval",
+                  },
+            ],
+          },
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: false,
+          },
+        };
+      },
+    );
+    expect(result.status).toBe("failed");
+    const listed = feedback[1]!
+      .split("\n")
+      .filter((line) => line.startsWith("- math.cjs"));
+    expect(listed).toHaveLength(20);
+    expect(feedback[1]).toContain(
+      "- and 3 more: semgrep javascript.eval-detected (1), semgrep javascript.other (2)",
+    );
+    const scansCompleted = events.filter(
+      (event) => event.type === "security.scan_completed",
+    );
+    expect(scansCompleted[0]?.data.new).toContainEqual(
+      expect.objectContaining({ fingerprint: print(0) }),
+    );
+    const verified = events.filter(
+      (event) => event.type === "security.verify_fix",
+    );
+    expect(verified).toHaveLength(1);
+    expect(verified[0]!.data).toEqual({
+      fixed: many.slice(1).map((item) => item.fingerprint),
+      stillPresent: [print(0)],
+    });
+  });
+
   it("gates dependency advisories only on lockfiles the run changed", async () => {
     const advisory = (lockfile: string) => async () => ({
       tools: ["osv-scanner"],
@@ -2533,8 +2604,14 @@ describe("code review gate", () => {
     criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "a + b" }],
     findings: [],
   };
+  type FixCheck = {
+    verdict: "fixed" | "still_present" | "inconclusive";
+    evidence: string;
+  };
   const setup = async (options: {
     reviews: (Review | Error)[];
+    /** Answers for checks of earlier findings; each defaults to fixed. */
+    fixChecks?: FixCheck[];
     reviewer?: { kind: "local" | "openai" };
     attempts?: number;
     extraChanges?: { path: string; before: null; after: string }[];
@@ -2569,7 +2646,9 @@ describe("code review gate", () => {
     });
     const feedback: (string | undefined)[] = [];
     const reviewed: string[] = [];
+    const fixChecked: { id: string; diff: string }[] = [];
     const reviews = [...options.reviews];
+    const fixChecks = [...(options.fixChecks ?? [])];
     await options.prepare?.(root);
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
@@ -2606,6 +2685,14 @@ describe("code review gate", () => {
         if (next instanceof Error) throw next;
         return { review: next, model: "reviewer-fixture", usage };
       },
+      verifyFix: async (input) => {
+        fixChecked.push({ id: input.finding.id, diff: input.diff });
+        return {
+          result: fixChecks.shift() ?? { verdict: "fixed", evidence: "gone" },
+          model: "reviewer-fixture",
+          usage,
+        };
+      },
     });
     engines.push(engine);
     const plan = await engine.createPlan({
@@ -2622,6 +2709,7 @@ describe("code review gate", () => {
       result,
       feedback,
       reviewed,
+      fixChecked,
       events: engine.store.events(result.id),
     };
   };
@@ -2808,6 +2896,118 @@ describe("code review gate", () => {
     expect(feedback[1]).toContain(
       "Blocking in math.test.cjs:1: Add a test for another sum",
     );
+  });
+
+  it("re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed", async () => {
+    const blocking = {
+      severity: "blocking" as const,
+      path: "math.test.cjs",
+      line: 1,
+      message: "Add a test for another sum",
+    };
+    const { result, feedback, reviewed, fixChecked, events } = await setup({
+      reviews: [
+        {
+          verdict: "request-changes",
+          summary: "Needs a second test",
+          criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "ok" }],
+          findings: [
+            blocking,
+            {
+              severity: "advisory",
+              path: null,
+              line: null,
+              message: "Name the test",
+            },
+          ],
+        },
+        approve,
+      ],
+      fixChecks: [
+        { verdict: "still_present", evidence: "Only one sum is tested" },
+        { verdict: "fixed", evidence: "A second sum is tested" },
+      ],
+    });
+    expect(result.error ?? "").toBe("");
+    expect(result.status).toBe("succeeded");
+    const id = findingId(blocking);
+    // The finding's ID is recorded with it, and every check names it.
+    const completed = events.filter(
+      (event) => event.type === "review.completed",
+    );
+    expect(completed[0]!.data.findings).toContainEqual(
+      expect.objectContaining({ id, severity: "blocking" }),
+    );
+    expect(fixChecked.map((check) => check.id)).toEqual([id, id]);
+    // Attempt 2's unfixed finding failed the review with no full review;
+    // attempt 3's fixed one let the full review run.
+    expect(reviewed).toHaveLength(2);
+    expect(
+      events
+        .filter((event) => event.type === "review.verify_fix")
+        .map((event) => event.data),
+    ).toEqual([
+      {
+        findingId: id,
+        verdict: "still_present",
+        evidence: "Only one sum is tested",
+      },
+      { findingId: id, verdict: "fixed", evidence: "A second sum is tested" },
+    ]);
+    expect(completed.map((event) => event.data.stage ?? "review")).toEqual([
+      "review",
+      "verify-fix",
+      "review",
+    ]);
+    expect(completed[1]!.data).toMatchObject({
+      passed: false,
+      findings: [expect.objectContaining({ id })],
+    });
+    expect(feedback[1]).toContain(
+      "Optional advisory findings (not required to pass review):",
+    );
+    expect(feedback[2]).toContain(
+      `- Blocking in math.test.cjs:1: Add a test for another sum (finding ${id}; still present: Only one sum is tested)`,
+    );
+  });
+
+  it("lets a person approve a run that stopped at an unfixed earlier finding", async () => {
+    const { engine, result, reviewed, events } = await setup({
+      attempts: 2,
+      reviews: [
+        {
+          verdict: "request-changes",
+          summary: "Needs a second test",
+          criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "ok" }],
+          findings: [
+            {
+              severity: "blocking",
+              path: "math.test.cjs",
+              line: 1,
+              message: "Add a test for another sum",
+            },
+          ],
+        },
+      ],
+      fixChecks: [{ verdict: "still_present", evidence: "One sum" }],
+    });
+    expect(result.status).toBe("failed");
+    expect(reviewed).toHaveLength(1);
+    expect(
+      events.filter((event) => event.type === "review.completed").at(-1)?.data,
+    ).toMatchObject({ passed: false, stage: "verify-fix" });
+    await engine.approveReview(result.id, "I checked the tests myself");
+    await engine.resume(result.id, true);
+    const resumed = await engine.wait(result.id);
+    expect(resumed.error ?? "").toBe("");
+    expect(resumed.status).toBe("succeeded");
+    // The person's approval stood in: no further fix check or review ran.
+    expect(reviewed).toHaveLength(1);
+    expect(
+      engine.store
+        .events(result.id)
+        .filter((event) => event.type === "review.verify_fix"),
+    ).toHaveLength(1);
   });
 
   it("does not accept an approval with a criterion it could not confirm", async () => {

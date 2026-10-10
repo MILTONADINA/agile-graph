@@ -1290,7 +1290,29 @@ describe("managed DAG safety boundaries", () => {
         },
       };
     });
-    const engine = await open(root, { worker, review });
+    // A retry first checks the earlier blocking finding in its own call;
+    // the full review runs again only once that finding is fixed.
+    const verifyFix: NonNullable<EngineDependencies["verifyFix"]> = async (
+      input,
+    ) => {
+      reviewed.push(input.diff);
+      const fixed = input.diff.includes("+export const second = 6;");
+      return {
+        result: {
+          verdict: fixed ? ("fixed" as const) : ("still_present" as const),
+          evidence: "diff",
+        },
+        model: "reviewer-fixture",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cachedTokens: 0,
+          costUsd: 0,
+          estimated: false,
+        },
+      };
+    };
+    const engine = await open(root, { worker, review, verifyFix });
     const planned = await plan(engine, [step("one"), step("two", ["one"])]);
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).toBe("failed");
@@ -1303,7 +1325,9 @@ describe("managed DAG safety boundaries", () => {
     expect(repairs).toBe(2);
     // One review of the unchanged combined result, then one of the new
     // repair: the retained repair is not checked and reviewed a second time.
-    expect(reviewed).toHaveLength(4);
+    // Each review of a retry starts with a check of the earlier finding,
+    // and the new repair's is followed by the full review.
+    expect(reviewed).toHaveLength(5);
     const events = engine.store.events(run.id).slice(before);
     expect(
       events

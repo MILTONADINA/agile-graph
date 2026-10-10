@@ -97,9 +97,17 @@ import {
 } from "./execution/generator.js";
 import { publishRun } from "./execution/publish.js";
 import {
+  findingId,
   invokeReviewWorker,
+  invokeVerifyFix,
+  priorBlockingFindings,
   reviewOutcome,
+  VERIFY_FIX_LIMIT,
+  verifyFixFeedback,
+  type PriorFinding,
   type ReviewInput,
+  type VerifyFixInput,
+  type VerifyFixResult,
   type WorkerReview,
 } from "./workers/review.js";
 import {
@@ -191,6 +199,15 @@ export interface EngineDependencies {
     model: string;
     usage: Usage;
   }>;
+  /**
+   * Checks whether one earlier review finding is fixed; defaults to a fresh
+   * call to the configured reviewer's API.
+   */
+  verifyFix?: (input: VerifyFixInput) => Promise<{
+    result: VerifyFixResult;
+    model: string;
+    usage: Usage;
+  }>;
   /** Proposes plan steps; defaults to the planner provider's API. */
   planner?: (input: PlanInput) => Promise<{
     decomposition: Decomposition;
@@ -203,6 +220,21 @@ export interface EngineDependencies {
     profile: ProjectProfile;
     signal?: AbortSignal;
   }) => Promise<SecurityScan>;
+}
+// Findings past the ones listed in full, counted by tool and rule, so the
+// worker knows how much is left rather than seeing them silently dropped.
+function securityOverflow(
+  rest: readonly { tool: string; rule: string }[],
+): string[] {
+  if (!rest.length) return [];
+  const counts = new Map<string, number>();
+  for (const { tool, rule } of rest)
+    counts.set(`${tool} ${rule}`, (counts.get(`${tool} ${rule}`) ?? 0) + 1);
+  return [
+    `- and ${rest.length} more: ${[...counts]
+      .map(([key, count]) => `${key} (${count})`)
+      .join(", ")}`,
+  ];
 }
 // The scanner image graph-engine security-scan builds and uses by default.
 export const SECURITY_SCAN_IMAGE = "graph-security:local";
@@ -813,8 +845,23 @@ export class GraphEngine {
       ? recorded.data.providerId
       : undefined;
   }
-  // Reviews share the run's worker slots, turn budget and cost reservations.
-  private async invokeReviewer(input: ReviewInput, plan: ExecutionPlan) {
+  // Reviews, and checks of earlier findings, share the run's worker slots,
+  // turn budget and cost reservations.
+  private invokeReviewer(input: ReviewInput, plan: ExecutionPlan) {
+    return this.reviewerCall(input, plan, () =>
+      (this.deps.review ?? invokeReviewWorker)(input),
+    );
+  }
+  private invokeFixCheck(input: VerifyFixInput, plan: ExecutionPlan) {
+    return this.reviewerCall(input, plan, () =>
+      (this.deps.verifyFix ?? invokeVerifyFix)(input),
+    );
+  }
+  private async reviewerCall<T extends { usage: Usage }>(
+    input: Pick<ReviewInput, "provider" | "policy" | "signal">,
+    plan: ExecutionPlan,
+    call: () => Promise<T>,
+  ): Promise<T> {
     await this.assertCurrentPlanVerification(plan);
     const callId = `worker-review-${id()}`;
     const started = Date.now();
@@ -840,7 +887,7 @@ export class GraphEngine {
         input.policy.maxCostUsd,
         input.policy.maxTurns,
       );
-      const result = await (this.deps.review ?? invokeReviewWorker)(input);
+      const result = await call();
       this.store.settleCall(plan.id, callId, input.provider.id, result.usage);
       return result;
     } finally {
@@ -2329,6 +2376,7 @@ export class GraphEngine {
               by: "person",
               passed: true,
               verdict: "approved-by-person",
+              snapshotHash,
               summary: String(approval.data.note ?? ""),
               note: "A person approved this snapshot in place of the reviewer; human acceptance is recorded separately.",
             },
@@ -2446,12 +2494,102 @@ export class GraphEngine {
             { cause: error },
           );
         }
+        // A retry first checks the latest AI review's blocking findings, one
+        // fresh call each, so the reviewer never confirms its own finding
+        // inside a review looking for new ones. Any not shown fixed fails
+        // the review without a full review; it runs once all are fixed.
+        const prior = priorBlockingFindings(
+          this.store
+            .events(run.id)
+            .filter((event) => event.type === "review.completed")
+            .at(-1)?.data,
+        );
         this.store.event(
           run.id,
           "review.started",
-          { providerId: reviewer.id },
+          {
+            providerId: reviewer.id,
+            snapshotHash,
+            ...(prior.length ? { priorFindings: prior.length } : {}),
+          },
           stepId,
         );
+        if (prior.length) {
+          const unfixed: { finding: PriorFinding; check: VerifyFixResult }[] =
+            [];
+          try {
+            for (const [index, finding] of prior.entries()) {
+              const check: VerifyFixResult =
+                index < VERIFY_FIX_LIMIT
+                  ? (
+                      await this.invokeFixCheck(
+                        {
+                          provider: reviewer,
+                          policy,
+                          objective: run.plan.objective,
+                          finding,
+                          diff,
+                          signal,
+                        },
+                        run.plan,
+                      )
+                    ).result
+                  : {
+                      verdict: "inconclusive",
+                      evidence: `Not checked: a review checks at most ${VERIFY_FIX_LIMIT} earlier findings`,
+                    };
+              run.usage = this.store.usage(run.plan.id);
+              const evidence = redact(check.evidence);
+              this.store.event(
+                run.id,
+                "review.verify_fix",
+                { findingId: finding.id, verdict: check.verdict, evidence },
+                stepId,
+              );
+              if (check.verdict !== "fixed")
+                unfixed.push({ finding, check: { ...check, evidence } });
+            }
+          } catch (error) {
+            if (signal.aborted) throw error;
+            throw new Error(
+              `Code review did not complete: ${redact(errorMessage(error))}`,
+              { cause: error },
+            );
+          }
+          if (unfixed.length) {
+            const feedback = verifyFixFeedback(unfixed, prior.length);
+            // Recorded as a failed review, so the board, a person's approval
+            // and the next retry see where the run stopped; the next retry
+            // checks only the findings still listed here.
+            this.store.event(
+              run.id,
+              "review.completed",
+              {
+                providerId: reviewer.id,
+                passed: false,
+                verdict: "request-changes",
+                stage: "verify-fix",
+                snapshotHash,
+                summary: `${unfixed.length} of ${prior.length} earlier blocking finding(s) are not shown to be fixed`,
+                criteria: [],
+                findings: unfixed.map(({ finding }) => ({
+                  severity: "blocking",
+                  path: finding.path,
+                  line: finding.line,
+                  message: redact(finding.message),
+                  id: finding.id,
+                })),
+                note: "A reviewer can hold a change back but not accept it; human acceptance stays pending.",
+              },
+              stepId,
+            );
+            return {
+              passed: false,
+              feedback,
+              exportable: exportable && !containsSecret(feedback),
+            };
+          }
+        }
         let result: Awaited<ReturnType<typeof invokeReviewWorker>>;
         try {
           result = await this.invokeReviewer(
@@ -2485,6 +2623,7 @@ export class GraphEngine {
             model: result.model,
             passed: outcome.passed,
             verdict: result.review.verdict,
+            snapshotHash,
             summary: redact(result.review.summary),
             criteria: result.review.criteria.map((criterion) => ({
               met: criterion.met,
@@ -2493,6 +2632,7 @@ export class GraphEngine {
             findings: result.review.findings.map((finding) => ({
               ...finding,
               message: redact(finding.message),
+              id: findingId(finding),
             })),
             note: "A reviewer can hold a change back but not accept it; human acceptance stays pending.",
           },
@@ -2577,17 +2717,24 @@ export class GraphEngine {
         const advisory = unreviewed.filter(
           (finding) => !fresh.includes(finding),
         );
+        // The earlier scan in this run, read before this one is recorded.
+        const previousScan = this.store
+          .events(run.id)
+          .filter((event) => event.type === "security.scan_completed")
+          .at(-1);
         this.store.event(run.id, "security.scan_completed", {
           tools: scan.tools,
           findings: scan.findings.length,
+          snapshotHash: verifiedHash,
           new: fresh
             .slice(0, 200)
-            .map(({ tool, rule, path, line, message }) => ({
+            .map(({ tool, rule, path, line, message, fingerprint }) => ({
               tool,
               rule,
               path,
               line,
               message: redact(message),
+              fingerprint,
             })),
           errors: scan.errors.map(redact),
           unscanned: scan.unscanned,
@@ -2604,6 +2751,22 @@ export class GraphEngine {
               }
             : {}),
         });
+        // Informational: whether the earlier scan's new findings are gone.
+        // The gate itself blocks on whatever is still new, by fingerprint.
+        if (previousScan) {
+          const before = (
+            Array.isArray(previousScan.data.new) ? previousScan.data.new : []
+          )
+            .map(
+              (finding) => (finding as { fingerprint?: unknown }).fingerprint,
+            )
+            .filter((value): value is string => typeof value === "string");
+          const present = new Set(fresh.map((finding) => finding.fingerprint));
+          this.store.event(run.id, "security.verify_fix", {
+            fixed: before.filter((value) => !present.has(value)),
+            stillPresent: before.filter((value) => present.has(value)),
+          });
+        }
         if (scan.errors.length)
           throw new Error(
             `Security scan was incomplete, so the result cannot be accepted: ${redact(scan.errors.join("; "))}`,
@@ -2636,6 +2799,7 @@ export class GraphEngine {
                 ({ tool, rule, path, line, message }) =>
                   `- ${path}${line ? `:${line}` : ""} [${tool} ${rule}] ${redact(message).slice(0, 300)}`,
               ),
+            ...securityOverflow(fresh.slice(20)),
           ].join("\n"),
           exportable: fresh.every((finding) =>
             isAllowedPath(finding.path, this.config.policy, true),

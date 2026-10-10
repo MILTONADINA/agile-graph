@@ -59,6 +59,27 @@ blocking findings become the next attempt's feedback, within
 `policy.maxAttempts`, exactly as failed checks do; a run that still does not
 pass fails with a message naming code review, never "checks failed".
 
+Each finding gets an engine-assigned ID, `R` and the first 10 hex characters
+of the SHA-256 of its path, line and whitespace-normalized message, recorded
+with it and named in the feedback. A failing review's feedback also lists its
+advisory findings, under a section marked optional; a passing review sends
+nothing back.
+
+On a retry, when the run's latest AI review asked for changes with blocking
+findings, the next review first checks each of them (at most 20; any more
+count as inconclusive) in a fresh, separate call to the reviewer that carries
+only that finding, the task and the current diff, and answers `fixed`,
+`still_present` or `inconclusive` with evidence. These calls have the same
+refusals, worker slots and cost reservations as a review, and each is
+recorded as a `review.verify_fix` event. If any finding is not shown fixed,
+the review fails without a full review: a failed `review.completed` (with
+`stage: "verify-fix"`) lists the unfixed findings, which are what the next
+retry checks, and the feedback names each by ID with its evidence. The full
+review runs only once all are fixed, so the reviewer never confirms its own
+finding inside a review looking for new ones. A person's approval of the
+snapshot still stands in for all of this. Each fix check is a paid call, so
+a retry with many findings can reach `maxCostUsd` sooner.
+
 ## Limits
 
 - **A reviewer can only hold a change back.** It cannot accept a change,
@@ -94,8 +115,13 @@ patch's files off the list; a rollback that cannot needs reconciliation. A
 patch that leaves any of the run's files outside the verification inventory
 (a new Git-ignored file, say) is rolled back the same way before it is
 recorded as applied.
-Every review is recorded as `review.completed` with the verdict, criteria
-and findings (evidence and messages redacted).
+Every review is recorded as `review.completed` with the verdict, criteria,
+findings with their IDs (evidence and messages redacted) and the snapshot it
+reviewed. `graph-engine run-receipt` projects an `evidence` ledger from these
+events: the final snapshot, the snapshot the latest verification, review and
+security-gate results each ran against, whether each is `current`, and
+`complete`, true only when every gate that ran is current. It reads the
+events and never changes a gate.
 
 ## A person's review
 

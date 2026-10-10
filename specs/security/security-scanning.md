@@ -64,6 +64,8 @@ Teams need security tools chosen for what their repository actually contains, wi
   - Test: packages/engine/tests/cli.test.ts :: security-scan on SIGINT stops its scanner container, removes its copy of the repository and exits 130
   - Test: packages/engine/tests/cli.test.ts :: security-scan on SIGHUP stops its scanner container, removes its copy of the repository and exits 130
   - Test: packages/engine/tests/cli.test.ts :: security-db-update on SIGTERM stops its scanner container, removes its copy of the repository and exits 130
+- AC17: The worker's security feedback lists the first 20 new findings in full and summarizes the rest in one line counted by tool and rule, never dropping them silently. Each recorded new finding keeps its fingerprint, and when the run has an earlier scan, a `security.verify_fix` event records which of that scan's new fingerprints are gone (`fixed`) and which remain (`stillPresent`). The record is informational: the gate still blocks on every finding that is new by fingerprint.
+  - Test: packages/engine/tests/execution.test.ts :: summarizes security findings past the first 20 and records which earlier findings were fixed
 
 ## Security considerations
 

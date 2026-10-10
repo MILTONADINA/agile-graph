@@ -59,6 +59,13 @@ it("reads a project-scoped run and ordered events without recovering an active r
   expect(readRunReceipt(dataDir, projectId, run.id)).toEqual({
     run,
     events: [first, second],
+    evidence: {
+      finalSnapshotHash: null,
+      verification: null,
+      review: null,
+      security: null,
+      complete: false,
+    },
   });
   expect(() => readRunReceipt(dataDir, "other-project", run.id)).toThrow(
     /does not exist for this project/,
@@ -99,4 +106,90 @@ it("refuses a run database written by a newer engine", async () => {
   expect(() => readRunReceipt(dataDir, "project", "run")).toThrow(
     "newer than this engine",
   );
+});
+
+it("projects an evidence ledger of the snapshot each gate last ran against", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "graph-run-evidence-"));
+  directories.push(dataDir);
+  const projectId = "receipt-project";
+  const plan: ExecutionPlan = {
+    version: SCHEMA_VERSION,
+    id: "plan-1",
+    projectId,
+    snapshotId: "a".repeat(64),
+    policyHash: "b".repeat(64),
+    createdAt: "2026-10-10T00:00:00.000Z",
+    objective: "Review selected task",
+    acceptance: ["reviewed"],
+    steps: [],
+    verification: [],
+    publication: "none",
+  };
+  const run: RunRecord = {
+    id: "run-1",
+    plan,
+    status: "failed",
+    createdAt: plan.createdAt,
+    updatedAt: plan.createdAt,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      costUsd: 0,
+      estimated: false,
+    },
+  };
+  const first = "1".repeat(64);
+  const second = "2".repeat(64);
+  const store = new RunStore(dataDir, projectId);
+  store.savePlan(plan);
+  store.saveRun(run);
+  const verified = (snapshotHash: string) =>
+    store.event(run.id, "verification.completed", {
+      checks: [{ argv: ["npm", "test"], code: 0 }],
+      snapshotHash,
+    });
+  verified(first);
+  const review = store.event(run.id, "review.completed", {
+    passed: true,
+    verdict: "approve",
+    snapshotHash: first,
+  });
+  store.event(run.id, "security.scan_completed", { snapshotHash: first });
+  const gate = store.event(run.id, "security.gate_passed", {
+    snapshotHash: first,
+  });
+  const ledger = () => readRunReceipt(dataDir, projectId, run.id).evidence;
+  expect(ledger()).toMatchObject({
+    finalSnapshotHash: first,
+    verification: { snapshotHash: first, current: true, passed: true },
+    review: {
+      eventId: review.id,
+      snapshotHash: first,
+      current: true,
+      passed: true,
+      by: "reviewer",
+    },
+    security: { eventId: gate.id, current: true, passed: true },
+    complete: true,
+  });
+  // A later snapshot's checks leave the review and the security gate about
+  // the earlier one, so the ledger is no longer complete.
+  const later = verified(second);
+  expect(ledger()).toMatchObject({
+    finalSnapshotHash: second,
+    verification: { eventId: later.id, current: true },
+    review: { snapshotHash: first, current: false },
+    security: { snapshotHash: first, current: false },
+    complete: false,
+  });
+  // A gate event from an older engine names no snapshot and is not current.
+  store.event(run.id, "review.completed", { passed: true, by: "person" });
+  store.event(run.id, "security.gate_passed", { snapshotHash: second });
+  expect(ledger()).toMatchObject({
+    review: { snapshotHash: null, current: false, by: "person" },
+    security: { snapshotHash: second, current: true },
+    complete: false,
+  });
+  store.close();
 });
