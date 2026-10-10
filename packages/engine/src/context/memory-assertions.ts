@@ -192,6 +192,45 @@ export function parseReviewedAssertions(
   };
 }
 
+/**
+ * A memory expiry a person gave, as a canonical UTC timestamp. It must be an
+ * ISO 8601 date-time with a zone (Z or an offset), so it means the same
+ * instant on every machine.
+ */
+export function parseMemoryExpiry(input: unknown): string {
+  const parsed = timestamp.safeParse(input);
+  if (!parsed.success)
+    throw new Error(
+      "A memory expiry must be an ISO 8601 date-time with a time zone, for example 2026-12-31T23:59:59Z",
+    );
+  return new Date(parsed.data).toISOString();
+}
+
+/**
+ * When a memory stops applying, in epoch milliseconds, or undefined when it
+ * never expires. That is the earlier of its own validUntil and, when every
+ * reviewed assertion has a validUntil, the latest of those: a memory whose
+ * claims have all lapsed no longer describes the project.
+ */
+export function memoryExpiresAt(record: MemoryRecord): number | undefined {
+  const own = record.validUntil ? Date.parse(record.validUntil) : undefined;
+  const claims = record.assertions?.claims ?? [];
+  const claimed =
+    claims.length && claims.every((claim) => claim.validUntil)
+      ? Math.max(...claims.map((claim) => Date.parse(claim.validUntil!)))
+      : undefined;
+  const ends = [own, claimed].filter((value): value is number =>
+    Number.isFinite(value),
+  );
+  return ends.length ? Math.min(...ends) : undefined;
+}
+
+/** A memory is expired from the instant its validity ends. */
+export function memoryExpired(record: MemoryRecord, now: number): boolean {
+  const end = memoryExpiresAt(record);
+  return end !== undefined && end <= now;
+}
+
 /** A review is attributed metadata, not proof of truth or an acceptance action. */
 export function attachReviewedAssertions(
   record: MemoryRecord,

@@ -350,6 +350,12 @@ export interface MemoryRecord {
   sources: SourceReference[];
   supersedes?: string;
   assertions?: ReviewedMemoryAssertions;
+  /**
+   * When the memory stops applying (ISO 8601 date-time, stored in UTC). Set
+   * by a person at proposal or acceptance; once it passes, context retrieval
+   * leaves the memory out. The record and its status are kept.
+   */
+  validUntil?: string;
   /** Why a person rejected this proposal (status "rejected" only). */
   rejectionReason?: string;
 }

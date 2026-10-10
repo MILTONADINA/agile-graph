@@ -460,7 +460,10 @@ it("cloud graph traversal cannot expose resolved private targets or bridge throu
   }
 }, 20000);
 
-async function exportFixture(prefix: string) {
+async function exportFixture(
+  prefix: string,
+  deps: Parameters<typeof GraphEngine.open>[1] = {},
+) {
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   const config = await initializeProject(root);
   config.policy.inference = "allowlisted";
@@ -475,7 +478,7 @@ async function exportFixture(prefix: string) {
     path.join(root, "public", "rule.ts"),
     "export const rule = true;\n",
   );
-  const engine = await GraphEngine.open(root);
+  const engine = await GraphEngine.open(root, deps);
   const cleanup = async () => {
     await engine.close();
     await rm(root, { recursive: true, force: true });
@@ -602,6 +605,170 @@ it("cloud context_get refuses private mandatory memory and it cannot be authoriz
       expect(refused.isError).toBe(true);
       expect(JSON.stringify(refused)).toContain("not exportable");
       expect(JSON.stringify(refused)).not.toContain(canary);
+    } finally {
+      await connection.close();
+    }
+  } finally {
+    await cleanup();
+  }
+}, 20000);
+
+it("cloud context_get leaves out expired mandatory memory and changes nothing else", async () => {
+  const hour = 3_600_000;
+  const clock = { now: Date.parse("2030-01-01T00:00:00.000Z") };
+  const { engine, cleanup } = await exportFixture("graph-mcp-memory-expiry-", {
+    now: () => clock.now,
+  });
+  const lastingText = "LASTING_MANDATORY_CANARY keep the public rule";
+  const expiringText = "EXPIRING_MANDATORY_CANARY rule freeze until release";
+  const unauthorizedText = "UNAUTHORIZED_EXPIRING_CANARY rule review window";
+  try {
+    await engine.context.index();
+    const source = (await engine.context.searchSymbols("public/rule.ts"))[0]!
+      .source;
+    const mandatory = async (
+      text: string,
+      kind: "constraint" | "requirement",
+      validUntil?: number,
+      authorize = true,
+    ) => {
+      const memory = await engine.context.createMemory({
+        kind,
+        text,
+        sources: [source],
+        ...(validUntil
+          ? { validUntil: new Date(validUntil).toISOString() }
+          : {}),
+      });
+      await engine.context.acceptMemory(memory.id);
+      await engine.context.promoteMemory(memory.id);
+      if (authorize)
+        await engine.context.authorizeMemoryExport(memory.id, sha256(text));
+      return memory;
+    };
+    const cloud = async () => {
+      const connection = await connect(engine, { client: "cloud" });
+      try {
+        const result = await connection.client.callTool({
+          name: "context_get",
+          arguments: { query: "rule" },
+        });
+        const text = (result.content as { text: string }[])[0]!.text;
+        return { isError: result.isError === true, text };
+      } finally {
+        await connection.close();
+      }
+    };
+    const lasting = await mandatory(lastingText, "constraint");
+    const expiring = await mandatory(
+      expiringText,
+      "requirement",
+      clock.now + hour,
+    );
+
+    const live = await cloud();
+    expect(live.isError).toBe(false);
+    const before = JSON.parse(live.text);
+    expect(before.mandatory).toEqual([lastingText, expiringText]);
+
+    clock.now += hour;
+    const expired = await cloud();
+    expect(expired.isError).toBe(false);
+    const after = JSON.parse(expired.text);
+    // Only the expired memory leaves; its text and hash appear nowhere. The
+    // cloud packet keeps its fixed warnings, so the expiry adds nothing, not
+    // even the memory's ID, that the local packet's warning carries.
+    expect(expired.text).not.toContain(expiringText);
+    expect(expired.text).not.toContain(sha256(expiringText));
+    expect(expired.text).not.toContain(expiring.id);
+    expect(after).toEqual({
+      ...before,
+      mandatory: [lastingText],
+      mandatorySources: before.mandatorySources.filter(
+        (entry: { memoryId: string }) => entry.memoryId === lasting.id,
+      ),
+      estimatedTokens: expect.any(Number),
+    });
+    expect(after.estimatedTokens).toBeLessThan(before.estimatedTokens);
+    const local = await engine.context.getContext({
+      query: "rule",
+      retrieval: "lexical",
+    });
+    expect(local.coverage.warnings).toContain(
+      `Expired memory left out of context: ${expiring.id}. Review it with graph-engine memory-review, then propose a successor with memory-add --supersedes <id> if it still applies.`,
+    );
+    expect(after.mandatorySources).toEqual([
+      expect.objectContaining({
+        memoryId: lasting.id,
+        textSha256: sha256(lastingText),
+        exportAuthorized: true,
+      }),
+    ]);
+
+    // An unauthorized memory refuses the packet while it applies, and stops
+    // refusing once expired; expiry never grants export to anything else.
+    const unauthorized = await mandatory(
+      unauthorizedText,
+      "constraint",
+      clock.now + hour,
+      false,
+    );
+    const refused = await cloud();
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain(`memory ${unauthorized.id}`);
+    expect(refused.text).not.toContain(unauthorizedText);
+    clock.now += hour;
+    const lapsed = await cloud();
+    expect(lapsed.isError).toBe(false);
+    expect(lapsed.text).not.toContain(unauthorizedText);
+    const packet = JSON.parse(lapsed.text);
+    expect(packet).toEqual({ ...after, snapshotId: packet.snapshotId });
+    expect(
+      (await engine.context.listMemories()).map((memory) => memory.status),
+    ).toEqual(["accepted", "accepted", "accepted"]);
+  } finally {
+    await cleanup();
+  }
+}, 30000);
+
+it("memory_propose takes an optional validUntil and refuses a malformed or past one, and the proposal stays proposed", async () => {
+  const clock = { now: Date.parse("2030-01-01T00:00:00.000Z") };
+  const { engine, cleanup } = await exportFixture("graph-mcp-memory-propose-", {
+    now: () => clock.now,
+  });
+  try {
+    const connection = await connect(engine, { client: "cloud" });
+    try {
+      const propose = (validUntil?: string) =>
+        connection.client.callTool({
+          name: "memory_propose",
+          arguments: {
+            text: "Toy release freeze",
+            kind: "constraint",
+            ...(validUntil ? { validUntil } : {}),
+          },
+        });
+      const proposed = await propose("2030-01-08T00:00:00+02:00");
+      expect(proposed.isError).not.toBe(true);
+      const body = JSON.parse(
+        (proposed.content as { text: string }[])[0]!.text,
+      );
+      expect(body).toEqual({
+        id: expect.any(String),
+        status: "proposed",
+        validUntil: "2030-01-07T22:00:00.000Z",
+      });
+      expect((await propose("2030-01-08")).isError).toBe(true);
+      const past = await propose("2029-12-31T00:00:00Z");
+      expect(past.isError).toBe(true);
+      expect(JSON.stringify(past)).toContain("has already passed");
+      expect(await engine.context.listMemories()).toEqual([
+        expect.objectContaining({
+          id: body.id,
+          status: "proposed",
+          validUntil: "2030-01-07T22:00:00.000Z",
+        }),
+      ]);
     } finally {
       await connection.close();
     }

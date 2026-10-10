@@ -52,7 +52,7 @@ export function createMcpServer(
     "context_get",
     {
       description:
-        "Retrieves a token-budgeted packet of source-backed context for one task from an index of the project's current working tree (git-tracked and unignored files, minus excluded, binary, over-1 MiB and credential-matching files). Returns JSON with snapshotId, mandatory (the text of every accepted requirement or constraint memory, included whatever the query), items (ranked code, document or memory excerpts; code and document items carry path, line range and content hash), estimatedTokens, budgetTokens and coverage warnings. Use it when a task needs this project's code, docs, requirements or constraints; use symbol_search to find a declaration by name and graph_neighbors to follow one symbol's relationships. The call fails when the query matches a credential pattern or when the query plus mandatory memory exceeds the budget. For a cloud-backed client, retrieval defaults to lexical, items come only from files the exportPaths policy allows, memory excerpts are withheld, and the call fails while the project policy is offline (inference local or network deny) or when any mandatory memory is private, unsourced, outside the exportPaths policy or not authorized for export by an operator (graph-engine memory-export-authorize).",
+        "Retrieves a token-budgeted packet of source-backed context for one task from an index of the project's current working tree (git-tracked and unignored files, minus excluded, binary, over-1 MiB and credential-matching files). Returns JSON with snapshotId, mandatory (the text of every accepted requirement or constraint memory that has not expired, included whatever the query), items (ranked code, document or memory excerpts; code and document items carry path, line range and content hash), estimatedTokens, budgetTokens and coverage warnings. Use it when a task needs this project's code, docs, requirements or constraints; use symbol_search to find a declaration by name and graph_neighbors to follow one symbol's relationships. The call fails when the query matches a credential pattern or when the query plus mandatory memory exceeds the budget. For a cloud-backed client, retrieval defaults to lexical, items come only from files the exportPaths policy allows, memory excerpts are withheld, and the call fails while the project policy is offline (inference local or network deny) or when any mandatory memory is private, unsourced, outside the exportPaths policy or not authorized for export by an operator (graph-engine memory-export-authorize).",
       inputSchema: {
         query: z
           .string()
@@ -211,7 +211,7 @@ export function createMcpServer(
     "memory_propose",
     {
       description:
-        "Stores the text as a new private project memory with status proposed and returns JSON with its id and status. A proposal has no effect on retrieval or project policy until someone accepts it outside this server (graph-engine memory-accept); this server cannot list, accept, share or edit memories. Use it for a durable fact, decision, requirement, constraint or reusable solution that later tasks on this project need. Blank text or text matching a credential pattern is rejected, and a cloud-backed client gets an error while the project policy is offline.",
+        "Stores the text as a new private project memory with status proposed and returns JSON with its id, status and any expiry (validUntil). A proposal has no effect on retrieval or project policy until someone accepts it outside this server (graph-engine memory-accept); this server cannot list, accept, share or edit memories. Use it for a durable fact, decision, requirement, constraint or reusable solution that later tasks on this project need. Blank text or text matching a credential pattern is rejected, as is an expiry that has already passed, and a cloud-backed client gets an error while the project policy is offline.",
       inputSchema: {
         text: z
           .string()
@@ -231,12 +231,23 @@ export function createMcpServer(
           .describe(
             "An accepted requirement or constraint is added to the mandatory section of every context packet. Proposals from this tool carry no source references, so an accepted requirement or constraint also makes context_get fail for cloud-backed clients, which receive mandatory memory only when it is shared, sourced and authorized for export by an operator. An operator proposes a sourced replacement that retires it with graph-engine memory-add --source <path>#L<start>-L<end> --supersedes <id>.",
           ),
+        validUntil: z
+          .string()
+          .datetime({ offset: true })
+          .optional()
+          .describe(
+            "Optional proposed expiry, an ISO 8601 date-time with a time zone, for example 2026-12-31T23:59:59Z. Once it passes, context_get leaves the memory out. The person who accepts the proposal may keep or replace it.",
+          ),
       },
     },
     async (args) => {
       await allowed();
       const memory = await engine.context.createMemory(args);
-      return result({ id: memory.id, status: memory.status });
+      return result({
+        id: memory.id,
+        status: memory.status,
+        ...(memory.validUntil ? { validUntil: memory.validUntil } : {}),
+      });
     },
   );
   if (options.client === "local" || options.allowRunStatus)

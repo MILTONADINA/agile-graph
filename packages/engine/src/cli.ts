@@ -398,7 +398,22 @@ cli
   .action(() => withEngine((engine) => engine.context.listSummaries()));
 cli
   .command("memory-review")
-  .action(() => withEngine((engine) => engine.context.reviewMemories()));
+  .description(
+    "Flag accepted memories whose evidence changed, that conflict, or that have expired or expire soon (IDs and dates only); it accepts, retires or deletes nothing",
+  )
+  .option(
+    "--within-days <days>",
+    "Also flag memories that expire within this many days",
+    (value: string) => Number(value),
+    14,
+  )
+  .action((options) =>
+    withEngine((engine) =>
+      engine.context.reviewMemories(undefined, {
+        withinDays: options.withinDays,
+      }),
+    ),
+  );
 cli
   .command("snapshots-prune")
   .option(
@@ -1674,6 +1689,10 @@ cli
     "--supersedes <id>",
     "The accepted memory this proposal replaces; accepting the proposal retires it",
   )
+  .option(
+    "--valid-until <iso>",
+    "When the memory stops applying, as an ISO 8601 date-time with a time zone (for example 2026-12-31T23:59:59Z); once it passes, context leaves the memory out",
+  )
   .action((text, options) =>
     withEngine(async (engine) => {
       const kind = z
@@ -1692,6 +1711,9 @@ cli
         sources,
         ...(options.supersedes !== undefined
           ? { supersedes: options.supersedes as string }
+          : {}),
+        ...(options.validUntil !== undefined
+          ? { validUntil: options.validUntil as string }
           : {}),
       });
       // Mandatory memory blocks cloud consumers until it can be exported.
@@ -1724,7 +1746,20 @@ cli
   .action(() => withEngine((engine) => engine.context.listMemories()));
 cli
   .command("memory-accept <id>")
-  .action((id) => withEngine((engine) => engine.context.acceptMemory(id)));
+  .option(
+    "--valid-until <iso>",
+    "Set or replace the proposal's expiry, as an ISO 8601 date-time with a time zone; once it passes, context leaves the memory out",
+  )
+  .action((id, options) =>
+    withEngine((engine) =>
+      engine.context.acceptMemory(
+        id,
+        options.validUntil !== undefined
+          ? { validUntil: options.validUntil as string }
+          : {},
+      ),
+    ),
+  );
 cli
   .command("memory-reject <id>")
   .description(

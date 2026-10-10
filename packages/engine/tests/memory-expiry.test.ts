@@ -1,0 +1,388 @@
+import { afterEach, expect, it } from "vitest";
+import { execFile } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path, { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  DEFAULT_POLICY,
+  type MemoryAssertion,
+  type MemoryRecord,
+} from "@graph-engineering/contracts";
+import { ContextEngine } from "../src/context/index.js";
+import {
+  memoryExpired,
+  memoryExpiresAt,
+} from "../src/context/memory-assertions.js";
+import { checked } from "../src/util.js";
+
+// Memories that expire: a person sets validUntil at proposal or acceptance,
+// and once it passes, retrieval leaves the memory out. Toy synthetic project.
+
+const DAY = 86_400_000;
+const START = Date.parse("2030-01-01T00:00:00.000Z");
+const directories: string[] = [],
+  engines: ContextEngine[] = [];
+afterEach(async () => {
+  for (const engine of engines.splice(0)) await engine.close().catch(() => {});
+  for (const directory of directories.splice(0))
+    await rm(directory, { recursive: true, force: true });
+});
+
+async function fixture() {
+  const directory = await mkdtemp(join(tmpdir(), "graph-memory-expiry-"));
+  directories.push(directory);
+  const root = join(directory, "repo");
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(
+    join(root, "src", "main.ts"),
+    "export function main() { return 1; }\n",
+  );
+  const clock = { now: START };
+  const engine = new ContextEngine({
+    projectId: "expiry-project",
+    root,
+    dataDir: join(directory, "data"),
+    policy: structuredClone(DEFAULT_POLICY),
+    now: () => clock.now,
+  });
+  engines.push(engine);
+  return { engine, clock, root };
+}
+
+const iso = (ms: number) => new Date(ms).toISOString();
+
+function record(
+  validUntil: string | undefined,
+  claims: Partial<MemoryAssertion>[] = [],
+): MemoryRecord {
+  return {
+    version: "1.0.0",
+    id: "memory-0001",
+    projectId: "expiry-project",
+    kind: "constraint",
+    text: "Toy constraint",
+    visibility: "private",
+    status: "accepted",
+    createdAt: iso(START),
+    sources: [],
+    ...(validUntil ? { validUntil } : {}),
+    ...(claims.length
+      ? {
+          assertions: {
+            version: "1.0.0",
+            claims: claims.map((claim) => ({
+              subject: "toy",
+              predicate: "uses",
+              scope: {},
+              value: { type: "string", value: "x" },
+              exclusive: true,
+              ...claim,
+            })),
+            review: {
+              reviewer: "toy",
+              reviewedAt: iso(START),
+              evidence: ["e"],
+            },
+          },
+        }
+      : {}),
+  } as MemoryRecord;
+}
+
+it("expires a memory at its own validUntil or once every reviewed assertion has lapsed", () => {
+  const soon = iso(START + DAY),
+    later = iso(START + 3 * DAY);
+  expect(memoryExpiresAt(record(undefined))).toBeUndefined();
+  expect(memoryExpiresAt(record(soon))).toBe(START + DAY);
+  // The latest assertion end counts, and only when every claim has one.
+  expect(
+    memoryExpiresAt(
+      record(undefined, [{ validUntil: soon }, { validUntil: later }]),
+    ),
+  ).toBe(START + 3 * DAY);
+  expect(
+    memoryExpiresAt(record(undefined, [{ validUntil: soon }, {}])),
+  ).toBeUndefined();
+  // The earlier of the two ends applies.
+  expect(memoryExpiresAt(record(soon, [{ validUntil: later }]))).toBe(
+    START + DAY,
+  );
+  // Validity is half-open: expired from the instant it ends.
+  expect(memoryExpired(record(soon), START + DAY - 1)).toBe(false);
+  expect(memoryExpired(record(soon), START + DAY)).toBe(true);
+});
+
+it("keeps an expired memory out of the mandatory set and retrieved items, naming only its ID", async () => {
+  const { engine, clock } = await fixture();
+  const constraintText = "EXPIRING_CONSTRAINT_CANARY freeze the toy release";
+  const observationText = "EXPIRING_OBSERVATION_CANARY toy release notes";
+  const lastingText = "LASTING_CONSTRAINT_CANARY keep the toy main export";
+  const constraint = await engine.proposeMemory({
+    kind: "constraint",
+    text: constraintText,
+    validUntil: "2030-01-02T01:00:00+01:00",
+  });
+  // Stored as the same instant in UTC.
+  expect(constraint.validUntil).toBe("2030-01-02T00:00:00.000Z");
+  const observation = await engine.proposeMemory({
+    kind: "observation",
+    text: observationText,
+  });
+  const lasting = await engine.proposeMemory({
+    kind: "constraint",
+    text: lastingText,
+  });
+  await engine.acceptMemory(constraint.id);
+  await engine.acceptMemory(observation.id, {
+    validUntil: iso(START + 2 * DAY),
+  });
+  await engine.acceptMemory(lasting.id);
+  const query = { query: "toy release", retrieval: "lexical" as const };
+
+  const before = await engine.getContext(query);
+  expect(before.mandatory).toEqual([constraintText, lastingText]);
+  expect(before.items.map((item) => item.memoryId)).toContain(observation.id);
+
+  clock.now = START + DAY;
+  const halfway = await engine.getContext(query);
+  expect(halfway.mandatory).toEqual([lastingText]);
+  expect(halfway.mandatorySources.map((entry) => entry.memoryId)).toEqual([
+    lasting.id,
+  ]);
+  expect(halfway.items.map((item) => item.memoryId)).toContain(observation.id);
+  const warning = halfway.coverage.warnings.find((text) =>
+    text.startsWith("Expired memory"),
+  );
+  expect(warning).toContain(constraint.id);
+  expect(JSON.stringify(halfway)).not.toContain(constraintText);
+
+  clock.now = START + 2 * DAY;
+  const after = await engine.getContext(query);
+  expect(after.mandatory).toEqual([lastingText]);
+  expect(after.items.some((item) => item.memoryId === observation.id)).toBe(
+    false,
+  );
+  expect(JSON.stringify(after)).not.toContain(observationText);
+  expect(
+    after.coverage.warnings.find((text) => text.startsWith("Expired memory")),
+  ).toContain(`${constraint.id}, ${observation.id}`);
+
+  // Expiry is computed when context is read: the records stay accepted.
+  const stored = await engine.listMemories();
+  expect(stored.map((memory) => memory.status)).toEqual([
+    "accepted",
+    "accepted",
+    "accepted",
+  ]);
+});
+
+it("refuses a malformed or past expiry and an expiry change after acceptance, while acceptance may set or replace it", async () => {
+  const { engine, clock } = await fixture();
+  await expect(
+    engine.proposeMemory({
+      kind: "constraint",
+      text: "Toy",
+      validUntil: "2030-02-01",
+    }),
+  ).rejects.toThrow("ISO 8601 date-time with a time zone");
+  await expect(
+    engine.createMemory({
+      kind: "constraint",
+      text: "Toy",
+      validUntil: "2029-12-31T00:00:00Z",
+    }),
+  ).rejects.toThrow("has already passed");
+
+  const replaced = await engine.proposeMemory({
+    kind: "decision",
+    text: "Toy decision",
+    validUntil: iso(START + DAY),
+  });
+  const accepted = await engine.acceptMemory(replaced.id, {
+    validUntil: iso(START + 5 * DAY),
+  });
+  expect(accepted.validUntil).toBe(iso(START + 5 * DAY));
+  // Re-accepting with the same expiry is a no-op; a different one is refused.
+  await expect(
+    engine.acceptMemory(replaced.id, { validUntil: iso(START + 5 * DAY) }),
+  ).resolves.toMatchObject({ status: "accepted" });
+  await expect(
+    engine.acceptMemory(replaced.id, { validUntil: iso(START + 9 * DAY) }),
+  ).rejects.toThrow("already accepted");
+
+  // A proposal whose expiry lapsed before acceptance needs a later one.
+  const lapsed = await engine.proposeMemory({
+    kind: "decision",
+    text: "Toy lapsed decision",
+    validUntil: iso(START + DAY),
+  });
+  clock.now = START + 2 * DAY;
+  await expect(engine.acceptMemory(lapsed.id)).rejects.toThrow(
+    "has already passed",
+  );
+  await expect(
+    engine.acceptMemory(lapsed.id, { validUntil: iso(START + DAY) }),
+  ).rejects.toThrow("has already passed");
+  expect(
+    await engine.acceptMemory(lapsed.id, { validUntil: iso(START + 3 * DAY) }),
+  ).toMatchObject({ status: "accepted", validUntil: iso(START + 3 * DAY) });
+});
+
+it("memory-review flags expired and expiring memories by ID and date within a configurable window", async () => {
+  const { engine, clock } = await fixture();
+  const ids: Record<string, string> = {};
+  for (const [name, days] of [
+    ["expired", 1],
+    ["soon", 10],
+    ["later", 30],
+    ["never", undefined],
+  ] as const) {
+    const memory = await engine.proposeMemory({
+      kind: "constraint",
+      text: `Toy ${name} constraint`,
+      ...(days ? { validUntil: iso(START + days * DAY) } : {}),
+    });
+    await engine.acceptMemory(memory.id);
+    ids[name] = memory.id;
+  }
+  clock.now = START + 2 * DAY;
+  const validity = (
+    reviews: Awaited<ReturnType<typeof engine.reviewMemories>>,
+  ) =>
+    Object.fromEntries(
+      reviews.flatMap((review) =>
+        review.flags
+          .filter((flag) => flag.method === "validity")
+          .map((flag) => [review.memoryId, [flag.kind, flag.validUntil]]),
+      ),
+    );
+
+  const defaults = await engine.reviewMemories();
+  expect(validity(defaults)).toEqual({
+    [ids.expired!]: ["expired", iso(START + DAY)],
+    [ids.soon!]: ["expiring", iso(START + 10 * DAY)],
+  });
+  // Dates only: no flag repeats memory text.
+  for (const review of defaults)
+    for (const flag of review.flags) expect(flag.reason).not.toMatch(/Toy/);
+
+  expect(
+    validity(await engine.reviewMemories(undefined, { withinDays: 60 })),
+  ).toEqual({
+    [ids.expired!]: ["expired", iso(START + DAY)],
+    [ids.soon!]: ["expiring", iso(START + 10 * DAY)],
+    [ids.later!]: ["expiring", iso(START + 30 * DAY)],
+  });
+  expect(
+    validity(await engine.reviewMemories(undefined, { withinDays: 0 })),
+  ).toEqual({ [ids.expired!]: ["expired", iso(START + DAY)] });
+  await expect(
+    engine.reviewMemories(undefined, { withinDays: -1 }),
+  ).rejects.toThrow("--within-days");
+});
+
+it("marks a shared memory conflicted when its shared file changes the expiry, instead of silently keeping either", async () => {
+  const { engine, root } = await fixture();
+  const memory = await engine.proposeMemory({
+    kind: "constraint",
+    text: "Toy shared constraint",
+    validUntil: iso(START + DAY),
+  });
+  await engine.acceptMemory(memory.id);
+  const { path: shared } = await engine.promoteMemory(memory.id);
+  expect(await engine.importSharedMemories()).toBe(0);
+  expect((await engine.listMemories())[0]!.status).toBe("accepted");
+  const file = join(root, shared);
+  const edited = JSON.parse(await readFile(file, "utf8"));
+  edited.validUntil = iso(START + 30 * DAY);
+  await writeFile(file, JSON.stringify(edited, null, 2) + "\n");
+  await engine.importSharedMemories();
+  expect((await engine.listMemories())[0]).toMatchObject({
+    status: "conflicted",
+    validUntil: iso(START + DAY),
+  });
+});
+
+const CLI = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
+const ENGINE = fileURLToPath(new URL("../", import.meta.url));
+
+it("memory-add and memory-accept take --valid-until, and memory-review --within-days lists expiring memory", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "graph-memory-expiry-cli-"));
+  const data = await mkdtemp(
+    path.join(tmpdir(), "graph-memory-expiry-cli-data-"),
+  );
+  directories.push(root, data);
+  await checked("git", ["init", "-q"], { cwd: root });
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env))
+    if (value !== undefined) env[key] = value;
+  Object.assign(env, {
+    GRAPH_ENGINE_DATA_DIR: data,
+    CI: "",
+    GRAPH_ENGINE_NO_FEEDBACK: "1",
+  });
+  const graph = (...args: string[]) =>
+    new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+      execFile(
+        process.execPath,
+        ["--import", "tsx", CLI, "-C", root, ...args],
+        { cwd: ENGINE, env, timeout: 60_000, maxBuffer: 1_000_000 },
+        (error, stdout, stderr) =>
+          resolve({
+            code: error ? Number((error as { code?: number }).code ?? 1) : 0,
+            stdout,
+            stderr,
+          }),
+      );
+    });
+  const json = async <T>(pending: ReturnType<typeof graph>): Promise<T> => {
+    const result = await pending;
+    expect(result.code, result.stderr).toBe(0);
+    return JSON.parse(result.stdout) as T;
+  };
+  expect((await graph("init")).code).toBe(0);
+  const inDays = (days: number) => iso(Date.now() + days * DAY);
+
+  const proposed = await json<MemoryRecord>(
+    graph(
+      "memory-add",
+      "--kind",
+      "constraint",
+      "--valid-until",
+      inDays(3),
+      "Toy CLI constraint",
+    ),
+  );
+  expect(proposed.validUntil).toBeDefined();
+  const past = await graph(
+    "memory-add",
+    "--valid-until",
+    "2000-01-01T00:00:00Z",
+    "Toy past observation",
+  );
+  expect(past.code).not.toBe(0);
+  expect(past.stderr).toContain("has already passed");
+  const expiry = inDays(5);
+  const accepted = await json<MemoryRecord>(
+    graph("memory-accept", proposed.id, "--valid-until", expiry),
+  );
+  expect(accepted).toMatchObject({ status: "accepted", validUntil: expiry });
+
+  type Review = {
+    memoryId: string;
+    flags: { kind: string; validUntil?: string; reason: string }[];
+  };
+  const narrow = await json<Review[]>(
+    graph("memory-review", "--within-days", "1"),
+  );
+  expect(
+    narrow.flatMap((review) => review.flags).some((flag) => flag.validUntil),
+  ).toBe(false);
+  const wide = await json<Review[]>(graph("memory-review"));
+  const flag = wide
+    .find((review) => review.memoryId === proposed.id)
+    ?.flags.find((entry) => entry.kind === "expiring");
+  expect(flag).toMatchObject({ validUntil: expiry });
+  expect(flag?.reason).not.toContain("Toy CLI constraint");
+}, 120_000);
