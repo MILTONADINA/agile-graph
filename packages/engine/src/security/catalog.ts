@@ -47,10 +47,6 @@ const extensions = (profile: ProjectProfile, ...values: string[]) =>
   profile.files.filter((file) =>
     values.some((value) => file.toLowerCase().endsWith(value)),
   );
-const named = (profile: ProjectProfile, ...names: string[]) =>
-  profile.files.filter((file) =>
-    names.includes(file.split("/").pop()!.toLowerCase()),
-  );
 const describe = (label: string, files: string[]) =>
   files.length
     ? `${files.length} ${label} file${files.length === 1 ? "" : "s"}`
@@ -86,24 +82,17 @@ export function semgrepRuleSets(profile: ProjectProfile): string[] {
   return [...sets].sort();
 }
 
-export const LOCKFILES = [
-  "package-lock.json",
-  "yarn.lock",
-  "pnpm-lock.yaml",
-  "requirements.txt",
-  "poetry.lock",
-  "pipfile.lock",
-  "go.sum",
-  "cargo.lock",
-  "pom.xml",
-  "build.gradle",
-  "gradle.lockfile",
-  "composer.lock",
-  "gemfile.lock",
-  "packages.lock.json",
-  // Dart and Flutter; OSV-Scanner reads it as the Pub ecosystem.
-  "pubspec.lock",
-];
+// Dependency manifests and lockfiles OSV-Scanner extracts, by base name.
+// One matcher serves tool selection, the database download and the gates
+// that refuse to pass a changed lockfile unscanned, so they cannot drift.
+const LOCKFILE =
+  /^(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|requirements[^/]*\.txt|poetry\.lock|pipfile\.lock|pdm\.lock|uv\.lock|pylock(\.[^/]+)?\.toml|go\.mod|go\.sum|cargo\.lock|pom\.xml|build\.gradle(\.kts)?|([^/]+-)?gradle\.lockfile|verification-metadata\.xml|composer\.lock|gemfile\.lock|gems\.locked|packages\.lock\.json|packages\.config|[^/]+\.deps\.json|mix\.lock|pubspec\.lock|renv\.lock|package\.resolved|podfile\.lock|conan\.lock|cabal\.project\.freeze|stack\.yaml\.lock)$/i;
+
+/** Whether `file` is a dependency lockfile or manifest OSV-Scanner reads. */
+export function isLockfile(file: string): boolean {
+  const name = file.slice(file.lastIndexOf("/") + 1);
+  return name.length <= 200 && LOCKFILE.test(name);
+}
 const liveTargets = (profile: ProjectProfile) =>
   profile.authorizedTargets.length
     ? `${profile.authorizedTargets.length} authorized live target(s): ${profile.authorizedTargets.join(", ")}`
@@ -184,7 +173,7 @@ export const SECURITY_TOOLS: readonly SecurityTool[] = [
     mode: "needs-database",
     license: "open-source",
     appliesTo: (profile) =>
-      describe("dependency lock", named(profile, ...LOCKFILES)),
+      describe("dependency lock", profile.files.filter(isLockfile)),
     needs:
       "a local copy of the OSV vulnerability database, downloaded with network permission before an offline scan",
   },
@@ -196,7 +185,7 @@ export const SECURITY_TOOLS: readonly SecurityTool[] = [
     license: "open-source",
     appliesTo: (profile) =>
       describe("dependency lock or container", [
-        ...named(profile, ...LOCKFILES),
+        ...profile.files.filter(isLockfile),
         ...profile.files.filter(isDockerfile),
       ]),
     needs:

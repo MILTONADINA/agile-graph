@@ -8,17 +8,17 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { command } from "../util.js";
 import {
-  LOCKFILES,
+  isLockfile,
   selectSecurityTools,
   semgrepRuleSets,
   type ProjectProfile,
 } from "./catalog.js";
 
-const LOCKFILE_NAMES = new Set(LOCKFILES.map((name) => name.toLowerCase()));
 import { isDockerfile } from "./files.js";
 import { redact, redactTail } from "../policy.js";
 import { agentConfigFindings } from "./agent-config.js";
@@ -468,6 +468,25 @@ export async function runSecurityScan(options: {
   const out = path.join(work, "out");
   const lines = new Map<string, string[]>();
   const unscanned: SecurityScan["unscanned"] = [];
+  // An error is stored and exported as SARIF, so it names no host path: the
+  // work directory, the data directory and the repository become
+  // placeholders.
+  const hostPaths = withoutHostPaths([
+    [work, "<tmp>"],
+    // The database sits at <data>/security-db/osv; any other location is
+    // hidden as a whole.
+    ...(options.osvDatabase
+      ? ([
+          [
+            /[\\/]security-db[\\/]osv[\\/]?$/.test(options.osvDatabase)
+              ? path.dirname(path.dirname(options.osvDatabase))
+              : options.osvDatabase,
+            "<data>",
+          ],
+        ] as const)
+      : []),
+    [root, "<repo>"],
+  ]);
   try {
     await mkdir(out, { recursive: true });
     await mkdir(scan, { recursive: true });
@@ -689,7 +708,7 @@ export async function runSecurityScan(options: {
         // Redacted before it is cut, so the cut cannot leave part of a
         // secret too short to recognise.
         errors.push(
-          `${tool.id}: ${redact(error instanceof Error ? error.message : String(error)).slice(0, 400)}`,
+          `${tool.id}: ${redact(hostPaths(error instanceof Error ? error.message : String(error))).slice(0, 400)}`,
         );
       }
     }
@@ -703,6 +722,35 @@ export async function runSecurityScan(options: {
   } finally {
     await rm(work, { recursive: true, force: true });
   }
+}
+
+/**
+ * Replaces each host directory (and its resolved form, as tools report
+ * symlinked temp paths such as /private/var on macOS) with a placeholder,
+ * longest first so a nested directory keeps its own placeholder.
+ */
+export function withoutHostPaths(
+  pairs: readonly (readonly [string, string])[],
+): (text: string) => string {
+  const all: [string, string][] = [];
+  for (const [directory, placeholder] of pairs) {
+    if (!path.isAbsolute(directory)) continue;
+    const variants = new Set([path.resolve(directory)]);
+    try {
+      variants.add(realpathSync.native(directory));
+    } catch {
+      // A directory that is gone keeps its given form only.
+    }
+    for (const variant of variants)
+      if (variant !== path.parse(variant).root)
+        all.push([variant, placeholder]);
+  }
+  all.sort(([a], [b]) => b.length - a.length);
+  return (text) => {
+    for (const [directory, placeholder] of all)
+      text = text.split(directory).join(placeholder);
+    return text;
+  };
 }
 
 /** The scanner image's ID, or a clear error when it is not built. */
@@ -749,9 +797,7 @@ export async function updateOsvDatabase(options: {
     throw new Error(
       `Downloading the OSV database needs network policy allowlisted with ${OSV_DATABASE_HOST} in allowedHosts`,
     );
-  const lockfiles = options.files.filter((file) =>
-    LOCKFILE_NAMES.has(path.posix.basename(file).toLowerCase()),
-  );
+  const lockfiles = options.files.filter(isLockfile);
   if (!lockfiles.length)
     throw new Error("No dependency lockfiles to download a database for");
   const imageId = await scannerImageId(options.image, options.signal);

@@ -95,6 +95,8 @@ An operator wants a worker model to implement a planned change without touching 
   - Test: packages/engine/tests/mcp.test.ts :: tells a cloud client a verification image is missing, never its name
 - AC23: A command run where there is no `.graph/project.json` (before `init`, or from a subdirectory of a project, since `-C` defaults to the current directory and no parent is searched) fails with `No Graph Engineering project at <root>: run graph-engine init there, or pass -C <project root> before the command` instead of a bare ENOENT; `init` still creates the project there.
   - Test: packages/engine/tests/cli.test.ts :: says to run init or pass -C when there is no project, and init still creates one
+- AC24: Each verification check runs on its own fresh copy of the workspace's allowed files (plus any audit reproducer added to the view), so a file an earlier check writes cannot change what a later check sees; after each check its inputs are checked for changes before the next check runs.
+  - Test: packages/engine/tests/verification-inputs.test.ts :: gives each check a fresh view so an earlier check cannot plant a file a later check sees
 
 ## Security considerations
 

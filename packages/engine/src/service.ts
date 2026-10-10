@@ -118,7 +118,7 @@ import {
   type Decomposition,
   type PlanInput,
 } from "./workers/plan.js";
-import { LOCKFILES, type ProjectProfile } from "./security/catalog.js";
+import { isLockfile, type ProjectProfile } from "./security/catalog.js";
 import {
   assertVendoredPins,
   auditRecord,
@@ -2026,10 +2026,7 @@ export class GraphEngine {
   > {
     try {
       if (!(await readCommittedBaseline(this.root))) return undefined;
-      const names = new Set(LOCKFILES.map((name) => name.toLowerCase()));
-      const lockfiles = (await gitFiles(this.root)).filter((file) =>
-        names.has(path.posix.basename(file).toLowerCase()),
-      );
+      const lockfiles = (await gitFiles(this.root)).filter(isLockfile);
       if (!lockfiles.length || (await osvDatabase(this.dataDir)))
         return undefined;
       return {
@@ -3309,12 +3306,7 @@ export class GraphEngine {
         // dependency scan is always recorded.
         // Case-insensitive on both sides: Cargo.lock, Gemfile.lock and
         // Pipfile.lock are capitalized on disk.
-        const lockfileNames = new Set(
-          LOCKFILES.map((name) => name.toLowerCase()),
-        );
-        const lockfiles = (await gitFiles(workspace)).filter((file) =>
-          lockfileNames.has(path.posix.basename(file).toLowerCase()),
-        );
+        const lockfiles = (await gitFiles(workspace)).filter(isLockfile);
         if (!database && lockfiles.length) {
           const changed = lockfiles.filter((file) => workerPaths.has(file));
           this.store.event(run.id, "security.tool_not_run", {

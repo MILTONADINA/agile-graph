@@ -19,7 +19,12 @@
 // index, and a file whose analysis fails is reported as unscanned.
 import { createHash } from "node:crypto";
 import { redact } from "../policy.js";
-import { isAgentSettings, isInstructionFile, isMcpConfig } from "./files.js";
+import {
+  isAgentSettings,
+  isAutoRunConfig,
+  isInstructionFile,
+  isMcpConfig,
+} from "./files.js";
 import type { SecurityFinding } from "./scan.js";
 
 /**
@@ -53,6 +58,7 @@ export function agentConfigFindings(
     try {
       if (isAgentSettings(file)) settingsFindings(file, lines, own);
       else if (isMcpConfig(file)) mcpFindings(file, lines, own);
+      else if (isAutoRunConfig(file)) autoRunFindings(file, lines, own);
       if (isInstructionFile(file))
         for (const found of injectionFindings(file, lines))
           own.findings.push(found);
@@ -591,7 +597,12 @@ function mcpFindings(file: string, lines: Lines, result: AgentConfigResult) {
       at.key("servers", undefined, at.key("mcp") - 1),
     ],
     ["mcp.servers", value["mcp.servers"], at.key("mcp.servers")],
+    // Zed's context servers.
+    ["context_servers", value.context_servers, at.key("context_servers")],
   ];
+  // opencode.json declares servers directly under mcp.
+  if (/(^|\/)opencode\.jsonc?$/i.test(file))
+    containers.push(["mcp", value.mcp, at.key("mcp")]);
   for (const [where, servers, keyLine] of containers) {
     if (!isObject(servers)) continue;
     for (const [name, server] of Object.entries(servers))
@@ -607,6 +618,77 @@ function mcpFindings(file: string, lines: Lines, result: AgentConfigResult) {
       );
   }
 }
+
+/**
+ * VS Code tasks that run when the folder opens, and launch configurations
+ * that run a task before or after debugging. Each is a command the editor
+ * runs without the developer typing it.
+ */
+function autoRunFindings(
+  file: string,
+  lines: Lines,
+  result: AgentConfigResult,
+) {
+  const config = parsed(file, lines, result);
+  if (!config) return;
+  const { value, at } = config;
+  if (/tasks\.json$/i.test(file)) {
+    if (!Array.isArray(value.tasks)) return;
+    let cursor = Math.max(0, at.key("tasks") - 1);
+    for (const task of value.tasks) {
+      if (!isObject(task)) continue;
+      const runOptions = isObject(task.runOptions) ? task.runOptions : {};
+      if (runOptions.runOn !== "folderOpen") continue;
+      const line = at.key("runOn", "folderOpen", cursor) || at.key("tasks");
+      cursor = line;
+      const name = typeof task.label === "string" ? task.label : "unnamed";
+      const command =
+        typeof task.command === "string" ? task.command : undefined;
+      out(
+        result,
+        finding(
+          "auto-run-task",
+          file,
+          line,
+          `Task ${label(name)} runs ${command ? describeCommand(command) : "a command (not shown)"} when the folder opens`,
+          `tasks.${label(name)}`,
+          hash({
+            label: task.label ?? null,
+            type: task.type ?? null,
+            command: task.command ?? null,
+            args: task.args ?? null,
+            dependsOn: task.dependsOn ?? null,
+          }),
+        ),
+      );
+    }
+    return;
+  }
+  if (!Array.isArray(value.configurations)) return;
+  const from = Math.max(0, at.key("configurations") - 1);
+  for (const launch of value.configurations) {
+    if (!isObject(launch)) continue;
+    const name = typeof launch.name === "string" ? launch.name : "unnamed";
+    for (const key of ["preLaunchTask", "postDebugTask"] as const) {
+      const task = launch[key];
+      if (typeof task !== "string") continue;
+      out(
+        result,
+        finding(
+          "auto-run-task",
+          file,
+          at.key(key, task, from) || at.key("configurations"),
+          `Launch configuration ${label(name)} runs a task through ${key}`,
+          `configurations.${label(name)}.${key}`,
+          hash({ name: launch.name ?? null, key, task }),
+        ),
+      );
+    }
+  }
+}
+
+const out = (result: AgentConfigResult, found: Finding) =>
+  result.findings.push(found);
 
 const TOML_KEY = String.raw`(?:"([^"]*)"|'([^']*)'|([A-Za-z0-9_-]+))`;
 const TOML_STRING = String.raw`(?:"((?:[^"\\]|\\.)*)"|'([^']*)')`;

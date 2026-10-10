@@ -76,8 +76,8 @@ export interface AddedFile {
   content: string;
 }
 /**
- * Runs registered checks in the offline sandbox on a temporary view: a copy
- * of the workspace's allowed files. `options.added` writes new files into
+ * Runs registered checks in the offline sandbox, each on its own temporary
+ * view: a fresh copy of the workspace's allowed files. `options.added` writes new files into
  * that view only (the security audit's reproducer), so the workspace itself
  * is never written; an added path that already exists is refused.
  */
@@ -103,41 +103,55 @@ export async function verifyInContainer(
   // Checks run on the whole repository, whatever the working set.
   policy = wholeRepository(policy);
   const results: VerificationResult[] = [];
-  const view = await mkdtemp(
-    path.join(path.dirname(workspace), "verification-"),
-  );
-  const inputs = new Map<string, string>();
-  try {
-    for (const relative of await gitFiles(workspace))
-      if (isAllowedPath(relative, policy)) {
-        try {
-          const file = await safePath(workspace, relative, policy);
-          const content = await readFile(file);
-          const target = path.join(view, relative);
-          await mkdir(path.dirname(target), { recursive: true });
-          await copyFile(file, target);
-          inputs.set(relative, hash(content.toString("base64")));
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  // Each check gets a fresh copy of the view, so a file an earlier check
+  // writes (a planted config, a stub binary, a patched test) cannot change
+  // what a later check runs against.
+  const freshView = async () => {
+    const view = await mkdtemp(
+      path.join(path.dirname(workspace), "verification-"),
+    );
+    const inputs = new Map<string, string>();
+    try {
+      for (const relative of await gitFiles(workspace))
+        if (isAllowedPath(relative, policy)) {
+          try {
+            const file = await safePath(workspace, relative, policy);
+            const content = await readFile(file);
+            const target = path.join(view, relative);
+            await mkdir(path.dirname(target), { recursive: true });
+            await copyFile(file, target);
+            inputs.set(relative, hash(content.toString("base64")));
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          }
         }
-      }
-    for (const added of options.added ?? []) {
-      if (inputs.has(added.path))
-        throw new Error(
-          `An added verification file already exists: ${added.path}`,
+      for (const added of options.added ?? []) {
+        if (inputs.has(added.path))
+          throw new Error(
+            `An added verification file already exists: ${added.path}`,
+          );
+        // safePath refuses a path outside the policy or through a symlink;
+        // "wx" refuses a file that is already there.
+        const target = await safePath(view, added.path, policy);
+        await mkdir(path.dirname(target), { recursive: true });
+        await writeFile(target, added.content, { flag: "wx" });
+        inputs.set(
+          added.path,
+          hash(Buffer.from(added.content).toString("base64")),
         );
-      // safePath refuses a path outside the policy or through a symlink;
-      // "wx" refuses a file that is already there.
-      const target = await safePath(view, added.path, policy);
-      await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, added.content, { flag: "wx" });
-      inputs.set(
-        added.path,
-        hash(Buffer.from(added.content).toString("base64")),
-      );
+      }
+    } catch (error) {
+      await rm(view, { recursive: true, force: true });
+      throw error;
     }
+    return { view, inputs };
+  };
+  const views: string[] = [];
+  try {
     for (const check of checks) {
       if (signal?.aborted) throw new Error("Run cancelled");
+      const { view, inputs } = await freshView();
+      views.push(view);
       const imageId = await checked(
         "docker",
         ["image", "inspect", "--format", "{{.Id}}", check.image],
@@ -147,6 +161,7 @@ export async function verifyInContainer(
         throw new Error(
           "Verification image must already be provisioned locally",
         );
+      let failed = false;
       const name = `graph-check-${hash(`${workspace}:${Date.now()}:${check.argv.join(" ")}`).slice(0, 20)}`;
       const stop = () => {
         void command("docker", ["kill", name], { timeoutMs: 5000 }).catch(
@@ -201,25 +216,27 @@ export async function verifyInContainer(
           imageId,
           snapshotHash,
         });
-        if (result.code !== 0) break;
+        failed = result.code !== 0;
       } finally {
         signal?.removeEventListener("abort", stop);
         await command("docker", ["rm", "-f", name], { timeoutMs: 5000 }).catch(
           () => {},
         );
       }
-    }
-    for (const [relative, digest] of inputs) {
-      try {
-        const file = await safePath(view, relative, policy);
-        if (hash((await readRegularFile(file)).toString("base64")) !== digest)
-          throw new Error(`Verification modified source file ${relative}`);
-      } catch {
-        throw new Error(`Verification changed a source input: ${relative}`);
+      for (const [relative, digest] of inputs) {
+        try {
+          const file = await safePath(view, relative, policy);
+          if (hash((await readRegularFile(file)).toString("base64")) !== digest)
+            throw new Error(`Verification modified source file ${relative}`);
+        } catch {
+          throw new Error(`Verification changed a source input: ${relative}`);
+        }
       }
+      await rm(view, { recursive: true, force: true });
+      if (failed) break;
     }
     return results;
   } finally {
-    await rm(view, { recursive: true, force: true });
+    for (const view of views) await rm(view, { recursive: true, force: true });
   }
 }
