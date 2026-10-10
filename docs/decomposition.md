@@ -58,7 +58,8 @@ and its suggested next command then says to move the file first.
 When a run's AI reviewer found some criteria unmet, `graph-engine converge
 <run-id>` creates a new plan holding only those criteria (answered "no" or
 "unknown" in the latest AI review), with the run's objective prefixed by
-`Follow-up of run <run-id>:`. It is an ordinary new plan, bound to the
+`Follow-up of run <run-id>:` (one prefix naming the latest run, so a
+follow-up of a follow-up does not nest them). It is an ordinary new plan, bound to the
 current policy and source and approved like any other; the original run and
 plan are left unchanged, and when every criterion was met nothing is
 created. It takes `--provider`, `--effort` and `--check` like `plan`.

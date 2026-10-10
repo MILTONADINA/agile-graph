@@ -32,7 +32,20 @@ export const decompositionSchema = z
             dependsOn: z.array(z.string()).max(MAX_PROPOSED_STEPS),
             // Optional here although the JSON schema requires it: a local
             // planner without strict structured output may leave it out.
-            covers: z.array(z.string().max(64)).max(50).optional(),
+            // Blank entries are dropped and the rest trimmed before they are
+            // checked, so one empty string does not fail a proposal already
+            // paid for; what remains meets the DAG's own covers rules.
+            covers: z.preprocess(
+              (value) =>
+                Array.isArray(value)
+                  ? value
+                      .map((entry) =>
+                        typeof entry === "string" ? entry.trim() : entry,
+                      )
+                      .filter((entry) => entry !== "")
+                  : value,
+              z.array(z.string().min(1).max(64)).max(50).optional(),
+            ),
           })
           .strict(),
       )

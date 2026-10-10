@@ -80,6 +80,61 @@ describe("plan worker", () => {
     });
   });
 
+  it("drops blank covers entries instead of failing a paid-for proposal", async () => {
+    const reply = (steps: unknown[]) =>
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              model: "planner-model",
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({ rationale: "r", steps }),
+                  },
+                },
+              ],
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+            }),
+          ),
+      );
+    const result = await invokePlanWorker(
+      input(),
+      reply([
+        {
+          id: "model",
+          objective: "Add the Invoice model",
+          dependsOn: [],
+          covers: ["AC1", "", "   ", " AC2 "],
+        },
+        {
+          id: "api",
+          objective: "Expose GET /invoices",
+          dependsOn: ["model"],
+          covers: ["", "\t"],
+        },
+      ]),
+    );
+    expect(result.decomposition.steps.map((step) => step.covers)).toEqual([
+      ["AC1", "AC2"],
+      [],
+    ]);
+    // An entry longer than the DAG allows is still refused.
+    await expect(
+      invokePlanWorker(
+        input(),
+        reply([
+          {
+            id: "model",
+            objective: "Add the Invoice model",
+            dependsOn: [],
+            covers: ["A".repeat(65)],
+          },
+        ]),
+      ),
+    ).rejects.toThrow();
+  });
+
   it("asks for a structured decomposition with the task and its context", async () => {
     const sent: { body?: Record<string, any> } = {};
     const result = await invokePlanWorker(input(), respond(sent));

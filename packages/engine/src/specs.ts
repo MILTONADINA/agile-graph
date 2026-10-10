@@ -86,11 +86,17 @@ export function parseSpec(relativePath: string, text: string): Spec {
   let open: SpecCriterion | undefined;
   let inFence = false;
   for (const line of sections["Acceptance criteria"] ?? []) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
+    // A fenced block indented under a criterion is part of what it asks for,
+    // so its lines, delimiters included, are kept as text; nothing inside a
+    // fence is ever read as a criterion or a test link. A fence opened at
+    // the margin ends the criterion, like any other margin line.
+    const delimiter = /^\s*(```|~~~)/.test(line);
+    if (delimiter && !inFence && !/^\s/.test(line)) open = undefined;
+    if (delimiter) inFence = !inFence;
+    if (delimiter || inFence) {
+      if (open && line.trim()) open.text += ` ${line.trim()}`;
       continue;
     }
-    if (inFence) continue;
     const criterion = /^- (AC\d+): (.+)$/.exec(line);
     if (criterion) {
       open = { id: criterion[1]!, text: criterion[2]!.trim(), tests: [] };
@@ -136,9 +142,10 @@ export interface SpecClarification {
 
 /**
  * The open questions written inline as `[NEEDS CLARIFICATION: question]` in
- * the sections a plan is built from. A guess at an open question would
- * become a worker's requirement, so a ready spec may not hold any. Fenced
- * code is an example, never an open question.
+ * the sections a plan is built from, matched in any case and also without a
+ * colon or a question, as `[NEEDS CLARIFICATION]`. A guess at an open
+ * question would become a worker's requirement, so a ready spec may not hold
+ * any. Fenced code is an example, never an open question.
  */
 export function clarifications(spec: Spec): SpecClarification[] {
   const found: SpecClarification[] = [];
@@ -154,10 +161,14 @@ export function clarifications(spec: Spec): SpecClarification[] {
         return !fenced;
       })
       .join("\n");
-    for (const match of text.matchAll(/\[NEEDS CLARIFICATION:\s*([^\]]*)\]/g))
+    // In any case, with or without a colon and a question.
+    for (const match of text.matchAll(
+      /\[\s*needs\s+clarification\b\s*:?([^\]]*)\]/gi,
+    ))
       found.push({
         section,
-        question: match[1]!.replace(/\s+/g, " ").trim(),
+        question:
+          match[1]!.replace(/\s+/g, " ").trim() || "(no question written)",
       });
   }
   return found;

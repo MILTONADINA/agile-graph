@@ -148,6 +148,7 @@ import {
   hiddenIndexEntries,
 } from "./execution/git.js";
 import {
+  followUpObjective,
   likelyWorkerTurns,
   requiresSecurityReview,
   routePlan,
@@ -1234,8 +1235,8 @@ export class GraphEngine {
   /**
    * Converges on what a finished run left undone: a new plan whose
    * acceptance criteria are only those the run's latest AI review did not
-   * find met, with the run's objective under a "Follow-up of run" prefix
-   * that links back to it. Add-only: the run and its plan are never
+   * find met, with the run's objective under a single "Follow-up of run"
+   * prefix that links back to it. Add-only: the run and its plan are never
    * changed, and the new plan goes through createPlan, so policy, approval
    * and hashing are the ordinary ones. With every criterion met it creates
    * nothing.
@@ -1262,7 +1263,7 @@ export class GraphEngine {
     // whole set of criteria, and the follow-up holds only some of them.
     const plan = await this.createPlan({
       ...options,
-      objective: `Follow-up of run ${runId}: ${run.plan.objective}`,
+      objective: followUpObjective(runId, run.plan.objective),
       acceptance: unmet,
     });
     return { runId, unmet, plan };

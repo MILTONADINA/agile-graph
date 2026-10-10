@@ -4,7 +4,9 @@ import type { RunEvent } from "@graph-engineering/contracts";
 import {
   LIKELY_FIX_CHECKS_PER_REPAIR,
   acCoverage,
+  followUpObjective,
   likelyWorkerTurns,
+  MAX_PLAN_OBJECTIVE,
   requiresSecurityReview,
   routePlan,
   unmetCriteria,
@@ -175,5 +177,36 @@ describe("unmet criteria for a follow-up", () => {
     expect(
       unmetCriteria(acceptance, [review({ by: "person", passed: true })]),
     ).toBeUndefined();
+  });
+});
+
+describe("follow-up objectives", () => {
+  it("keeps one follow-up prefix naming the latest run and caps the objective", () => {
+    expect(followUpObjective("run-1", "Fix addition")).toBe(
+      "Follow-up of run run-1: Fix addition",
+    );
+    // A follow-up of a follow-up names only the latest run.
+    expect(
+      followUpObjective(
+        "run-3",
+        "Follow-up of run run-2: Follow-up of run run-1: Fix addition",
+      ),
+    ).toBe("Follow-up of run run-3: Fix addition");
+    // Only a leading prefix is stripped.
+    expect(
+      followUpObjective("run-2", "Fix addition. Follow-up of run run-1: x"),
+    ).toBe("Follow-up of run run-2: Fix addition. Follow-up of run run-1: x");
+    const long = followUpObjective("run-4", "x".repeat(MAX_PLAN_OBJECTIVE));
+    expect(MAX_PLAN_OBJECTIVE).toBe(16000);
+    expect(long).toHaveLength(MAX_PLAN_OBJECTIVE);
+    expect(long.startsWith("Follow-up of run run-4: xxx")).toBe(true);
+    // A cut never leaves half of a surrogate pair.
+    // With an odd-length prefix the limit falls inside the last pair.
+    const emoji = followUpObjective(
+      "run-55",
+      "\u{1F600}".repeat(MAX_PLAN_OBJECTIVE),
+    );
+    expect(emoji).toHaveLength(MAX_PLAN_OBJECTIVE - 1);
+    expect(emoji).not.toMatch(/[\uD800-\uDBFF]$/);
   });
 });

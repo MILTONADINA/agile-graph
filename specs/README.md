@@ -46,7 +46,8 @@ What this feature deliberately does not do.
 - `ready`: agreed and plannable. Criteria may not have tests yet; the run's
   tester writes them. Open questions are written inline as
   `[NEEDS CLARIFICATION: question]` while the spec is a draft; `spec-check`
-  and `plan --spec` refuse a ready or implemented spec that still holds one.
+  and `plan --spec` refuse a ready or implemented spec that still holds one,
+  in any case and with or without a question.
 - `implemented`: every criterion links at least one test that exists and
   contains the named test. `spec-check` enforces this.
 
