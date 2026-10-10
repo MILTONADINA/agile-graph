@@ -59,8 +59,12 @@ const CONSTRUCTORS = new Set([
   "redirecting_factory_constructor_signature",
 ]);
 const COMMENTS = new Set(["comment", "documentation_comment"]);
+// Path segments of name characters; the file name may also hold single dots
+// between them. Only "." separates the file name's parts, because "_" and "-"
+// are name characters already: a separator the name class also matches would
+// let a long name that fails backtrack exponentially (a_a_..._a..dart).
 const sourcePath =
-  /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+(?:[._-][A-Za-z0-9_-]+)*\.dart$/;
+  /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.dart$/;
 const portablePath = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.dart$/;
 const packageName = /^[a-z][a-z0-9_]*$/;
 const generatedPath = /(?:\.g|\.freezed|\.mocks)\.dart$/;
