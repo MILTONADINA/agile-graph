@@ -102,6 +102,19 @@ told only that the log could not be written, and the reason goes to the
 server's standard error. An entry whose outcome is `null` is a call still in
 progress, or one whose server stopped before it finished.
 
+### What a result leaves out
+
+`symbol_search` returns `{ symbols, limitations }`, `graph_neighbors` returns
+`{ edges, limitations }`, and a `context_get` packet has a `limitations`
+field. They give counts and flags only: `filtered` (results withheld by
+credential screening), `truncated` (the result reached its limit of 100
+symbols or 200 edges, or the token budget left candidates out),
+`coverageIncomplete` (indexing could not cover some files), `unresolvedEdges`
+for `graph_neighbors` (edges whose `to` is null) and `notes`. A cloud client's
+notes are fixed sentences with no paths or diagnostics, and results outside
+the export policy are left out before counting, so a count cannot reveal
+private names; a local client's notes also include the indexing diagnostics.
+
 The [platform guide](platform.md#mcp-clients) has the full export and run
 rules.
 

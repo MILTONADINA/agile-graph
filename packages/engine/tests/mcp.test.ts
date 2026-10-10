@@ -392,9 +392,9 @@ it("cloud graph traversal cannot expose resolved private targets or bridge throu
           arguments: { symbolId: entry.id, depth: 3 },
         });
         expect(result.isError).not.toBe(true);
-        const edges = JSON.parse(
+        const { edges } = JSON.parse(
           (result.content as { type: string; text: string }[])[0]!.text,
-        ) as import("@graph-engineering/contracts").GraphEdge[];
+        ) as { edges: import("@graph-engineering/contracts").GraphEdge[] };
         expect(
           edges.some(
             (edge) =>
@@ -428,7 +428,7 @@ it("cloud graph traversal cannot expose resolved private targets or bridge throu
           expect(
             JSON.parse(
               (hiddenSeed.content as { type: string; text: string }[])[0]!.text,
-            ),
+            ).edges,
           ).toEqual([]);
           for (const retrieval of ["lexical", "graph"] as const) {
             const query = "PRIVATE_BRIDGE_QUERY_CANARY";

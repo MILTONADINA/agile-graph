@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -16,9 +16,12 @@ import {
   createMcpServer,
   enabledMcpTools,
   mcpArgsSha256,
+  MCP_LIMITATION_NOTES,
+  type McpLimitations,
   type McpServerOptions,
 } from "../src/mcp.js";
 import { MCP_OPTIONAL_TOOLS, parseAllowedTools } from "../src/mcp-tools.js";
+import { MAX_PLAN_OBJECTIVE } from "../src/planning.js";
 import { planSha256, readMcpCalls } from "../src/store.js";
 import { checked, writeJson } from "../src/util.js";
 
@@ -379,4 +382,236 @@ it("enables individual tools with allowTools, keeps allowRun and allowRunStatus 
   expect(await names({ client: "local", allowTools: ["run_start"] })).toEqual(
     [...base, "run_events", "run_list", "run_start", "run_status"].sort(),
   );
+});
+
+// A project a cloud client may read: public/ is exportable, private/ is not,
+// and an oversized private file makes indexing report incomplete coverage
+// with a diagnostic that names its path.
+async function limitationsFixture() {
+  const root = await mkdtemp(path.join(os.tmpdir(), "graph-mcp-limits-"));
+  const config = await initializeProject(root);
+  config.policy.inference = "allowlisted";
+  config.policy.network = "allowlisted";
+  config.policy.allowedHosts = ["api.openai.com"];
+  config.policy.exportPaths = ["public/**"];
+  await writeJson(path.join(root, PROJECT_FILE), config);
+  await mkdir(path.join(root, "public"));
+  await mkdir(path.join(root, "private"));
+  await writeFile(
+    path.join(root, "public", "limits.ts"),
+    [
+      'import { missing } from "./not-there";',
+      "export function limitsLogin() { return missing(); }",
+      ...Array.from(
+        { length: 101 },
+        (_, index) =>
+          `export function limitsMany${index}() { return ${index}; }`,
+      ),
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "private", "PRIVATE_LIMITS_CANARY.ts"),
+    "export function limitsLoginPrivate() { return false; }",
+  );
+  await writeFile(
+    path.join(root, "private", "OVERSIZED_LIMITS_CANARY.txt"),
+    "x".repeat(1024 * 1024 + 1),
+  );
+  const engine = await GraphEngine.open(root);
+  cleanup.push(async () => {
+    await engine.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectDataDir(config.projectId), {
+      recursive: true,
+      force: true,
+    });
+  });
+  const connect = async (client: "local" | "cloud") => {
+    const server = createMcpServer(engine, { client });
+    const mcp = new Client({ name: `limits-${client}`, version: "1.0.0" });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await mcp.connect(clientTransport);
+    cleanup.push(async () => {
+      await mcp.close();
+      await server.close();
+    });
+    return mcp;
+  };
+  return { engine, connect };
+}
+
+it("states a cloud client's result limitations as counts and fixed sentences, never paths, diagnostics or a count of private matches", async () => {
+  const { engine, connect } = await limitationsFixture();
+  // A legacy index row whose signature holds a credential: screening
+  // withholds it, and the count says so.
+  const searchSymbols = engine.context.searchSymbols.bind(engine.context);
+  vi.spyOn(engine.context, "searchSymbols").mockImplementation(
+    async (...args) =>
+      (await searchSymbols(...args)).map((symbol) =>
+        symbol.name === "limitsLogin"
+          ? {
+              ...symbol,
+              signature:
+                'function limitsLogin(password = "LIMITS_SECRET_CANARY_123456789012")',
+            }
+          : symbol,
+      ),
+  );
+  const client = await connect("cloud");
+  const allowed = new Set<string>(Object.values(MCP_LIMITATION_NOTES));
+  const checkCloud = (limitations: McpLimitations) => {
+    for (const note of limitations.notes) expect(allowed.has(note)).toBe(true);
+    const textOf = JSON.stringify(limitations);
+    for (const hidden of [
+      "PRIVATE_LIMITS_CANARY",
+      "OVERSIZED_LIMITS_CANARY",
+      "LIMITS_SECRET_CANARY",
+      "private/",
+      "1 MiB",
+    ])
+      expect(textOf).not.toContain(hidden);
+    expect(limitations.notes).toContain(MCP_LIMITATION_NOTES.exportScope);
+    expect(limitations.coverageIncomplete).toBe(true);
+    expect(limitations.notes).toContain(MCP_LIMITATION_NOTES.cloudCoverage);
+  };
+
+  const search = json(
+    await client.callTool({
+      name: "symbol_search",
+      arguments: { query: "limitsLogin" },
+    }),
+  );
+  // The private limitsLoginPrivate also matches, but only the exportable
+  // symbol withheld by credential screening is counted.
+  expect(search.symbols).toEqual([]);
+  expect(search.limitations).toMatchObject({ filtered: 1, truncated: false });
+  expect(search.limitations.notes).toContain(MCP_LIMITATION_NOTES.filtered);
+  checkCloud(search.limitations);
+
+  const many = json(
+    await client.callTool({
+      name: "symbol_search",
+      arguments: { query: "limitsMany" },
+    }),
+  );
+  expect(many.symbols).toHaveLength(100);
+  expect(many.limitations).toMatchObject({ filtered: 0, truncated: true });
+  expect(many.limitations.notes).toContain(MCP_LIMITATION_NOTES.symbolLimit);
+  checkCloud(many.limitations);
+
+  const file = (await engine.context.searchSymbols("public/limits.ts")).find(
+    (symbol) => symbol.kind === "file",
+  )!;
+  const graph = json(
+    await client.callTool({
+      name: "graph_neighbors",
+      arguments: { symbolId: file.id },
+    }),
+  );
+  expect(graph.limitations.unresolvedEdges).toBe(
+    (graph.edges as { to: string | null }[]).filter((edge) => edge.to === null)
+      .length,
+  );
+  expect(graph.limitations.unresolvedEdges).toBeGreaterThan(0);
+  expect(graph.limitations.notes).toContain(MCP_LIMITATION_NOTES.unresolved);
+  checkCloud(graph.limitations);
+
+  const packet = json(
+    await client.callTool({
+      name: "context_get",
+      arguments: { query: "export function return", budgetTokens: 400 },
+    }),
+  );
+  expect(packet.limitations).toMatchObject({ truncated: true });
+  expect(packet.limitations.notes).toContain(
+    MCP_LIMITATION_NOTES.contextBudget,
+  );
+  checkCloud(packet.limitations);
+});
+
+it("gives a local client the same limitations with the indexing diagnostics", async () => {
+  const { connect } = await limitationsFixture();
+  const client = await connect("local");
+  const search = json(
+    await client.callTool({
+      name: "symbol_search",
+      arguments: { query: "limitsLogin" },
+    }),
+  );
+  // A local client sees private symbols, so nothing is withheld.
+  expect(
+    (search.symbols as { name: string }[]).map((symbol) => symbol.name).sort(),
+  ).toEqual(["limitsLogin", "limitsLoginPrivate"]);
+  expect(search.limitations).toMatchObject({
+    filtered: 0,
+    truncated: false,
+    coverageIncomplete: true,
+  });
+  expect(search.limitations.notes).not.toContain(
+    MCP_LIMITATION_NOTES.exportScope,
+  );
+  expect(search.limitations.notes).toContain(MCP_LIMITATION_NOTES.coverage);
+  expect(search.limitations.notes.join("\n")).toContain(
+    "private/OVERSIZED_LIMITS_CANARY.txt",
+  );
+  const packet = json(
+    await client.callTool({
+      name: "context_get",
+      arguments: {
+        query: "export function return",
+        budgetTokens: 400,
+        retrieval: "lexical",
+      },
+    }),
+  );
+  expect(packet.limitations).toMatchObject({
+    filtered: 0,
+    truncated: true,
+    coverageIncomplete: true,
+  });
+  expect(packet.limitations.notes.join("\n")).toContain(
+    "OVERSIZED_LIMITS_CANARY",
+  );
+});
+
+it("bounds a plan objective by MAX_PLAN_OBJECTIVE in plan_create, plan_decompose and the dashboard API", async () => {
+  expect(MAX_PLAN_OBJECTIVE).toBe(16000);
+  const { engine, connect } = await fixture();
+  const client = await connect({ client: "local", allowRun: true });
+  const tooLong = "x".repeat(MAX_PLAN_OBJECTIVE + 1);
+  for (const name of ["plan_create", "plan_decompose"]) {
+    const refused = await client.callTool({
+      name,
+      arguments: {
+        objective: tooLong,
+        acceptance: ["2 + 3 is 5"],
+        plannerId: "local",
+      },
+    });
+    expect(refused.isError).toBe(true);
+    expect(text(refused)).toContain(String(MAX_PLAN_OBJECTIVE));
+  }
+  const fits = await client.callTool({
+    name: "plan_create",
+    arguments: {
+      objective: "x".repeat(MAX_PLAN_OBJECTIVE),
+      acceptance: ["2 + 3 is 5"],
+    },
+  });
+  expect(fits.isError).not.toBe(true);
+  const { createServer } = await import("../src/server.js");
+  const { app } = createServer(engine, "test-token");
+  try {
+    const dashboard = await app.inject({
+      method: "POST",
+      url: "/api/plans",
+      headers: { host: "localhost", authorization: "Bearer test-token" },
+      payload: { objective: tooLong, acceptance: ["2 + 3 is 5"] },
+    });
+    expect(dashboard.statusCode).toBe(400);
+  } finally {
+    await app.close();
+  }
 });
