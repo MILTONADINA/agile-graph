@@ -2316,11 +2316,19 @@ export class GraphEngine {
           typeof value === "string" ? redact(value) : value,
         ),
       ) as AuditRecord[];
+      const addKnown = (
+        a: number | null | undefined,
+        b: number | null | undefined,
+      ) =>
+        a === null || a === undefined || b === null || b === undefined
+          ? null
+          : a + b;
       const total = usage.reduce(
         (sum, item) => ({
-          inputTokens: (sum.inputTokens ?? 0) + (item.inputTokens ?? 0),
-          outputTokens: (sum.outputTokens ?? 0) + (item.outputTokens ?? 0),
-          cachedTokens: (sum.cachedTokens ?? 0) + (item.cachedTokens ?? 0),
+          // An unknown count stays unknown rather than counting as zero.
+          inputTokens: addKnown(sum.inputTokens, item.inputTokens),
+          outputTokens: addKnown(sum.outputTokens, item.outputTokens),
+          cachedTokens: addKnown(sum.cachedTokens, item.cachedTokens),
           costUsd:
             sum.costUsd === null || item.costUsd === null
               ? null
