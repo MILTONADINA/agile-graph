@@ -2141,7 +2141,7 @@ describe("planning warnings", () => {
         { steps: [step, step] as never },
         { reviewer: true, maxAttempts: 3 },
       ),
-    ).toBe(2 * 3 + 1 + 2 + 2 * 3);
+    ).toBe(2 * 3 + 1 + 2 * (1 + 3) + 2 * 3);
     expect(
       likelyWorkerTurns(
         { steps: [step] as never },
@@ -2157,8 +2157,10 @@ describe("planning warnings", () => {
 // A committed project and a stand-in for Docker whose scanner containers
 // never end, like a scan that runs for its full 30 minutes. It records the
 // container's process ID and every other docker command it is given. The
-// command's temporary directory is one this test can inspect.
-async function scannerProject() {
+// command's temporary directory is one this test can inspect. `run`, when
+// given, replaces what a scanner container does: shell lines with the
+// container's /out directory in $out.
+async function scannerProject(run?: string[]) {
   const { root, graph } = await project();
   await graph("init");
   const projectFile = path.join(root, ".graph/project.json");
@@ -2195,8 +2197,22 @@ async function scannerProject() {
       'case "$1" in',
       "  version) echo 27.0.0 ;;",
       `  image) echo sha256:${"a".repeat(64)} ;;`,
-      `  run) echo $$ > ${JSON.stringify(`${pidFile}.tmp`)} && mv ${JSON.stringify(`${pidFile}.tmp`)} ${JSON.stringify(pidFile)}`,
-      "       exec sleep 300 ;;",
+      ...(run
+        ? [
+            "  run)",
+            '    out=""',
+            '    for arg in "$@"; do',
+            '      case "$arg" in',
+            '        type=bind,source=*,target=/out) out="${arg#type=bind,source=}"; out="${out%,target=/out}" ;;',
+            "      esac",
+            "    done",
+            ...run.map((line) => `    ${line}`),
+            "    ;;",
+          ]
+        : [
+            `  run) echo $$ > ${JSON.stringify(`${pidFile}.tmp`)} && mv ${JSON.stringify(`${pidFile}.tmp`)} ${JSON.stringify(pidFile)}`,
+            "       exec sleep 300 ;;",
+          ]),
       `  *) echo "$*" >> ${JSON.stringify(log)} ;;`,
       "esac",
       "",
@@ -2204,9 +2220,15 @@ async function scannerProject() {
   );
   await chmod(path.join(bin, "docker"), 0o755);
   return {
+    root,
     temp,
     pidFile,
     log,
+    run: (...args: string[]) =>
+      graph.with({
+        PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
+        TMPDIR: temp,
+      })(...args),
     start: (...args: string[]) =>
       graph.startWith(
         {
@@ -2304,3 +2326,52 @@ describe.skipIf(process.platform === "win32")(
     }, 120_000);
   },
 );
+
+describe.skipIf(process.platform === "win32")("security-scan --sarif", () => {
+  it("writes the scan's redacted findings, their baseline state and an incomplete scan's errors as SARIF", async () => {
+    // Built by concatenation so the source itself holds no credential shape.
+    const token = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
+    const report = JSON.stringify([
+      {
+        RuleID: "github-pat",
+        File: "/scan/index.js",
+        StartLine: 1,
+        Description: `GitHub token ${token}`,
+      },
+    ]);
+    // gitleaks reports one finding; every other scanner fails.
+    const { root, run } = await scannerProject([
+      'case "$*" in',
+      `  *" gitleaks dir "*) printf '%s' '${report}' > "$out/gitleaks.json" ;;`,
+      '  *) echo "scanner crashed" >&2; exit 2 ;;',
+      "esac",
+    ]);
+    const file = path.join(root, "scan.sarif");
+    const result = await run("security-scan", "--sarif", file);
+    expect(result.code).toBe(1);
+    const text = await readFile(file, "utf8");
+    expect(text).not.toContain(token);
+    const log = JSON.parse(text);
+    expect(log.version).toBe("2.1.0");
+    const [sarif] = log.runs;
+    expect(sarif.results).toHaveLength(1);
+    expect(sarif.results[0]).toMatchObject({
+      ruleId: "gitleaks/github-pat",
+      baselineState: "new",
+      locations: [
+        {
+          physicalLocation: {
+            artifactLocation: { uri: "index.js", uriBaseId: "%SRCROOT%" },
+            region: { startLine: 1 },
+          },
+        },
+      ],
+    });
+    const [invocation] = sarif.invocations;
+    expect(invocation.executionSuccessful).toBe(false);
+    expect(invocation.toolExecutionNotifications).toContainEqual({
+      level: "error",
+      message: { text: expect.stringContaining("exited 2: scanner crashed") },
+    });
+  }, 120_000);
+});

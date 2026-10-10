@@ -197,6 +197,7 @@ const STRUCTURAL_EVENT_KEYS: ReadonlySet<string> = new Set([
   // Finding identities compared across attempts: a stored copy that
   // redaction rewrote would never match the live one again.
   "fingerprint",
+  "newFingerprints",
   "findingId",
   "fixed",
   "stillPresent",
@@ -445,7 +446,7 @@ export class RunStore {
             .get(this.projectId, ownerId) as { count: number };
           if (count.count >= maxWorkerCalls)
             throw new Error(
-              `Run exhausted its shared worker-turn budget: policy.maxTurns (${maxWorkerCalls}) counts every model call in a run, across its steps, tester, reviews and repairs. A higher limit applies only to plans made after the change, and changing it voids resume and review-approve for runs planned before it`,
+              `Run exhausted its shared worker-turn budget: policy.maxTurns (${maxWorkerCalls}) counts every model call in a run, across its steps, tester, reviews, checks of earlier review findings and repairs. A higher limit applies only to plans made after the change, and changing it voids resume and review-approve for runs planned before it`,
             );
         }
         const usage = this.usage(ownerId);

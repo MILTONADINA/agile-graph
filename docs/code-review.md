@@ -78,7 +78,18 @@ retry checks, and the feedback names each by ID with its evidence. The full
 review runs only once all are fixed, so the reviewer never confirms its own
 finding inside a review looking for new ones. A person's approval of the
 snapshot still stands in for all of this. Each fix check is a paid call, so
-a retry with many findings can reach `maxCostUsd` sooner.
+a retry with many findings can reach `maxCostUsd` sooner, and each counts
+against the run's shared `policy.maxTurns`. The warning a new plan gets when
+its model calls may exceed `maxTurns` counts three fix checks per repair
+attempt with a reviewer (a review that holds a change back usually names a
+handful of findings); a review with more spends more of the budget.
+
+Each `review.verify_fix` event records the snapshot it judged. A review that
+did not complete at a snapshot (a fix check or the full review failed) and is
+resumed at that same snapshot keeps the findings already shown `fixed` there:
+it records the verdict again with `reused: true` instead of paying for the
+check. A verdict is never reused at another snapshot, and `still_present` or
+`inconclusive` is always checked again.
 
 ## Limits
 

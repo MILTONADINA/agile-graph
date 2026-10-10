@@ -109,7 +109,13 @@ To load the findings into a code host, an editor or another review tool,
 add `--sarif <file>`. The scan then also writes every finding as SARIF 2.1.0.
 Tool-quoted text is redacted as it is in the scan output, and each result's
 `baselineState` says whether the reviewed baseline already holds it (`unchanged`)
-or not (`new`).
+or not (`new`). Each result's `artifactLocation` is the repository-relative
+path with every segment percent-encoded (a space, `#`, `%` or non-ASCII
+character), relative to `uriBaseId` `%SRCROOT%`, the repository root. The
+log's one invocation has `executionSuccessful: false` when the scan had
+errors or files no scanner could read, and lists each redacted error and
+each unscanned path under `toolExecutionNotifications`, so a tool reading
+the log cannot take an incomplete scan for a clean one.
 
 With the image built, `GRAPH_ENGINE_SECURITY_IMAGE=1 npm test -w
 @graph-engineering/engine -- tests/security-catalog.test.ts` scans planted
@@ -138,6 +144,13 @@ worker created, and records `security.scan_completed`.
   changed. A newly published advisory about a dependency the run did not
   touch is recorded under `advisory` in `security.scan_completed` instead of
   failing unrelated work.
+- `security.scan_completed` lists up to 200 new findings in full and records
+  the fingerprints of up to 10,000 under `newFingerprints`
+  (`fingerprintsTruncated` when there were more). On the run's next scan a
+  `security.verify_fix` event says which of those fingerprints are gone
+  (`fixed`) and which remain (`stillPresent`), with `truncated` when the
+  earlier list was cut. It is informational: the gate blocks on whatever is
+  still new.
 - Dependency scanning needs a downloaded OSV database. Without one, the
   skipped scan is recorded as `security.tool_not_run`, and a run that
   changed a lockfile (Dart and Flutter's `pubspec.lock` among them) fails

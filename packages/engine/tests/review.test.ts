@@ -6,6 +6,7 @@ import {
   invokeVerifyFix,
   priorBlockingFindings,
   REVIEW_INSTRUCTIONS,
+  reusableFixVerdicts,
   reviewOutcome,
   VERIFY_FIX_INSTRUCTIONS,
   type WorkerReview,
@@ -115,6 +116,28 @@ describe("review findings", () => {
     );
     // A passing review sends nothing back, advisory findings included.
     expect(reviewOutcome(approve, ["sum works"]).feedback).toBe("");
+  });
+
+  it("reuses only fixed verdicts recorded for the same snapshot", () => {
+    const check = (data: Record<string, unknown>) => ({
+      type: "review.verify_fix",
+      data: { verdict: "fixed", evidence: "gone", snapshotHash: "s1", ...data },
+    });
+    const reusable = reusableFixVerdicts(
+      [
+        check({ findingId: "Rsame" }),
+        check({ findingId: "Rother", snapshotHash: "s0" }),
+        check({ findingId: "Rpresent", verdict: "still_present" }),
+        check({ findingId: "Runsure", verdict: "inconclusive" }),
+        check({ findingId: "Rlegacy", snapshotHash: undefined }),
+        { type: "review.completed", data: { findingId: "Rreview" } },
+      ],
+      "s1",
+    );
+    expect([...reusable]).toEqual([["Rsame", "gone"]]);
+    expect(
+      reusableFixVerdicts([check({ findingId: "Rsame" })], "s2").size,
+    ).toBe(0);
   });
 
   it("re-checks only the blocking findings of the latest AI review that asked for changes", () => {
