@@ -1091,3 +1091,29 @@ the fixture was corrected to send exact JSON bytes before the successful run.
 No image or model was downloaded. These tests use a fake inbox adapter; real
 secret provisioning, provider compatibility and durable atomic replay handling
 remain application-owned and unverified.
+
+## Self-development: SARIF export planned and run by the graph — 2026-10-10 UTC
+
+The graph planned this repository's SARIF export from its own spec
+(`specs/security/sarif-export.md`), with the existing local oMLX Qwen as
+worker, tester and reviewer, shadow decisions and a zero external-API cap.
+The owner approved the plan by its content hash. This was **not** an
+autonomous success: the change was finished by hand. The run found two
+engine problems along the way:
+
+- `plan --spec` kept only the first line of each acceptance criterion, so
+  workers would have received criteria cut short. The spec was rewritten with
+  one line per criterion for this run; the parser fix is separate work.
+- The tester asked for `packages/engine/src/security/` with a trailing slash.
+  The scope check matches paths without one, so the whole run failed instead
+  of returning the directory listing a directory request already gets. This
+  is fixed separately, with a test.
+
+After that fix the run resumed. The tester spent all twelve turns of the
+run's shared turn budget asking for files, two of them rejected as asking
+for nothing new, and wrote no tests. With a 16,000-token context and twelve
+turns, the local model could not gather enough of this repository to write
+tests for it. The SARIF module, its tests and the `--sarif` flag were then
+written by hand. A smoke scan of a one-file repository wrote a valid SARIF
+2.1.0 log with the planted `eval` finding marked `new`. No model or image was
+downloaded; the verification image was rebuilt from the current dependencies.

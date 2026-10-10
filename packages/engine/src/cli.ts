@@ -69,6 +69,7 @@ import {
 import { parseSourceLocation } from "./context/index.js";
 import { trackedFiles } from "./execution/workspace.js";
 import { selectSecurityTools } from "./security/catalog.js";
+import { scanSarif } from "./security/sarif.js";
 import {
   baselineChanged,
   displayFinding,
@@ -736,6 +737,10 @@ cli
     "--update-baseline",
     "Accept every current finding into the baseline after review",
   )
+  .option(
+    "--sarif <file>",
+    "Also write every finding, redacted and marked new or unchanged against the baseline, as SARIF 2.1.0",
+  )
   .action(async (options) => {
     try {
       await checked("docker", ["version", "--format", "{{.Server.Version}}"]);
@@ -772,6 +777,15 @@ cli
       await writeBaseline(root(), scan);
     }
     const fresh = newFindings(scan, await readBaseline(root()));
+    if (options.sarif)
+      await writeFile(
+        path.resolve(options.sarif),
+        `${JSON.stringify(
+          scanSarif(scan.findings, fresh, ENGINE_VERSION),
+          null,
+          2,
+        )}\n`,
+      );
     print({
       tools: scan.tools,
       findings: scan.findings.length,

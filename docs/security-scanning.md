@@ -105,6 +105,12 @@ true while the baseline differs from the committed version, including a new
 baseline that was never committed when Git is set to hide untracked files,
 so accepting risk without a reviewed commit is visible.
 
+To load the findings into a code host, an editor or another review tool,
+add `--sarif <file>`. The scan then also writes every finding as SARIF 2.1.0.
+Tool-quoted text is redacted as it is in the scan output, and each result's
+`baselineState` says whether the reviewed baseline already holds it (`unchanged`)
+or not (`new`).
+
 With the image built, `GRAPH_ENGINE_SECURITY_IMAGE=1 npm test -w
 @graph-engineering/engine -- tests/security-catalog.test.ts` scans planted
 findings, scanner configuration and suppressions and checks the baseline.
