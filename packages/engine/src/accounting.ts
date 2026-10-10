@@ -1,4 +1,9 @@
-import type { RunRecord, Usage } from "@graph-engineering/contracts";
+import type {
+  ProjectPolicy,
+  RunRecord,
+  Usage,
+} from "@graph-engineering/contracts";
+import type { DecisionBudget } from "./decision-batch.js";
 
 export interface AccountingGroup {
   totals: Usage;
@@ -125,4 +130,64 @@ export function summarizeInferenceCalls(
     };
   }
   return summary;
+}
+
+/**
+ * The reservation ledger for hosted typed decisions. With
+ * policy.decisionMaxCostUsd set, every decision call in the project shares
+ * one ledger per UTC day (`decisions-YYYY-MM-DD`) under that cap instead of
+ * the run's ledger under maxCostUsd, so a zero worker cap still lets
+ * decisions run and worker spend never draws on the decision cap. Each call
+ * settles on the ledger it reserved on, even across midnight.
+ */
+export function decisionLedgerBudget(input: {
+  store: {
+    reserveCall(
+      ownerId: string,
+      callId: string,
+      provider: string,
+      reservedUsd: number | null,
+      ceiling: number | null,
+    ): void;
+    settleCall(
+      ownerId: string,
+      callId: string,
+      provider: string,
+      usage: Usage,
+    ): void;
+  };
+  policy: () => Pick<ProjectPolicy, "maxCostUsd" | "decisionMaxCostUsd">;
+  ownerId: string;
+  nowMs: () => number;
+}): DecisionBudget {
+  const owners = new Map<string, string>();
+  const ledger = () => {
+    const policy = input.policy();
+    if (policy.decisionMaxCostUsd === undefined)
+      return { owner: input.ownerId, ceiling: policy.maxCostUsd };
+    const day = new Date(input.nowMs()).toISOString().slice(0, 10);
+    return { owner: `decisions-${day}`, ceiling: policy.decisionMaxCostUsd };
+  };
+  return {
+    reserve: async ({ callId, provider, amountUsd }) => {
+      const { owner, ceiling } = ledger();
+      input.store.reserveCall(owner, callId, provider, amountUsd, ceiling);
+      owners.set(callId, owner);
+    },
+    settle: async (usage) => {
+      const owner = owners.get(usage.callId) ?? ledger().owner;
+      owners.delete(usage.callId);
+      input.store.settleCall(owner, usage.callId, usage.provider, {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cachedTokens: 0,
+        costUsd: usage.chargedUsd,
+        // The debit is conservative: a reviewed price or a reservation
+        // above the reported charge is an estimate, not a measured cost.
+        estimated:
+          usage.reportedCostUsd === null ||
+          usage.chargedUsd !== usage.reportedCostUsd,
+      });
+    },
+  };
 }

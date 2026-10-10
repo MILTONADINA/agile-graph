@@ -345,6 +345,40 @@ provider-enforced financial guarantee. Reconcile invoice changes or ambiguous
 charges before restoring headroom. Local Laya has zero external provider fee in
 this ledger; electricity and hardware costs are not measured or claimed free.
 
+### Decision-only daily cap
+
+Owners keep `policy.maxCostUsd` at 0 so workers spend nothing, which also
+refuses every priced hosted decision. The optional
+`policy.decisionMaxCostUsd` (a number at least 0, or `null` for no cap)
+replaces `maxCostUsd` for hosted decision calls only. Their reservations then
+go to one project-wide ledger per UTC day, `decisions-YYYY-MM-DD`, not to the
+run's ledger, so a run's usage no longer includes decision spend; the
+`insights-context` report shows it. Worker, planner, review and audit spend
+stay under `maxCostUsd`. The key is absent from `DEFAULT_POLICY`, so policies
+without it keep their hash and their old behaviour. Setting it changes the
+policy hash, so make fresh plans afterwards.
+
+### Hosted context selection
+
+A run's context-selection questions are exportable only for items that are
+not memory, have a source and lie on a path policy lets leave the machine
+(`exportPaths`, minus `excludedPaths`). Exportable and local-only candidates
+are asked in separate groups, so one local-only item does not keep the others
+from a hosted provider; local-only questions go to local providers such as
+Laya and record the hosted refusal.
+
+### Decision quality report
+
+`graph-engine insights-context` is a read-only local report. Per provider and
+decision category it counts questions answered and abstained, tallies the
+recorded abstention reasons, and gives request latency (`latencyMs`, recorded
+on new decisions) and charged spend with calls of unknown cost counted
+separately. Where two providers answered the same question in the same batch
+(`batchId`, recorded on new decisions) it reports how often they agreed. It
+prints counts and engine-written reasons only, no state text, labels or file
+contents, and no MCP tool returns it. Older records without batch IDs or
+latency are not paired or timed.
+
 ## Evaluation dataset
 
 `graph-engine evaluate <json>` accepts a versioned dataset or a legacy array of

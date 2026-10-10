@@ -12,7 +12,7 @@ import {
   type DecisionProvider,
   type PromotionEvidence,
 } from "./decisions.js";
-import { assertEndpoint, containsSecret } from "./policy.js";
+import { assertEndpoint, containsSecret, decisionCostCap } from "./policy.js";
 import { hash, id, now } from "./util.js";
 import {
   authorizesPromotionFromBinding,
@@ -252,6 +252,8 @@ export async function decideBatch(
   const policy = structuredClone(options.policy);
   assertProjectPolicy(policy);
   const policyVersion = hash(policy);
+  // Pairs each provider's answer to the same question in local reports.
+  const batchId = id();
   const timeoutMs =
     policy.decisionTimeoutSeconds === null
       ? null
@@ -327,6 +329,8 @@ export async function decideBatch(
       reservedUsd: number | null = null;
     let accountingFailure = false;
     let callUsage: DecisionCallUsage | undefined;
+    // Wall time of the provider request, for local quality reports only.
+    let latencyMs: number | null = null;
     try {
       assertNotCancelled();
       if (!policy.providers.includes(provider.id))
@@ -386,7 +390,9 @@ export async function decideBatch(
             : price.usdPerUnit *
               (price.unit === "question" ? pending.length : 1)
           : null;
-      if (policy.maxCostUsd !== null && hosted) {
+      // policy.decisionMaxCostUsd, when set, replaces maxCostUsd here.
+      const cap = decisionCostCap(policy);
+      if (cap !== null && hosted) {
         if (estimate === null || !options.budget)
           throw new Error(
             "Unknown hosted pricing or missing reservation ledger; cost-capped projects abstain",
@@ -398,7 +404,7 @@ export async function decideBatch(
           throw new Error(
             "Hosted pricing must be a positive reviewed price; cost-capped projects abstain",
           );
-        if (estimate > policy.maxCostUsd)
+        if (estimate > cap)
           throw new Error(
             "Decision request exceeds the configured cost ceiling",
           );
@@ -431,6 +437,7 @@ export async function decideBatch(
               AbortSignal.timeout(timeoutMs),
             ]);
       dispatched = true;
+      const sentAt = performance.now();
       const response = await fetch(provider.endpoint, {
         method: "POST",
         redirect: "error",
@@ -445,6 +452,7 @@ export async function decideBatch(
       if (!response.ok)
         throw new Error(`Decision provider HTTP ${response.status}`);
       result = await readDecisionResponse(response, requestSignal);
+      latencyMs = Math.round(performance.now() - sentAt);
       requestSignal?.throwIfAborted();
     } catch (error) {
       failure =
@@ -622,6 +630,7 @@ export async function decideBatch(
         createdAt: now(),
         evidence: {
           questionId: question.id,
+          batchId,
           callId,
           stateHash: hash(state),
           contextComplete: options.stateTruncated !== true,
@@ -634,6 +643,7 @@ export async function decideBatch(
               }
             : {}),
           ...(questionFailure ? { failure: questionFailure } : {}),
+          ...(latencyMs !== null ? { latencyMs } : {}),
           ...(question.id === pending[0]?.id && callUsage
             ? { usage: callUsage }
             : {}),

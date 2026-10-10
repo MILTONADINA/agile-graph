@@ -910,3 +910,14 @@ export function assertPublication(
   )
     throw new Error("Project policy denies GitHub publication");
 }
+/**
+ * The USD cap hosted typed decisions are charged against: the decision-only
+ * daily cap when the policy sets one (null means none), else maxCostUsd.
+ */
+export function decisionCostCap(
+  policy: Pick<ProjectPolicy, "maxCostUsd" | "decisionMaxCostUsd">,
+): number | null {
+  return policy.decisionMaxCostUsd !== undefined
+    ? policy.decisionMaxCostUsd
+    : policy.maxCostUsd;
+}
