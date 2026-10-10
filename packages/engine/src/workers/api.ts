@@ -11,6 +11,7 @@ import type {
   Usage,
 } from "@graph-engineering/contracts";
 import {
+  assertChatEndpoint,
   assertEndpoint,
   assertProvider,
   containsSecret,
@@ -322,8 +323,38 @@ export async function callStructuredProvider(
         ? { thinking_budget: provider.localOptions.thinkingBudget }
         : {}),
     };
+  } else if (provider.kind === "chat") {
+    // Any OpenAI-compatible chat-completions server. It is a cloud consumer
+    // like openai: no default address, HTTPS to an allowlisted host only, and
+    // no local-server options such as thinking toggles.
+    if (!provider.endpoint)
+      throw new Error("A chat provider needs its HTTPS endpoint configured");
+    if (!key)
+      throw new Error(
+        `Provider ${provider.id} needs apiKeyEnv naming its API key variable`,
+      );
+    endpoint = `${provider.endpoint.replace(/\/$/, "")}/chat/completions`;
+    headers.Authorization = `Bearer ${key}`;
+    body = {
+      model: provider.model,
+      messages: [
+        { role: "system", content: options.instructions },
+        { role: "user", content: options.user },
+      ],
+      max_tokens: policy.maxOutputTokens,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: options.schemaName,
+          strict: true,
+          schema: options.schema,
+        },
+      },
+      ...(options.effort ? { reasoning_effort: options.effort } : {}),
+    };
   } else throw new Error("Installed agents require their dedicated adapter");
-  assertEndpoint(endpoint, policy, provider.kind === "local");
+  if (provider.kind === "chat") assertChatEndpoint(endpoint, policy);
+  else assertEndpoint(endpoint, policy, provider.kind === "local");
   const callSignal = AbortSignal.any([
     signal ?? new AbortController().signal,
     AbortSignal.timeout(policy.timeoutSeconds * 1000),

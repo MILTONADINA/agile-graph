@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { isApiKind } from "@graph-engineering/contracts";
 import type {
   ProjectPolicy,
   ProviderConfig,
@@ -106,7 +107,7 @@ function assertReviewerCall(
   request: string,
   what: string,
 ): void {
-  if (!["openai", "anthropic", "local"].includes(provider.kind))
+  if (!isApiKind(provider.kind) && provider.kind !== "local")
     throw new Error(
       `Reviewer ${provider.id} must be an API or local provider; installed agents cannot review yet`,
     );

@@ -5,12 +5,14 @@ import path from "node:path";
 import {
   assertInstalledWorkerBinding,
   assertInstalledWorkerIdentity,
+  isInstalledKind,
+  type InstalledKind,
   type InstalledWorkerBinding,
   type InstalledWorkerIdentity,
   type ProviderConfig,
 } from "@graph-engineering/contracts";
 
-export type InstalledKind = "claude" | "codex" | "cursor";
+export type { InstalledKind };
 
 /** Safe to return to a cloud client: no host paths, file contents or credentials. */
 export class InstalledIdentityError extends Error {
@@ -26,7 +28,7 @@ const READ_FLAGS =
   constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 
 export function isInstalledProvider(provider: ProviderConfig): boolean {
-  return ["claude", "codex", "cursor"].includes(provider.kind);
+  return isInstalledKind(provider.kind);
 }
 
 function canonical(value: unknown): unknown {

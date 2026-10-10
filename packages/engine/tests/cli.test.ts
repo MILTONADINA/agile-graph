@@ -468,6 +468,75 @@ describe("command line", () => {
     );
   }, 120_000);
 
+  it("adds a chat provider only with its endpoint and API key variable, and never permits it without --enable", async () => {
+    const { root, graph } = await project();
+    await graph("init");
+    const missing = await graph(
+      "provider-add",
+      "gateway",
+      "chat",
+      "hosted-fixture",
+      "--api-key-env",
+      "GATEWAY_KEY",
+    );
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain(
+      "A chat provider needs its HTTPS endpoint",
+    );
+    const keyless = await graph(
+      "provider-add",
+      "gateway",
+      "chat",
+      "hosted-fixture",
+      "--endpoint",
+      "https://gateway.example/v1",
+    );
+    expect(keyless.code).toBe(1);
+    expect(keyless.stderr).toContain(
+      "A chat provider needs the environment variable",
+    );
+    const conflicting = await graph(
+      "provider-add",
+      "gateway",
+      "chat",
+      "hosted-fixture",
+      "--key-env",
+      "ONE_KEY",
+      "--api-key-env",
+      "OTHER_KEY",
+    );
+    expect(conflicting.code).toBe(1);
+    expect(conflicting.stderr).toContain("name different variables");
+    const added = await graph(
+      "provider-add",
+      "gateway",
+      "chat",
+      "hosted-fixture",
+      "--endpoint",
+      "https://gateway.example/v1",
+      "--api-key-env",
+      "GATEWAY_KEY",
+      "--input-cost",
+      "1",
+      "--output-cost",
+      "2",
+    );
+    expect(added.code).toBe(0);
+    expect(JSON.parse(added.stdout)).toMatchObject({
+      id: "gateway",
+      kind: "chat",
+      endpoint: "https://gateway.example/v1",
+      apiKeyEnv: "GATEWAY_KEY",
+    });
+    expect(added.stderr).toContain(
+      "gateway is configured but not permitted by the project policy",
+    );
+    const config = JSON.parse(
+      await readFile(path.join(root, ".graph/project.json"), "utf8"),
+    );
+    expect(config.policy.providers).not.toContain("gateway");
+  }, 120_000);
+
   it("permits a configured worker with provider-enable without changing its configuration", async () => {
     const { root, graph } = await project();
     await graph("init");
@@ -1753,7 +1822,7 @@ describe("command line", () => {
     config.policy.maxCostUsd = 0;
     await writeFile(file, JSON.stringify(config));
     const refusal =
-      "an installed claude agent reports no cost the engine can enforce, so it cannot run under a numeric policy.maxCostUsd whatever prices are recorded for it. Use an openai, anthropic or local worker";
+      "an installed claude agent reports no cost the engine can enforce, so it cannot run under a numeric policy.maxCostUsd whatever prices are recorded for it. Use an openai, anthropic, chat or local worker";
     // Recording prices is not the fix, so the advice never asks for them.
     const added = await graph(
       "provider-add",

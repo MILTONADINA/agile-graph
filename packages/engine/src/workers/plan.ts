@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isApiKind } from "@graph-engineering/contracts";
 import type {
   ContextPacket,
   ProjectPolicy,
@@ -96,7 +97,7 @@ export async function invokePlanWorker(
   providerFetch: ProviderFetch = nodeProviderFetch,
 ): Promise<{ decomposition: Decomposition; model: string; usage: Usage }> {
   const { provider, policy } = input;
-  if (!["openai", "anthropic", "local"].includes(provider.kind))
+  if (!isApiKind(provider.kind) && provider.kind !== "local")
     throw new Error(
       `Planner ${provider.id} must be an API or local provider; installed agents cannot plan yet`,
     );
