@@ -3,6 +3,7 @@ import type {
   ExecutionPlan,
   ProjectPolicy,
   ProviderConfig,
+  RunEvent,
 } from "@graph-engineering/contracts";
 import {
   decideBatch,
@@ -186,4 +187,52 @@ export function likelyWorkerTurns(
     (options.reviewer ? 1 + repairs * (1 + LIKELY_FIX_CHECKS_PER_REPAIR) : 0) +
     repairs * 3
   );
+}
+
+/**
+ * Which acceptance criteria no step says it covers, and which `covers`
+ * entries name no criterion. IDs come from the `ACn:` prefixes that plans
+ * made from specs carry; criteria without one cannot be covered by ID and
+ * are left out. Advisory only: a step's own claim is not evidence that the
+ * work satisfies the criterion, which stays the reviewer's to judge.
+ */
+export function acCoverage(
+  acceptance: readonly string[],
+  steps: readonly Pick<ExecutionPlan["steps"][number], "covers">[],
+): { uncovered: string[]; unknown: string[] } {
+  const ids = acceptance.flatMap(
+    (criterion) => /^(AC\d+):/.exec(criterion)?.[1] ?? [],
+  );
+  const covered = new Set(steps.flatMap((step) => step.covers ?? []));
+  return {
+    uncovered: ids.filter((criterionId) => !covered.has(criterionId)),
+    unknown: [...covered].filter((entry) => !ids.includes(entry)),
+  };
+}
+
+/** Whether any step of a plan names the criteria it covers. */
+export const namesCoverage = (
+  steps: readonly Pick<ExecutionPlan["steps"][number], "covers">[],
+): boolean => steps.some((step) => step.covers?.length);
+
+/**
+ * The acceptance criteria a run's latest AI review did not find met ("no"
+ * or "unknown"), in plan order. A review answers the plan's criteria by
+ * position, and a missing answer counts as unknown, as when the run was
+ * judged. A person's approval stands in for the reviewer's verdict but
+ * judges no criterion, so it is skipped. Undefined when no AI review
+ * completed.
+ */
+export function unmetCriteria(
+  acceptance: readonly string[],
+  events: readonly RunEvent[],
+): string[] | undefined {
+  const review = events.findLast(
+    (event) => event.type === "review.completed" && event.data.by !== "person",
+  );
+  if (!review) return undefined;
+  const answers = Array.isArray(review.data.criteria)
+    ? (review.data.criteria as { met?: unknown }[])
+    : [];
+  return acceptance.filter((_, index) => answers[index]?.met !== "yes");
 }

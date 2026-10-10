@@ -6,6 +6,7 @@ import { DEFAULT_POLICY } from "@graph-engineering/contracts";
 import {
   checkSpecs,
   ciRunsWithSwitch,
+  clarifications,
   definesTest,
   parseSpec,
   planFromSpec,
@@ -106,6 +107,69 @@ describe("spec parsing", () => {
     );
   });
 
+  it("keeps a criterion's wrapped lines and nested bullets in its text", () => {
+    const parsed = parseSpec(
+      "specs/billing/invoice-list.md",
+      spec({
+        criteria: [
+          "- AC1: GET /invoices lists invoices, newest first, and",
+          "  includes each invoice's total",
+          "  - in the account's currency",
+          "",
+          "  - rounded to cents",
+          "  - Test: tests/invoices.test.ts :: lists invoices",
+          "- AC2: Unauthenticated requests are refused",
+          "  - Test: tests/invoices.test.ts :: refuses anonymous users",
+          "",
+          "Notes at the margin belong to no criterion.",
+          "  - nor does an indented line after them",
+        ].join("\n"),
+      }),
+    );
+    expect(parsed.criteria).toEqual([
+      {
+        id: "AC1",
+        text: "GET /invoices lists invoices, newest first, and includes each invoice's total - in the account's currency - rounded to cents",
+        tests: [{ path: "tests/invoices.test.ts", name: "lists invoices" }],
+      },
+      {
+        id: "AC2",
+        text: "Unauthenticated requests are refused",
+        tests: [
+          { path: "tests/invoices.test.ts", name: "refuses anonymous users" },
+        ],
+      },
+    ]);
+    expect(planFromSpec(parsed).acceptance).toEqual([
+      "AC1: GET /invoices lists invoices, newest first, and includes each invoice's total - in the account's currency - rounded to cents",
+      "AC2: Unauthenticated requests are refused",
+    ]);
+  });
+
+  it("refuses to plan a spec with open clarification markers, naming them", () => {
+    const parsed = parseSpec(
+      "specs/billing/invoice-list.md",
+      spec({
+        status: "ready",
+        criteria: [
+          "- AC1: GET /invoices lists invoices [NEEDS CLARIFICATION: paged",
+          "  or all at once?]",
+          "- AC2: Unauthenticated requests are refused",
+        ].join("\n"),
+      }).replace(
+        "Editing invoices.",
+        "Editing invoices. [NEEDS CLARIFICATION: are drafts invoices?]",
+      ),
+    );
+    expect(clarifications(parsed)).toEqual([
+      { section: "Acceptance criteria", question: "paged or all at once?" },
+      { section: "Non-goals", question: "are drafts invoices?" },
+    ]);
+    expect(() => planFromSpec(parsed)).toThrow(
+      "has 2 open questions marked NEEDS CLARIFICATION; answer them in the spec before planning: paged or all at once? (Acceptance criteria); are drafts invoices? (Non-goals)",
+    );
+  });
+
   it("refuses to plan a draft", () => {
     expect(() =>
       planFromSpec(
@@ -126,6 +190,21 @@ describe("spec parsing", () => {
       specs: [expect.objectContaining({ id: "refunds", status: "draft" })],
       errors: [],
     });
+  });
+
+  it("explains the clarification marker in a template comment", () => {
+    const template = specTemplate({
+      id: "refunds",
+      title: "Refund an invoice",
+      area: "billing",
+    });
+    expect(template).toMatch(
+      /^<!-- Write an open question inline as \[NEEDS CLARIFICATION: the question\]\..* -->$/m,
+    );
+    // Outside every section, so the comment itself is never an open question.
+    expect(
+      clarifications(parseSpec("specs/billing/refunds.md", template)),
+    ).toEqual([]);
   });
 });
 
@@ -176,6 +255,26 @@ describe("spec check", () => {
         expect.stringContaining("ID invoice-list is also used by"),
       ]),
     );
+  });
+
+  it("fails a ready spec with open clarification markers but lets a draft hold them", async () => {
+    const marked = (status: string) =>
+      spec({ status }).replace(
+        "Accountants need to see every invoice.",
+        "Accountants need to see every invoice. [NEEDS CLARIFICATION: archived ones too?]\n\n```\n[NEEDS CLARIFICATION: an example, not a question]\n```",
+      );
+    const ready = await repo({
+      "specs/billing/invoice-list.md": marked("ready"),
+      "tests/invoices.test.ts": tests,
+    });
+    expect((await checkSpecs(ready, DEFAULT_POLICY)).errors).toEqual([
+      "specs/billing/invoice-list.md: needs clarification in '## Problem': archived ones too?",
+    ]);
+    const draft = await repo({
+      "specs/billing/invoice-list.md": marked("draft"),
+      "tests/invoices.test.ts": tests,
+    });
+    expect((await checkSpecs(draft, DEFAULT_POLICY)).errors).toEqual([]);
   });
 
   it("lets a ready spec have untested criteria but not an empty one", async () => {

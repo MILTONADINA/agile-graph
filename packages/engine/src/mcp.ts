@@ -450,6 +450,14 @@ export function createMcpServer(
                     .describe(
                       "Glob patterns limiting the files this step may write.",
                     ),
+                  covers: z
+                    .array(z.string().min(1).max(64))
+                    .min(1)
+                    .max(50)
+                    .optional()
+                    .describe(
+                      "Acceptance-criterion IDs (such as AC2) this step works towards; advisory, shown as coverage when the plan is reviewed.",
+                    ),
                 })
                 .strict(),
             )

@@ -108,6 +108,7 @@ async function decomposeProject() {
   const planner = {
     requests: 0,
     mode: "answer" as "answer" | "fail" | "hold",
+    covers: undefined as string[] | undefined,
   };
   const server = createServer((request, response) => {
     planner.requests++;
@@ -128,6 +129,7 @@ async function decomposeProject() {
                       id: "fix",
                       objective: "Fix addition in math.cjs",
                       dependsOn: [],
+                      ...(planner.covers ? { covers: planner.covers } : {}),
                     },
                   ],
                 }),
@@ -864,6 +866,36 @@ describe("command line", () => {
     },
     120_000,
   );
+
+  it("includes acceptance-criteria coverage in the decompose output when the planner names it", async () => {
+    const { graph, planner, decompose } = await decomposeProject();
+    const outside = await mkdtemp(path.join(tmpdir(), "graph-cli-covers-"));
+    directories.push(outside);
+    // The fixture's single criterion has no ID, and the planner names none.
+    const plain = await decompose(path.join(outside, "plain.json"));
+    expect(plain.code).toBe(0);
+    expect(JSON.parse(plain.stdout)).not.toHaveProperty("coverage");
+
+    planner.covers = ["AC1", "AC3"];
+    const out = path.join(outside, "covered.json");
+    const covered = await graph(
+      "decompose",
+      "Fix addition",
+      "--accept",
+      "AC1: 2 + 3 is 5",
+      "AC2: 0 + 0 is 0",
+      "--planner",
+      "qwen",
+      "--out",
+      out,
+    );
+    expect(covered.code).toBe(0);
+    const proposal = JSON.parse(covered.stdout);
+    expect(proposal.coverage).toEqual({ uncovered: ["AC2"], unknown: ["AC3"] });
+    expect(JSON.parse(await readFile(out, "utf8"))).toEqual([
+      expect.objectContaining({ id: "fix", covers: ["AC1", "AC3"] }),
+    ]);
+  }, 120_000);
 
   it("warns before the planner call when the decompose output is inside the project and not ignored by Git", async () => {
     const { root, planner, decompose } = await decomposeProject();
@@ -1871,6 +1903,67 @@ describe("command line", () => {
     );
     for (const state of ["approved", "approval", "approvalMatchesPlan"])
       expect(output).not.toHaveProperty(state);
+  }, 120_000);
+
+  it("shows acceptance-criteria coverage in plan-approve when steps name the criteria they cover", async () => {
+    const { graph } = await project();
+    await graph("init");
+    await graph(
+      "provider-add",
+      "qwen",
+      "local",
+      "fixture",
+      "--endpoint",
+      "http://127.0.0.1:1/v1",
+    );
+    const outside = await mkdtemp(path.join(tmpdir(), "graph-cli-steps-"));
+    directories.push(outside);
+    const write = async (name: string, steps: object[]) => {
+      const file = path.join(outside, name);
+      await writeFile(file, JSON.stringify(steps));
+      return file;
+    };
+    const worker = (id: string, extra: object = {}) => ({
+      id,
+      kind: "worker",
+      objective: `Do ${id}`,
+      dependsOn: [],
+      providerId: "qwen",
+      ...extra,
+    });
+    const shown = async (stepsFile: string) => {
+      const plan = await graph(
+        "plan",
+        "Add invoices",
+        "--accept",
+        "AC1: Invoices are listed",
+        "AC2: Anonymous requests are refused",
+        "--steps",
+        stepsFile,
+      );
+      expect(plan.code).toBe(0);
+      const approve = await graph("plan-approve", JSON.parse(plan.stdout).id);
+      expect(approve.code).toBe(0);
+      return JSON.parse(approve.stdout);
+    };
+    const covered = await shown(
+      await write("covered.json", [
+        worker("list", { covers: ["AC1", "AC7"] }),
+        worker("docs"),
+      ]),
+    );
+    expect(covered.steps).toEqual([
+      expect.objectContaining({ id: "list", covers: ["AC1", "AC7"] }),
+      expect.objectContaining({ id: "docs", covers: null }),
+    ]);
+    expect(covered.coverage).toEqual({ uncovered: ["AC2"], unknown: ["AC7"] });
+    // No step names any criterion: no coverage to show, not "all uncovered".
+    const plain = await shown(await write("plain.json", [worker("all")]));
+    expect(plain).not.toHaveProperty("coverage");
+
+    // converge needs a run that exists.
+    const converge = await graph("converge", "no-such-run");
+    expect(converge.code).toBe(1);
   }, 120_000);
 
   it("approves several plans only with --expect giving each plan's current planSha256, and none when one is missing or differs", async () => {

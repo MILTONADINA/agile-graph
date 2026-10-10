@@ -376,6 +376,12 @@ export interface ExecutionStep {
    * means any allowed path.
    */
   writes?: string[];
+  /**
+   * The plan's acceptance-criterion IDs (such as "AC2") this step works
+   * towards. Advisory: it shows coverage gaps at review and never gates a
+   * run. Absent on steps that name none, so older plans hash unchanged.
+   */
+  covers?: string[];
 }
 export interface ExecutionPlan {
   version: typeof SCHEMA_VERSION;

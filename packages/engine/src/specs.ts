@@ -45,6 +45,7 @@ export interface Spec {
  *     - Epic: optional text
  *     ## Problem / ## Acceptance criteria / ## Security considerations / ## Non-goals
  *     - AC1: criterion text
+ *       wrapped text and nested bullets, part of the criterion
  *       - Test: path/to/file.test.ts :: exact test name
  */
 export function parseSpec(relativePath: string, text: string): Spec {
@@ -78,6 +79,11 @@ export function parseSpec(relativePath: string, text: string): Spec {
     }
   }
   const criteria: SpecCriterion[] = [];
+  // The criterion that indented lines still belong to. Its wrapped lines and
+  // nested bullets are part of what a worker must satisfy, so they are kept;
+  // only a line back at the margin ends it. Blank lines do not, so a nested
+  // list separated by an empty line stays with its criterion.
+  let open: SpecCriterion | undefined;
   let inFence = false;
   for (const line of sections["Acceptance criteria"] ?? []) {
     if (/^\s*(```|~~~)/.test(line)) {
@@ -87,19 +93,24 @@ export function parseSpec(relativePath: string, text: string): Spec {
     if (inFence) continue;
     const criterion = /^- (AC\d+): (.+)$/.exec(line);
     if (criterion) {
-      criteria.push({
-        id: criterion[1]!,
-        text: criterion[2]!.trim(),
-        tests: [],
-      });
+      open = { id: criterion[1]!, text: criterion[2]!.trim(), tests: [] };
+      criteria.push(open);
       continue;
     }
     const test = /^\s+- Test: (.+?) :: (.+)$/.exec(line);
-    if (test && criteria.length)
-      criteria.at(-1)!.tests.push({
+    if (test) {
+      // As before, a test link belongs to the last criterion listed.
+      criteria.at(-1)?.tests.push({
         path: test[1]!.trim(),
         name: test[2]!.trim(),
       });
+      continue;
+    }
+    if (!line.trim()) continue;
+    // Joined with single spaces, as Markdown joins a wrapped paragraph; a
+    // nested bullet keeps its "- " so the list still reads as one.
+    if (/^\s/.test(line) && open) open.text += ` ${line.trim()}`;
+    else open = undefined;
   }
   return {
     path: relativePath,
@@ -116,6 +127,40 @@ export function parseSpec(relativePath: string, text: string): Spec {
     ),
     criteria,
   };
+}
+
+export interface SpecClarification {
+  section: string;
+  question: string;
+}
+
+/**
+ * The open questions written inline as `[NEEDS CLARIFICATION: question]` in
+ * the sections a plan is built from. A guess at an open question would
+ * become a worker's requirement, so a ready spec may not hold any. Fenced
+ * code is an example, never an open question.
+ */
+export function clarifications(spec: Spec): SpecClarification[] {
+  const found: SpecClarification[] = [];
+  for (const section of REQUIRED_SECTIONS) {
+    let fenced = false;
+    const text = (spec.sections[section] ?? "")
+      .split("\n")
+      .filter((line) => {
+        if (/^\s*(```|~~~)/.test(line)) {
+          fenced = !fenced;
+          return false;
+        }
+        return !fenced;
+      })
+      .join("\n");
+    for (const match of text.matchAll(/\[NEEDS CLARIFICATION:\s*([^\]]*)\]/g))
+      found.push({
+        section,
+        question: match[1]!.replace(/\s+/g, " ").trim(),
+      });
+  }
+  return found;
 }
 
 async function specFiles(root: string): Promise<string[]> {
@@ -355,6 +400,13 @@ export async function checkSpecs(
     }
     if (spec.status !== "draft" && !spec.criteria.length)
       problem("a ready or implemented spec needs at least one AC line");
+    // A draft may still hold open questions; answering them is what makes
+    // it ready.
+    if (spec.status !== "draft")
+      for (const open of clarifications(spec))
+        problem(
+          `needs clarification in '## ${open.section}': ${open.question}`,
+        );
     let linked = 0;
     for (const criterion of spec.criteria) {
       let verified = 0;
@@ -415,6 +467,8 @@ export function specTemplate(options: {
     `- Area: ${options.area}`,
     ...(options.epic ? [`- Epic: ${options.epic.trim()}`] : []),
     "",
+    "<!-- Write an open question inline as [NEEDS CLARIFICATION: the question]. A draft may hold them; spec-check and plan refuse a ready spec until each is answered. -->",
+    "",
     "## Problem",
     "",
     "Who needs what, and why. Describe the behaviour, not the implementation.",
@@ -448,6 +502,11 @@ export function planFromSpec(spec: Spec): {
     );
   if (!spec.criteria.length)
     throw new Error(`Spec ${spec.id} has no acceptance criteria`);
+  const open = clarifications(spec);
+  if (open.length)
+    throw new Error(
+      `Spec ${spec.id} has ${open.length} open ${open.length === 1 ? "question" : "questions"} marked NEEDS CLARIFICATION; answer ${open.length === 1 ? "it" : "them"} in the spec before planning: ${open.map((entry) => `${entry.question} (${entry.section})`).join("; ")}`,
+    );
   const security = spec.sections["Security considerations"];
   return {
     objective: [

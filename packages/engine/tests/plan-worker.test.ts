@@ -65,6 +65,21 @@ const respond = (sent: { body?: Record<string, any> }) =>
   });
 
 describe("plan worker", () => {
+  it("asks the planner which acceptance criteria each step covers", async () => {
+    expect(PLANNER_INSTRUCTIONS).toContain(
+      'When the acceptance criteria start with IDs such as "AC1:", list in each step\'s covers the IDs of the criteria it works towards',
+    );
+    const sent: { body?: Record<string, any> } = {};
+    await invokePlanWorker(input(), respond(sent));
+    const step =
+      sent.body!.response_format.json_schema.schema.properties.steps.items;
+    expect(step.required).toContain("covers");
+    expect(step.properties.covers).toEqual({
+      type: "array",
+      items: { type: "string" },
+    });
+  });
+
   it("asks for a structured decomposition with the task and its context", async () => {
     const sent: { body?: Record<string, any> } = {};
     const result = await invokePlanWorker(input(), respond(sent));

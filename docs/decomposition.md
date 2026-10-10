@@ -43,9 +43,25 @@ and its suggested next command then says to move the file first.
   and it is removed again if the call fails. Ctrl-C (or SIGTERM, or SIGHUP
   when the terminal closes) during the call cancels it and removes the file
   too, so the same `--out` can be retried.
+- When the acceptance criteria carry IDs (`AC1: ...`, as plans from specs
+  do), each step lists in `covers` the IDs it works towards. `decompose`
+  and `plan-approve` then show a `coverage` section: the criteria no step
+  covers (`uncovered`) and named IDs that match no criterion (`unknown`).
+  It is advice for the reviewer of the plan and gates nothing; a step's
+  claim is not evidence that its work meets the criterion.
 - **Nothing runs.** The steps file is the proposal. A person reviews and may
   edit it, then creates the plan with `plan --steps`, which validates the
   steps again and binds the plan to the current policy and source.
+
+## Following up a run
+
+When a run's AI reviewer found some criteria unmet, `graph-engine converge
+<run-id>` creates a new plan holding only those criteria (answered "no" or
+"unknown" in the latest AI review), with the run's objective prefixed by
+`Follow-up of run <run-id>:`. It is an ordinary new plan, bound to the
+current policy and source and approved like any other; the original run and
+plan are left unchanged, and when every criterion was met nothing is
+created. It takes `--provider`, `--effort` and `--check` like `plan`.
 
 ## Limits
 
