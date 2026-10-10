@@ -21,6 +21,7 @@ import {
 const LOCKFILE_NAMES = new Set(LOCKFILES.map((name) => name.toLowerCase()));
 import { isDockerfile } from "./files.js";
 import { redact, redactTail } from "../policy.js";
+import { agentConfigFindings } from "./agent-config.js";
 
 export interface SecurityFinding {
   tool: string;
@@ -636,6 +637,13 @@ export async function runSecurityScan(options: {
             "--compact",
           ]);
           raw.push(...parseCheckov(result.stdout));
+        } else if (tool.id === "agent-config") {
+          // In-process, over the same tracked files; no container.
+          const result = agentConfigFindings(lines);
+          raw.push(...result.findings);
+          for (const entry of result.unscanned)
+            if (!unscanned.some((known) => known.path === entry.path))
+              unscanned.push(entry);
         } else if (tool.id === "osv-scanner" && options.osvDatabase) {
           // Missing an ecosystem's database fails the scan (incomplete), never
           // skips that lockfile silently; the error says how to fix it.

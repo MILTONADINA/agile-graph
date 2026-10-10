@@ -5,7 +5,7 @@
 // a live target are recommended with what they still need. ZAP runs only
 // through `graph-engine security-live-scan`, which a person starts against a
 // target authorized in security.liveTargets; managed runs never run it.
-import { isDockerfile } from "./files.js";
+import { isAgentConfig, isDockerfile } from "./files.js";
 
 export type SecurityCategory =
   | "secrets"
@@ -13,6 +13,7 @@ export type SecurityCategory =
   | "dependencies"
   | "infrastructure"
   | "containers"
+  | "agent-configuration"
   | "dynamic";
 
 export type SecurityMode = "offline" | "needs-database" | "live-target";
@@ -161,6 +162,20 @@ export const SECURITY_TOOLS: readonly SecurityTool[] = [
           ),
         ),
       ]),
+  },
+  {
+    // Built in: runs in-process, with no container.
+    id: "agent-config",
+    name: "Graph Engineering agent configuration review",
+    category: "agent-configuration",
+    mode: "offline",
+    license: "open-source",
+    appliesTo: (profile) => {
+      const files = profile.files.filter(isAgentConfig);
+      return files.length
+        ? `${files.length} AI agent configuration or instruction file${files.length === 1 ? "" : "s"} (hooks, permissions, MCP servers or instructions an agent follows)`
+        : undefined;
+    },
   },
   {
     id: "osv-scanner",
