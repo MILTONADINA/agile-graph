@@ -165,6 +165,32 @@ it("requires a person's stored approval for a run started over MCP even when the
   ]);
 });
 
+it("refuses an MCP start once the stored approval is older than approvalTtlHours, saying it expired", async () => {
+  const { root, config, engine, connect } = await fixture();
+  config.policy.approvalTtlHours = 2;
+  await writeJson(path.join(root, PROJECT_FILE), config);
+  const client = await connect({ client: "local", allowRun: true });
+  const plan = await engine.createPlan({
+    objective: "Fix addition",
+    acceptance: ["2 + 3 is 5"],
+  });
+  const approval = engine.store.approvePlan(plan.id);
+  const approvedAt = new Date(Date.now() - 3 * 3_600_000).toISOString();
+  (engine.store as any).db
+    .prepare("UPDATE plan_approvals SET json=? WHERE plan_id=?")
+    .run(JSON.stringify({ ...approval, approvedAt }), plan.id);
+  const refused = await client.callTool({
+    name: "run_start",
+    arguments: { planId: plan.id },
+  });
+  expect(refused.isError).toBe(true);
+  expect(text(refused)).toContain(
+    `plan ${plan.id} has an approval given at ${approvedAt} that expired after policy.approvalTtlHours (2 hours)`,
+  );
+  expect(text(refused)).toContain(`graph-engine plan-approve ${plan.id}`);
+  expect(engine.store.runs()).toEqual([]);
+});
+
 it("refuses an MCP start of a plan whose content changed after it was approved, naming the current planSha256", async () => {
   const { engine, connect } = await fixture();
   const client = await connect({ client: "local", allowRun: true });
