@@ -2,6 +2,12 @@
   "version": 1,
   "findings": [
     {
+      "fingerprint": "273639dda8ad7e8af98c6d58fdeab563",
+      "tool": "agent-config",
+      "rule": "hook-command",
+      "path": ".claude/settings.json"
+    },
+    {
       "fingerprint": "a1036945c40e23ad959dd92498905616",
       "tool": "semgrep",
       "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
@@ -296,6 +302,48 @@
       "path": "packages/contracts/src/index.ts"
     },
     {
+      "fingerprint": "1ff489428d23fcae8ab76ec231581f11",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/cli.ts"
+    },
+    {
+      "fingerprint": "61fa16b607f5e79accace713cacfb631",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/cli.ts"
+    },
+    {
+      "fingerprint": "e215a3a87215d68d9432a083b6d251cc",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/cli.ts"
+    },
+    {
+      "fingerprint": "fcda226cd037564bbeb0693ddefa59df",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/cli.ts"
+    },
+    {
+      "fingerprint": "c267470561c15a647bbb82747093879c",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/context/dart-snapshot.ts"
+    },
+    {
+      "fingerprint": "dafe05791ac12a3e9a3ef5787138f1e1",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/context/dart-snapshot.ts"
+    },
+    {
+      "fingerprint": "eca59123debfa25a2fef690588cea554",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/context/dart-snapshot.ts"
+    },
+    {
       "fingerprint": "8ab2a8b1f955b541c731dc0dabee9a9d",
       "tool": "semgrep",
       "rule": "javascript.express.security.injection.tainted-sql-string",
@@ -305,6 +353,36 @@
       "fingerprint": "7e6127fd049f0a7f92900de1bbde26c4",
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/context/index.ts"
+    },
+    {
+      "fingerprint": "22e95714d391d1f57ee9dc597c55ad3e",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/context/index.ts"
+    },
+    {
+      "fingerprint": "4f2cbf22433be6699a855d0f95ec70d5",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/context/index.ts"
+    },
+    {
+      "fingerprint": "5073cf66dea449cb8483ed7d7d3a0a7c",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/context/index.ts"
+    },
+    {
+      "fingerprint": "5c8a5964a51846a619a7145cedff9cfb",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/context/index.ts"
+    },
+    {
+      "fingerprint": "919f534296951d17a829ba8e8cc7ace4",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
       "path": "packages/engine/src/context/index.ts"
     },
     {
@@ -782,7 +860,25 @@
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "0a3119b37b5021eaebfddbaf4205d9e5",
+      "fingerprint": "0b434bd054c80a2c3859bcb70b839f43",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "0bb1d1b6035781003fad38a5cc27fa90",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "0bb1d1b6035781003fad38a5cc27fa90#2",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "0d5e5cc83671baabc62f616215b32f97",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
@@ -794,37 +890,37 @@
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "1f59c6d30ffe9583636dd64e0aea0c27",
-      "tool": "semgrep",
-      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
-      "path": "packages/engine/src/mcp.ts"
-    },
-    {
       "fingerprint": "27ffd756cce5256a6287275408851a94",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "29dbc2841dad141de98f220baeba2cc6",
-      "tool": "semgrep",
-      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
-      "path": "packages/engine/src/mcp.ts"
-    },
-    {
-      "fingerprint": "2b16bbd7d2e77675ef557b5e8a224073",
-      "tool": "semgrep",
-      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
-      "path": "packages/engine/src/mcp.ts"
-    },
-    {
-      "fingerprint": "2dee2aadda028c06b3ab05b240d04771",
-      "tool": "semgrep",
-      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
-      "path": "packages/engine/src/mcp.ts"
-    },
-    {
       "fingerprint": "2fb7a73f1390bc280e5aa2a49a931783",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "3235cb0d854bbe0bf475586e1b5f5ee3",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "376703ed69863a8e9f20a68819a871f0",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "389cb694c8696a65dac53e98980a64da",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "4423fc9c0a67b1fd6f70173b30593f10",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
@@ -842,31 +938,31 @@
       "path": "packages/engine/src/mcp.ts"
     },
     {
+      "fingerprint": "5244b2a4537326ce9645a6e9e0af5bd7",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
       "fingerprint": "545c3f0aca4ca319c61d1e9aab9da787",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "596046534a157387448c8a81372f5276",
+      "fingerprint": "5b78f0b1e019ac0457fab8c92e15c97b",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "64274cc09bb867377ed341a1579cf5e2",
+      "fingerprint": "5dee8b2904b31b47a69a192ae9ef7207",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "6ac1587a864d40fc5638782459b47684",
-      "tool": "semgrep",
-      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
-      "path": "packages/engine/src/mcp.ts"
-    },
-    {
-      "fingerprint": "70fd973933453b520bf2f3b88cd372ec",
+      "fingerprint": "5ec278cff0ffd18deefab56a906a5c3d",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
@@ -884,13 +980,31 @@
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "8cc0c7ebc1c40482f94751f292ec01cc",
+      "fingerprint": "777d3ebb0e8d8b2b0f3754592e0f7fce",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
     },
     {
       "fingerprint": "93765d13dadee005c80736cfeab52718",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "a15d54910ed5b39fc26c8c49c7246dd9",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "a15d54910ed5b39fc26c8c49c7246dd9#2",
+      "tool": "semgrep",
+      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
+      "path": "packages/engine/src/mcp.ts"
+    },
+    {
+      "fingerprint": "a4b277e6debbf27d8b2cb3de4628c21b",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
@@ -914,19 +1028,13 @@
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "ba27d273dcb7fedea00a48eb9abb0ac1",
+      "fingerprint": "e2d0ba8d28c73197045597bf1ac79902",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
     },
     {
-      "fingerprint": "cc5cf2f67bfd744fef41b93a7cf03767",
-      "tool": "semgrep",
-      "rule": "typescript.mcp.security.mcp-ssrf-typescript",
-      "path": "packages/engine/src/mcp.ts"
-    },
-    {
-      "fingerprint": "d8be87271c625fefef21b3d03b1b3b5c",
+      "fingerprint": "e43f56ad9978854015dd6787cca64d8a",
       "tool": "semgrep",
       "rule": "typescript.mcp.security.mcp-ssrf-typescript",
       "path": "packages/engine/src/mcp.ts"
@@ -948,6 +1056,42 @@
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "packages/engine/src/planning.ts"
+    },
+    {
+      "fingerprint": "2a7944a89f3d05a73ff113b6d8746b74",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/policy.ts"
+    },
+    {
+      "fingerprint": "6fe5b726bca07af6fc0dbede263bbb7e",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/policy.ts"
+    },
+    {
+      "fingerprint": "f18ce242f709225c3ef9502dcdde9aa5",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/policy.ts"
+    },
+    {
+      "fingerprint": "03442794a6d11338980998b45782a92c",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/policy.ts"
+    },
+    {
+      "fingerprint": "3a30e65cba6569f1357e9947559da26a",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/policy.ts"
+    },
+    {
+      "fingerprint": "11d29b05776f8b0139cb5e7617e166b7",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/project.ts"
     },
     {
       "fingerprint": "03eb211141731398b3dd6d3217208100",
@@ -1064,16 +1208,34 @@
       "path": "packages/engine/src/sealed-population-manifest.ts"
     },
     {
+      "fingerprint": "358e9cee82cf05dcbeb56d28a739c2d3",
+      "tool": "gitleaks",
+      "rule": "cloudflare-api-key",
+      "path": "packages/engine/src/security/audit.ts"
+    },
+    {
+      "fingerprint": "0cac6bd9eb23f45269f7e750939906c5",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-redos",
+      "path": "packages/engine/src/security/files.ts"
+    },
+    {
       "fingerprint": "7c443fa17e30cb9a37d6caaa36fb3ec6",
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "packages/engine/src/security/files.ts"
     },
     {
-      "fingerprint": "1e2498a50b92948521336be24daa6563",
+      "fingerprint": "d35b2efb667ea883e2a6bcdb785d80f3",
       "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
-      "path": "packages/engine/src/specs.ts"
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/service.ts"
+    },
+    {
+      "fingerprint": "d958d88fd2098820e0be1c92badebb6a",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/src/service.ts"
     },
     {
       "fingerprint": "4d60cf34dd31d293fd53ab080a915b98",
@@ -1089,6 +1251,12 @@
     },
     {
       "fingerprint": "c86400d4e1b3ab6a3602653e1ddbdd24",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
+      "path": "packages/engine/src/specs.ts"
+    },
+    {
+      "fingerprint": "e4dd2ce0e01837dd0f0ab38f5499c51f",
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "packages/engine/src/specs.ts"
@@ -1142,10 +1310,34 @@
       "path": "packages/engine/src/template-runtime.ts"
     },
     {
+      "fingerprint": "978f9830f1b62917c9fb2a70df0b4292",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
+      "path": "packages/engine/tests/cli.test.ts"
+    },
+    {
+      "fingerprint": "a40ab973894dd7c6a5265a31cb5d79a1",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
+      "path": "packages/engine/tests/cli.test.ts"
+    },
+    {
+      "fingerprint": "015b2de129ea94c7a52777da8f8db106",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/tests/cli.test.ts"
+    },
+    {
       "fingerprint": "397bd253fe83e87f789cc8f66984816c",
       "tool": "gitleaks",
       "rule": "generic-api-key",
       "path": "packages/engine/tests/decision-batch.test.ts"
+    },
+    {
+      "fingerprint": "6ac7a57809437187759402b1996b801c",
+      "tool": "hadolint",
+      "rule": "DL3029",
+      "path": "packages/engine/tests/fixtures/dart-runtime/Dockerfile"
     },
     {
       "fingerprint": "58514869d3b67c7a052af1ea81e4d633",
@@ -1202,6 +1394,30 @@
       "path": "packages/engine/tests/mcp.test.ts"
     },
     {
+      "fingerprint": "37f3fe1708bca7ef43af73f0128c0bd4",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/tests/mcp.test.ts"
+    },
+    {
+      "fingerprint": "6b14226470d85350f964c1a952fab081",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/tests/memory-export-flow.test.ts"
+    },
+    {
+      "fingerprint": "ebbce2029d28d60cd7525cfa2c205eba",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/tests/memory-export-flow.test.ts"
+    },
+    {
+      "fingerprint": "44f2c456bb2faa3c9978aa2c4559e13b",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "packages/engine/tests/policy-export.test.ts"
+    },
+    {
       "fingerprint": "8b2341ce35a0b97cf588843ddb70bd05",
       "tool": "gitleaks",
       "rule": "generic-api-key",
@@ -1250,6 +1466,72 @@
       "path": "packages/engine/tests/template-runtime-oauth.test.ts"
     },
     {
+      "fingerprint": "1888ead9f565dbb74ff29760c387f91e",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
+      "path": "packages/engine/tests/verification-selection.test.ts"
+    },
+    {
+      "fingerprint": "11c098a260dc5148b954623a1882de3e",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "b243340f4fa6d4f52457ed2d9a6f9e91",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "b7b18592e0111e3c716a4748d967ed03",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "c8ff2821fd528b3bfdb6b20b96a556c0",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "ddc2b7771b28dfa95c9c1bc04b9bf42b",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "1228330f9df2349dae98e3704fa1324c",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "958662c620a1575e06974b5c5437a6c7",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
+      "path": "packages/engine/vendor/cloudflare-security-audit/validate-findings.cjs"
+    },
+    {
+      "fingerprint": "0152b203aef5482bdf11de3713097150",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "scripts/promotion-key.mjs"
+    },
+    {
+      "fingerprint": "87810a2ae3e49ed4fd7974e9f3d5d89a",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "scripts/promotion-key.mjs"
+    },
+    {
+      "fingerprint": "e79fbbf0ddcef6a0c04991e9ae1ee3e2",
+      "tool": "semgrep",
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "scripts/promotion-key.test.mjs"
+    },
+    {
       "fingerprint": "e7566ea3acea64244514192cf71770ff",
       "tool": "gitleaks",
       "rule": "generic-api-key",
@@ -1266,6 +1548,12 @@
       "tool": "hadolint",
       "rule": "DL4006",
       "path": "sidecars/security/Dockerfile"
+    },
+    {
+      "fingerprint": "f16754ab09f055a5883bb12c0b990824",
+      "tool": "gitleaks",
+      "rule": "generic-api-key",
+      "path": "specs/providers/installed-worker-identity.md"
     }
   ]
 }
