@@ -170,6 +170,64 @@ describe("spec parsing", () => {
     );
   });
 
+  it("keeps a fenced block under a criterion in its text but reads no marker in it", () => {
+    const parsed = parseSpec(
+      "specs/billing/invoice-list.md",
+      spec({
+        status: "ready",
+        criteria: [
+          "- AC1: GET /invoices returns",
+          "  ```json",
+          '  { "total": 1250, "note": "[NEEDS CLARIFICATION: an example]" }',
+          "",
+          "  - AC9: not a criterion",
+          "  - Test: tests/invoices.test.ts :: not a link",
+          "  ```",
+          "  for each invoice",
+          "  - Test: tests/invoices.test.ts :: lists invoices",
+          "- AC2: Unauthenticated requests are refused",
+          "```",
+          "A fence at the margin belongs to no criterion.",
+          "```",
+        ].join("\n"),
+      }),
+    );
+    expect(parsed.criteria).toEqual([
+      {
+        id: "AC1",
+        text: 'GET /invoices returns ```json { "total": 1250, "note": "[NEEDS CLARIFICATION: an example]" } - AC9: not a criterion - Test: tests/invoices.test.ts :: not a link ``` for each invoice',
+        tests: [{ path: "tests/invoices.test.ts", name: "lists invoices" }],
+      },
+      { id: "AC2", text: "Unauthenticated requests are refused", tests: [] },
+    ]);
+    expect(clarifications(parsed)).toEqual([]);
+    expect(planFromSpec(parsed).acceptance[0]).toContain('"total": 1250');
+  });
+
+  it("finds clarification markers in any case, with or without a question", () => {
+    const parsed = parseSpec(
+      "specs/billing/invoice-list.md",
+      spec({
+        status: "ready",
+        criteria: [
+          "- AC1: GET /invoices lists invoices [NEEDS CLARIFICATION]",
+          "- AC2: Refused [needs clarification: which status code?]",
+          "- AC3: Paged [Needs Clarification:]",
+          "- AC4: Sorted [ NEEDS  CLARIFICATION which order? ]",
+        ].join("\n"),
+      }),
+    );
+    expect(clarifications(parsed)).toEqual([
+      { section: "Acceptance criteria", question: "(no question written)" },
+      { section: "Acceptance criteria", question: "which status code?" },
+      { section: "Acceptance criteria", question: "(no question written)" },
+      { section: "Acceptance criteria", question: "which order?" },
+    ]);
+    expect(() => planFromSpec(parsed)).toThrow(
+      "has 4 open questions marked NEEDS CLARIFICATION; answer them in the spec before planning: (no question written) (Acceptance criteria); which status code? (Acceptance criteria)",
+    );
+  });
+
   it("refuses to plan a draft", () => {
     expect(() =>
       planFromSpec(

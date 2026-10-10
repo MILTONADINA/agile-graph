@@ -1576,6 +1576,24 @@ describe("managed execution", () => {
     expect(engine.store.events(reviewed)).toEqual(beforeEvents);
     expect(planSha256(engine.store.plan(original.id))).toBe(beforeHash);
 
+    // Converging the follow-up's own run keeps one prefix, naming that run.
+    engine.store.saveRun({
+      id: "again",
+      plan: followUp,
+      status: "failed",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      usage,
+    });
+    engine.store.event("again", "review.completed", {
+      providerId: "local",
+      passed: false,
+      criteria: [{ met: "yes" }, { met: "no" }],
+    });
+    const again = await engine.convergeRun("again");
+    expect(again.unmet).toEqual(["AC3: 1 + 1 is 2"]);
+    expect(again.plan!.objective).toBe("Follow-up of run again: Fix addition");
+
     const met = finished("met", "succeeded");
     engine.store.event(met, "review.completed", {
       providerId: "local",

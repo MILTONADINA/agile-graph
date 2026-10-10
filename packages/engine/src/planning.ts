@@ -236,3 +236,24 @@ export function unmetCriteria(
     : [];
   return acceptance.filter((_, index) => answers[index]?.met !== "yes");
 }
+
+/**
+ * The longest plan objective the plan-creating entry points accept (the
+ * `plan_create` and `plan_decompose` MCP tools and `POST /api/plans`).
+ */
+export const MAX_PLAN_OBJECTIVE = 16000;
+
+const FOLLOW_UP_PREFIX = /^(?:Follow-up of run \S+: )+/;
+
+/**
+ * A follow-up plan's objective: one "Follow-up of run <runId>:" prefix naming
+ * the latest run, with any earlier prefixes stripped so repeated converging
+ * does not nest them, cut to the plan objective limit.
+ */
+export function followUpObjective(runId: string, objective: string): string {
+  const text = `Follow-up of run ${runId}: ${objective.replace(FOLLOW_UP_PREFIX, "")}`;
+  if (text.length <= MAX_PLAN_OBJECTIVE) return text;
+  const cut = text.slice(0, MAX_PLAN_OBJECTIVE);
+  // Never end on half of a surrogate pair.
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}

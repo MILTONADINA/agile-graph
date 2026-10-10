@@ -10,20 +10,24 @@ Planning from a spec loses or guesses information. A criterion written over seve
 
 ## Acceptance criteria
 
-- AC1: A spec's acceptance criterion keeps its indented continuation lines and nested bullets, joined into one string, while its `- Test:` link lines stay out of the text and keep linking tests.
+- AC1: A spec's acceptance criterion keeps its indented continuation lines, nested bullets and indented fenced code blocks, joined into one string, while its `- Test:` link lines stay out of the text and keep linking tests, and nothing inside a fence is read as a criterion, a test link or a clarification marker.
   - Test: packages/engine/tests/specs.test.ts :: keeps a criterion's wrapped lines and nested bullets in its text
-- AC2: An inline NEEDS CLARIFICATION marker in the Problem, Acceptance criteria, Security considerations or Non-goals section is a `spec-check` error naming its question for a ready or implemented spec, a draft may hold markers, `plan --spec` refuses a spec while any remain and names them, and the spec template explains the marker in a comment line.
+  - Test: packages/engine/tests/specs.test.ts :: keeps a fenced block under a criterion in its text but reads no marker in it
+- AC2: An inline NEEDS CLARIFICATION marker, in any case and with or without a colon and a question, in the Problem, Acceptance criteria, Security considerations or Non-goals section is a `spec-check` error naming its question, or saying none was written, for a ready or implemented spec, a draft may hold markers, `plan --spec` refuses a spec while any remain and names them, and the spec template explains the marker in a comment line.
   - Test: packages/engine/tests/specs.test.ts :: fails a ready spec with open clarification markers but lets a draft hold them
   - Test: packages/engine/tests/specs.test.ts :: refuses to plan a spec with open clarification markers, naming them
+  - Test: packages/engine/tests/specs.test.ts :: finds clarification markers in any case, with or without a question
   - Test: packages/engine/tests/specs.test.ts :: explains the clarification marker in a template comment
-- AC3: A plan step may name the acceptance-criterion IDs it covers, the planner is asked for them, and `plan-approve` and `decompose` show which criteria no step covers and which named IDs match no criterion when any step names some, as advice that gates nothing; a plan whose steps name none hashes exactly as before.
+- AC3: A plan step may name the acceptance-criterion IDs it covers, the planner is asked for them and its blank entries are dropped rather than failing the proposal, and `plan-approve` and `decompose` show which criteria no step covers and which named IDs match no criterion when any step names some, as advice that gates nothing; a plan whose steps name none hashes exactly as before.
   - Test: packages/engine/tests/planning.test.ts :: reports criteria no step covers and covers entries naming no criterion
   - Test: packages/engine/tests/plan-worker.test.ts :: asks the planner which acceptance criteria each step covers
+  - Test: packages/engine/tests/plan-worker.test.ts :: drops blank covers entries instead of failing a paid-for proposal
   - Test: packages/engine/tests/dag.test.ts :: accepts covers on a step and leaves the hash of a plan without it unchanged
   - Test: packages/engine/tests/cli.test.ts :: shows acceptance-criteria coverage in plan-approve when steps name the criteria they cover
   - Test: packages/engine/tests/cli.test.ts :: includes acceptance-criteria coverage in the decompose output when the planner names it
-- AC4: `converge <runId>` creates a new plan, through the ordinary plan creation, whose acceptance criteria are only those the finished run's latest AI review did not find met and whose objective starts with "Follow-up of run <runId>:"; it never changes the run or its plan, and creates nothing when every criterion was met.
+- AC4: `converge <runId>` creates a new plan, through the ordinary plan creation, whose acceptance criteria are only those the finished run's latest AI review did not find met and whose objective starts with a single "Follow-up of run <runId>:" naming that run, any earlier follow-up prefix stripped, cut to the 16000-character plan objective limit; it never changes the run or its plan, and creates nothing when every criterion was met.
   - Test: packages/engine/tests/planning.test.ts :: takes the criteria the latest AI review did not find met, by position
+  - Test: packages/engine/tests/planning.test.ts :: keeps one follow-up prefix naming the latest run and caps the objective
   - Test: packages/engine/tests/execution.test.ts :: converges a finished run into a new plan of only its unmet criteria, changing nothing else
 
 ## Security considerations
