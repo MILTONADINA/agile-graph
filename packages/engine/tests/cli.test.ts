@@ -472,6 +472,22 @@ describe("command line", () => {
     expect(again.stderr).toContain("never changes an existing policy");
   }, 120_000);
 
+  it("refuses a repeated or doubly negated --export glob without writing a project", async () => {
+    const { root, graph } = await project();
+    for (const args of [
+      ["--export", "src/**", "--export", "src/**"],
+      ["--export", "src/**", "--export", "!!x"],
+    ]) {
+      const init = await graph("init", "--cloud-mcp", ...args);
+      expect(init.code).not.toBe(0);
+      await expect(
+        readFile(path.join(root, ".graph/project.json"), "utf8"),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    }
+    const repaired = await graph("init", "--cloud-mcp", "--export", "src/**");
+    expect(repaired.code).toBe(0);
+  }, 120_000);
+
   it("keeps a plain init offline, so cloud MCP clients stay refused by default", async () => {
     const { graph } = await project();
     const init = await graph("init");
