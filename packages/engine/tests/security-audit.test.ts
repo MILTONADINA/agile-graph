@@ -15,6 +15,7 @@ import {
 } from "../src/project.js";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import { checked, hash, writeJson } from "../src/util.js";
+import { inputTokenCeiling, tokensForBytes } from "../src/tokens.js";
 import { stoppedAtReview } from "../src/overview.js";
 import { workspaceFingerprint } from "../src/execution/workspace.js";
 import type { VerificationResult } from "../src/execution/docker.js";
@@ -707,6 +708,32 @@ describe("security audit workers", () => {
       ),
     ).rejects.toThrow("too large for the auditor's context budget");
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a change too large for the auditor under the strict one-token-per-byte count with the output reserved", async () => {
+    const fetch = vi.fn(async () => reply({ candidates: [] }));
+    // 12 KB of dense diff: within the default input ceiling (16,000 less a
+    // reserved 8,000) by the workers' estimate, over it at one token per byte.
+    const diff = "+0x" + "0123456789abcdef".repeat(750);
+    expect(tokensForBytes(Buffer.byteLength(diff) + 256)).toBeLessThanOrEqual(
+      inputTokenCeiling(policy),
+    );
+    await expect(
+      invokeSecurityHunter({ provider: local, policy, diff }, fetch),
+    ).rejects.toThrow("too large for the auditor's context budget");
+    await expect(
+      invokeSecurityVerifier(
+        { provider: local, policy, diff, candidate: candidate() },
+        fetch,
+      ),
+    ).rejects.toThrow("too large for the auditor's context budget");
+    expect(fetch).not.toHaveBeenCalled();
+    // With a small output cap the window has room for it.
+    await invokeSecurityHunter(
+      { provider: local, policy: { ...policy, maxOutputTokens: 64 }, diff },
+      fetch,
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("lets a chat provider audit", async () => {

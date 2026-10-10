@@ -421,11 +421,13 @@ function sampleRss(pid: number): Promise<number | undefined> {
 }
 
 /**
- * Samples a process's resident set until stopped and reports only a reading
- * above the limit. A failed, empty or slow sample is not evidence of memory
- * use (ps fails under load or after the child exits), so it never kills the
- * process; the analyzer's wall-clock deadline still bounds the run.
+ * Samples a process's resident set until stopped and reports a reading above
+ * the limit. A single failed, empty or zero sample is tolerated (ps can fail
+ * once under load or as the child exits, and the next tick sees the exit),
+ * but INVALID_RSS_LIMIT consecutive invalid samples also report over-limit:
+ * a child whose memory cannot be read is not allowed to run uncapped.
  */
+export const INVALID_RSS_LIMIT = 3;
 export function watchRss(options: {
   sample: () => Promise<number | undefined>;
   limitKiB: number;
@@ -434,6 +436,7 @@ export function watchRss(options: {
   intervalMs?: number;
 }): () => void {
   let stopped = false,
+    invalid = 0,
     timer: ReturnType<typeof setTimeout> | undefined;
   const active = () => !stopped && (options.running?.() ?? true);
   const tick = async () => {
@@ -445,7 +448,9 @@ export function watchRss(options: {
       rss = undefined;
     }
     if (!active()) return;
-    if (rss !== undefined && Number.isFinite(rss) && rss > options.limitKiB) {
+    const valid = rss !== undefined && Number.isFinite(rss) && rss > 0;
+    invalid = valid ? 0 : invalid + 1;
+    if ((valid && rss! > options.limitKiB) || invalid >= INVALID_RSS_LIMIT) {
       stopped = true;
       options.onOverLimit();
       return;
@@ -458,11 +463,14 @@ export function watchRss(options: {
     if (timer) clearTimeout(timer);
   };
 }
-function analyze(
-  runtime: JavaRuntime,
+// Exported for tests, which pass a stand-in runtime and sampler to check that
+// an over-limit report actually kills the child.
+export function analyze(
+  runtime: Pick<JavaRuntime, "executable" | "classPath">,
   input: string,
   timeoutMs: number,
   maxBytes: number,
+  sample: (pid: number) => Promise<number | undefined> = sampleRss,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const started = performance.now(),
@@ -491,7 +499,7 @@ function analyze(
     if (process.platform !== "win32" && child.pid) {
       const pid = child.pid;
       unwatch = watchRss({
-        sample: () => sampleRss(pid),
+        sample: () => sample(pid),
         limitKiB: JAVA_LIMITS.rssKiB,
         onOverLimit: stop,
         running: () => child.exitCode === null && child.signalCode === null,

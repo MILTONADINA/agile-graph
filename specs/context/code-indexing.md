@@ -52,8 +52,9 @@ Workers and connected AI clients need accurate, bounded context about a reposito
   - Test: packages/engine/tests/cli.test.ts :: exits when serve, mcp or watch fails, instead of keeping the process alive
 - AC11: Ctrl-C, SIGTERM or SIGHUP (sent when the terminal closes) stops `watch` by closing its watcher and then its engine before the process exits; further signals are ignored until that finishes.
   - Test: packages/engine/tests/cli.test.ts :: stops watch on SIGHUP, as when its terminal closes, closing its engine before it exits
-- AC12: The Java analyzer is killed for memory only when a resident-set reading exceeds its limit; a failed, empty or slow `ps` sample (as under load or after the analyzer exits) does not stop it, and its time cap still bounds the run.
-  - Test: packages/engine/tests/context-java.test.ts :: kills the analyzer only on an over-limit reading, not a failed or slow sample
+- AC12: The Java analyzer is killed for memory when a resident-set reading exceeds its limit, or when three consecutive `ps` samples fail or read empty or zero, so a child whose memory cannot be read never runs uncapped; a single failed sample between good readings (as under load, or as the analyzer exits) does not stop it, and its time cap still bounds the run.
+  - Test: packages/engine/tests/context-java.test.ts :: tolerates an isolated failed sample but kills on persistent failure or an over-limit reading
+  - Test: packages/engine/tests/context-java.test.ts :: analyze() kills the child when the memory watcher reports over-limit
 
 ## Security considerations
 

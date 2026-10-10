@@ -15,7 +15,7 @@ import {
   safePath,
 } from "../policy.js";
 import { hash } from "../util.js";
-import { estimateTokens } from "../tokens.js";
+import { estimateTokens, inputTokenCeiling } from "../tokens.js";
 import {
   fitWorkerContext,
   workerRequestTokens,
@@ -170,10 +170,7 @@ export async function requestedSourcePacket(options: {
 }): Promise<ContextPacket> {
   const { input, supplied } = options;
   const { provider, policy } = input;
-  const ceiling = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
+  const ceiling = inputTokenCeiling(policy, provider);
   const withItems = (items: ContextPacket["items"]): WorkerInput => ({
     ...input,
     context: {

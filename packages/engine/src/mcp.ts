@@ -272,7 +272,7 @@ export function createMcpServer(
           .positive()
           .optional()
           .describe(
-            "Maximum packet size in estimated tokens (UTF-8 bytes, an upper bound on model tokens). Defaults to, and may not exceed, the project's maxContextTokens policy; excerpts that do not fit are skipped in rank order.",
+            "Maximum packet size in estimated tokens (UTF-8 bytes divided by 2, a conservative estimate). Defaults to, and may not exceed, the project's maxContextTokens policy; excerpts that do not fit are skipped in rank order.",
           ),
         retrieval: z
           .enum(["lexical", "graph", "hybrid"])

@@ -160,8 +160,10 @@ describe("plan worker", () => {
     const policy = {
       ...DEFAULT_POLICY,
       providers: ["planner"],
-      // Room for about 2500 bytes of request (see tokens.ts).
-      maxContextTokens: tokensForBytes(2500),
+      // Room for about 2500 bytes of request after the output reservation
+      // (see tokens.ts).
+      maxContextTokens: tokensForBytes(2500) + 64,
+      maxOutputTokens: 64,
     };
     await invokePlanWorker(
       input({

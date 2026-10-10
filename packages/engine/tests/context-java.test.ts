@@ -13,6 +13,8 @@ import {
   resolveJavaBindings,
   validateJavaOutput,
   watchRss,
+  INVALID_RSS_LIMIT,
+  analyze,
 } from "../src/context/java.js";
 
 const runtime = await javaRuntime();
@@ -421,7 +423,7 @@ public class Processor extends AbstractProcessor { static { if(true)throw new Ru
   });
 });
 describe("Java analyzer memory sampling", () => {
-  it("kills the analyzer only on an over-limit reading, not a failed or slow sample", async () => {
+  it("tolerates an isolated failed sample but kills on persistent failure or an over-limit reading", async () => {
     vi.useFakeTimers();
     try {
       const watch = (sample: () => Promise<number | undefined>) => {
@@ -435,27 +437,45 @@ describe("Java analyzer memory sampling", () => {
         });
         return { onOverLimit, calls, unwatch };
       };
-      // A ps call that fails (as under load or after exit) or reads nothing.
+      // A ps call that fails once in a while (as under load) between good
+      // readings is tolerated.
       let reads = 0;
-      const failing = watch(async () => {
+      const flaky = watch(async () => {
         if (++reads % 2) throw new Error("ps failed");
-        return undefined;
+        return 900;
       });
       // A ps call that never answers.
       const hanging = watch(() => new Promise(() => {}));
       // A healthy reading under the limit.
       const healthy = watch(async () => 900);
       await vi.advanceTimersByTimeAsync(2000);
-      expect(failing.calls.mock.calls.length).toBeGreaterThan(10);
+      expect(flaky.calls.mock.calls.length).toBeGreaterThan(10);
       expect(healthy.calls.mock.calls.length).toBeGreaterThan(10);
       expect(hanging.calls).toHaveBeenCalledTimes(1);
-      for (const watcher of [failing, hanging, healthy]) {
+      for (const watcher of [flaky, hanging, healthy]) {
         expect(watcher.onOverLimit).not.toHaveBeenCalled();
         watcher.unwatch();
       }
-      const before = failing.calls.mock.calls.length;
+      const before = flaky.calls.mock.calls.length;
       await vi.advanceTimersByTimeAsync(400);
-      expect(failing.calls.mock.calls.length).toBe(before);
+      expect(flaky.calls.mock.calls.length).toBe(before);
+
+      // Persistent failure, empty output or zero readings stop the analyzer
+      // after INVALID_RSS_LIMIT consecutive samples rather than letting it run
+      // uncapped.
+      for (const sample of [
+        async () => {
+          throw new Error("ps failed");
+        },
+        async () => undefined,
+        async () => 0,
+      ]) {
+        const broken = watch(sample);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(broken.onOverLimit).toHaveBeenCalledTimes(1);
+        expect(broken.calls).toHaveBeenCalledTimes(INVALID_RSS_LIMIT);
+        broken.unwatch();
+      }
 
       // An actual reading over the limit stops the analyzer once.
       let rss = 900;
@@ -473,4 +493,51 @@ describe("Java analyzer memory sampling", () => {
       vi.useRealTimers();
     }
   });
+});
+describe("Java analyzer memory wiring", () => {
+  it.skipIf(process.platform === "win32")(
+    "analyze() kills the child when the memory watcher reports over-limit",
+    async () => {
+      const directory = await mkdtemp(path.join(tmpdir(), "graph-java-rss-"));
+      try {
+        // A stand-in "java" that ignores its arguments and would run for 30s.
+        const executable = path.join(directory, "java");
+        await writeFile(executable, "#!/bin/sh\nexec /bin/sleep 30\n", {
+          mode: 0o755,
+        });
+        // Control: under the limit, the stand-in runs until the deadline.
+        const control = performance.now();
+        await expect(
+          analyze(
+            { executable, classPath: directory },
+            "",
+            1500,
+            1000,
+            async () => 1,
+          ),
+        ).rejects.toThrow("resource limit");
+        expect(performance.now() - control).toBeGreaterThanOrEqual(1000);
+        const sampled: number[] = [];
+        const started = performance.now();
+        await expect(
+          analyze(
+            { executable, classPath: directory },
+            "",
+            10_000,
+            1000,
+            async (pid) => {
+              sampled.push(pid);
+              return JAVA_LIMITS.rssKiB + 1;
+            },
+          ),
+        ).rejects.toThrow("resource limit");
+        expect(sampled.length).toBeGreaterThan(0);
+        expect(performance.now() - started).toBeLessThan(1000);
+        // The killed child no longer exists.
+        expect(() => process.kill(sampled[0]!, 0)).toThrow();
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });

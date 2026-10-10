@@ -25,6 +25,7 @@ import {
   sameGeneratorRegistration,
 } from "@graph-engineering/contracts";
 import { ContextEngine } from "./context/index.js";
+import { inputTokenCeiling } from "./tokens.js";
 import { loadProject, loadProviders, projectDataDir } from "./project.js";
 import { planSha256, RunStore, type PlanApproval } from "./store.js";
 import {
@@ -54,7 +55,7 @@ import {
   estimateRequestCost,
   fitWorkerContext,
   StructuredOutputError,
-  structuredOutputFeedback,
+  structuredOutputRetryFeedback,
   type WorkerInput,
   type WorkerProposal,
   type WorkerResult,
@@ -819,10 +820,7 @@ export class GraphEngine {
       snapshotId: snapshot.id,
       mandatory: input.acceptance,
       exportOnly,
-      budgetTokens: Math.min(
-        policy.maxContextTokens,
-        planner.maxContextTokens ?? policy.maxContextTokens,
-      ),
+      budgetTokens: inputTokenCeiling(policy, planner),
     });
     if (exportOnly) {
       // As for cloud context_get: only authorized memory and exportable,
@@ -3817,7 +3815,10 @@ export class GraphEngine {
                 run.usage = this.store.usage(run.plan.id);
                 save("running");
                 returned(step.id, error.reason);
-                patchFeedback = structuredOutputFeedback(error);
+                patchFeedback = structuredOutputRetryFeedback(
+                  error,
+                  patchFeedback,
+                );
                 continue;
               }
               unusableOutputs = 0;
@@ -4272,7 +4273,10 @@ export class GraphEngine {
               run.usage = this.store.usage(run.plan.id);
               save("running");
               returned(step.id, error.reason);
-              patchFeedback = structuredOutputFeedback(error);
+              patchFeedback = structuredOutputRetryFeedback(
+                error,
+                patchFeedback,
+              );
               continue;
             }
             unusableOutputs = 0;

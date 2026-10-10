@@ -13,7 +13,7 @@ import {
   usageFrom,
   type ProviderFetch,
 } from "./api.js";
-import { tokensForBytes } from "../tokens.js";
+import { inputTokenCeiling, strictTokensForBytes } from "../tokens.js";
 
 export const reviewSchema = z
   .object({
@@ -117,11 +117,10 @@ function assertReviewerCall(
     throw new Error(
       `${what} input contains a potential secret; a cloud reviewer cannot receive it`,
     );
-  const ceiling = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
-  if (tokensForBytes(Buffer.byteLength(request) + 256) > ceiling)
+  const ceiling = inputTokenCeiling(policy, provider);
+  // A gate never judges input a provider might cut: strict one-token-per-byte
+  // count against the ceiling less the output reservation (tokens.ts).
+  if (strictTokensForBytes(Buffer.byteLength(request) + 256) > ceiling)
     throw new Error(
       "The change is too large for the reviewer's context budget; split the work or raise the reviewer's budget",
     );

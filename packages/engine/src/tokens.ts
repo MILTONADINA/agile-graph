@@ -1,15 +1,53 @@
+import type {
+  ProjectPolicy,
+  ProviderConfig,
+} from "@graph-engineering/contracts";
+
 // The one estimate of how many model tokens a serialized request uses, for
 // every comparison of request size with a token budget (maxContextTokens,
-// retrieval budgets, routed budgets). It names no tokenizer: common BPE
-// tokenizers average about 4 bytes of English or code per token, and fewer
-// for dense punctuation or non-Latin text, so dividing UTF-8 bytes by 3
-// (rounded up) over-counts typical input by about a third. That leaves a
-// margin for tokenizer differences while letting a 16k-token model receive a
-// realistic window, where counting one token per byte offered a third of it.
-export const BYTES_PER_TOKEN = 3;
+// retrieval budgets, routed budgets). It names no tokenizer. Common BPE
+// tokenizers average about 4 bytes of English prose per token, but dense
+// code, digits, JSON escapes and hex or base64 run nearer 1.5 to 2.5 bytes
+// per token, so dividing UTF-8 bytes by 2 (rounded up) is the conservative
+// estimate for workers and the planner.
+export const BYTES_PER_TOKEN = 2;
 
 export const tokensForBytes = (bytes: number): number =>
   Math.ceil(bytes / BYTES_PER_TOKEN);
 
 export const estimateTokens = (text: string): number =>
   tokensForBytes(Buffer.byteLength(text, "utf8"));
+
+// The strict estimate for gates that judge a change (the code-review gate and
+// the security audit): one token per UTF-8 byte, an upper bound for every
+// tokenizer, so a gate refuses rather than judges input a provider might cut.
+export const strictTokensForBytes = (bytes: number): number => bytes;
+
+// The input budget for one request to a provider: the smaller of the policy
+// and provider context limits, less the output reservation, so input plus
+// output fits the window and a server that cuts an over-long prompt never
+// drops mandatory text. The reservation is policy.maxOutputTokens (providers
+// declare no output cap of their own), but never more than half the window:
+// a policy whose output cap equals its context limit (the defaults are 16,000
+// each) keeps half the window for input instead of none.
+export function outputReservation(
+  policy: Pick<ProjectPolicy, "maxContextTokens" | "maxOutputTokens">,
+  provider?: Pick<ProviderConfig, "maxContextTokens">,
+): number {
+  const window = Math.min(
+    policy.maxContextTokens,
+    provider?.maxContextTokens ?? policy.maxContextTokens,
+  );
+  return Math.min(policy.maxOutputTokens, Math.floor(window / 2));
+}
+
+export function inputTokenCeiling(
+  policy: Pick<ProjectPolicy, "maxContextTokens" | "maxOutputTokens">,
+  provider?: Pick<ProviderConfig, "maxContextTokens">,
+): number {
+  const window = Math.min(
+    policy.maxContextTokens,
+    provider?.maxContextTokens ?? policy.maxContextTokens,
+  );
+  return window - outputReservation(policy, provider);
+}

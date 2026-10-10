@@ -54,9 +54,11 @@ change the default timeout behavior or the evidence status of this baseline.
   - Test: packages/engine/tests/api.test.ts :: reports malformed or schema-invalid worker output as a recoverable StructuredOutputError with the call's usage
   - Test: packages/engine/tests/execution.test.ts :: returns malformed or truncated worker output to the worker as feedback instead of failing the run
   - Test: packages/engine/tests/execution.test.ts :: stops a worker whose structured output is unusable twice in a row
-- AC12: Every comparison of a request's size with a token budget (worker, planner, reviewer, auditor, installed and Cursor requests, requested sources, routed budgets and retrieval) uses one documented conservative estimate, UTF-8 bytes divided by 3 rounded up, so a 16k-token model receives a request larger than 16k bytes that fits in tokens, while a request over the budget in estimated tokens is still refused before any call.
+- AC12: Every comparison of a request's size with a token budget (worker, planner, installed and Cursor requests, requested sources, routed budgets and retrieval) uses one documented conservative estimate, UTF-8 bytes divided by 2 rounded up, since dense code, digits, JSON escapes and hex or base64 run near 1.5 to 2.5 bytes per token. The reviewer and the security auditor use a strict estimate, one token per byte (`packages/engine/src/tokens.ts`). Every input ceiling is the smaller of the policy's and the provider's `maxContextTokens` less an output reservation of `policy.maxOutputTokens`, at most half that window (so the defaults, 16,000 each, leave 8,000 for input), so input plus output fits the window and a server that cuts an over-long prompt never drops mandatory text. A request over its ceiling is refused, or has optional evidence fitted, before any call.
   - Test: packages/engine/tests/api.test.ts :: estimates tokens conservatively from UTF-8 bytes, one estimate for every budget
-  - Test: packages/engine/tests/api.test.ts :: gives a 16k-token model a realistic window: accepts a request over 16k bytes that fits in tokens, and still refuses an oversize one
+  - Test: packages/engine/tests/api.test.ts :: reserves the output cap in every input ceiling, at most half the window
+  - Test: packages/engine/tests/api.test.ts :: gives a 16k-token model a realistic window less its output reservation, and refuses or fits a dense oversize request
+  - Test: packages/engine/tests/api.test.ts :: applies the output reservation: a request that fits the window alone is refused once the output cap is reserved
 
 ## Security considerations
 
