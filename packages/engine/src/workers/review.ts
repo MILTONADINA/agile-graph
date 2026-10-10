@@ -13,7 +13,12 @@ import {
   usageFrom,
   type ProviderFetch,
 } from "./api.js";
-import { inputTokenCeiling, strictTokensForBytes } from "../tokens.js";
+import {
+  inputTokenCeiling,
+  REVIEW_OUTPUT_TOKENS,
+  strictTokensForBytes,
+  withOutputCap,
+} from "../tokens.js";
 
 export const reviewSchema = z
   .object({
@@ -117,7 +122,10 @@ function assertReviewerCall(
     throw new Error(
       `${what} input contains a potential secret; a cloud reviewer cannot receive it`,
     );
-  const ceiling = inputTokenCeiling(policy, provider);
+  const ceiling = inputTokenCeiling(
+    withOutputCap(policy, REVIEW_OUTPUT_TOKENS),
+    provider,
+  );
   // A gate never judges input a provider might cut: strict one-token-per-byte
   // count against the ceiling less the output reservation (tokens.ts).
   if (strictTokensForBytes(Buffer.byteLength(request) + 256) > ceiling)
@@ -147,7 +155,7 @@ export async function invokeReviewWorker(
   const { text, result } = await callStructuredProvider(
     {
       provider,
-      policy,
+      policy: withOutputCap(policy, REVIEW_OUTPUT_TOKENS),
       instructions: REVIEW_INSTRUCTIONS,
       user,
       schema: reviewJsonSchema,
@@ -230,7 +238,7 @@ export async function invokeVerifyFix(
   const { text, result } = await callStructuredProvider(
     {
       provider,
-      policy,
+      policy: withOutputCap(policy, REVIEW_OUTPUT_TOKENS),
       instructions: VERIFY_FIX_INSTRUCTIONS,
       user,
       schema: verifyFixJsonSchema,

@@ -11,7 +11,12 @@ import {
   type Usage,
 } from "@graph-engineering/contracts";
 import { assertProvider, containsSecret } from "../policy.js";
-import { inputTokenCeiling, strictTokensForBytes } from "../tokens.js";
+import {
+  AUDIT_OUTPUT_TOKENS,
+  inputTokenCeiling,
+  strictTokensForBytes,
+  withOutputCap,
+} from "../tokens.js";
 import {
   callStructuredProvider,
   nodeProviderFetch,
@@ -479,7 +484,10 @@ async function auditCall<T>(
     throw new AuditNotSentError(
       `Security ${role} input contains a potential secret; a cloud auditor cannot receive it`,
     );
-  const ceiling = inputTokenCeiling(policy, provider);
+  const ceiling = inputTokenCeiling(
+    withOutputCap(policy, AUDIT_OUTPUT_TOKENS),
+    provider,
+  );
   // Strict one-token-per-byte count: the audit refuses rather than judge
   // input a provider might cut (tokens.ts).
   if (
@@ -495,7 +503,7 @@ async function auditCall<T>(
   const { text, result } = await callStructuredProvider(
     {
       provider,
-      policy,
+      policy: withOutputCap(policy, AUDIT_OUTPUT_TOKENS),
       instructions: call.instructions,
       user,
       schema: call.schema,

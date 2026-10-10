@@ -51,3 +51,17 @@ export function inputTokenCeiling(
   );
   return window - outputReservation(policy, provider);
 }
+
+// Gates answer with a compact, schema-bound verdict, not a patch, so they
+// reserve (and request) far less output than a worker: the review gate at most
+// REVIEW_OUTPUT_TOKENS, the security audit at most AUDIT_OUTPUT_TOKENS. The
+// rest of the window stays available for the change being judged. An answer
+// that hits the cap is reported as truncated, never accepted.
+export const REVIEW_OUTPUT_TOKENS = 4096;
+export const AUDIT_OUTPUT_TOKENS = 8192;
+export function withOutputCap<T extends Pick<ProjectPolicy, "maxOutputTokens">>(
+  policy: T,
+  cap: number,
+): T {
+  return { ...policy, maxOutputTokens: Math.min(policy.maxOutputTokens, cap) };
+}
