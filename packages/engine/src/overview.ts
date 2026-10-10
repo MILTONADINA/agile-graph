@@ -137,6 +137,94 @@ export function passedChecksSnapshot(
     : undefined;
 }
 
+/** One gate's latest recorded result and the snapshot it ran against. */
+export interface EvidenceStage {
+  eventId: string;
+  at: string;
+  /** Null when the event did not record its snapshot (older engines). */
+  snapshotHash: string | null;
+  /** Whether it ran against the run's final snapshot. */
+  current: boolean;
+  passed: boolean;
+}
+
+/**
+ * The run receipt's evidence ledger: which snapshot each gate's latest
+ * result was about, against the snapshot the run ended on. A gate whose
+ * result is about an earlier snapshot says nothing about the final one.
+ */
+export interface RunEvidence {
+  /** The snapshot the latest required checks ran on. */
+  finalSnapshotHash: string | null;
+  verification: EvidenceStage | null;
+  review: (EvidenceStage & { by: "reviewer" | "person" }) | null;
+  security: EvidenceStage | null;
+  /** True only when every gate that ran has a result about the final snapshot. */
+  complete: boolean;
+}
+
+/**
+ * Projects the evidence ledger from a run's events alone. It reads what the
+ * gates recorded and never decides or changes a gate.
+ */
+export function runEvidence(events: readonly RunEvent[]): RunEvidence {
+  const latest = (...types: string[]) =>
+    events.findLast((event) => types.includes(event.type));
+  const verification = latest("verification.completed");
+  const finalSnapshotHash =
+    typeof verification?.data.snapshotHash === "string"
+      ? verification.data.snapshotHash
+      : null;
+  const stage = (
+    event: RunEvent | undefined,
+    passed: (event: RunEvent) => boolean,
+  ): EvidenceStage | null => {
+    if (!event) return null;
+    const snapshotHash =
+      typeof event.data.snapshotHash === "string"
+        ? event.data.snapshotHash
+        : null;
+    return {
+      eventId: event.id,
+      at: event.at,
+      snapshotHash,
+      current: snapshotHash !== null && snapshotHash === finalSnapshotHash,
+      passed: passed(event),
+    };
+  };
+  const checks = (event: RunEvent) =>
+    Array.isArray(event.data.checks) &&
+    event.data.checks.length > 0 &&
+    event.data.checks.every(
+      (check) => (check as { code?: unknown }).code === 0,
+    );
+  const reviewEvent = latest("review.completed");
+  const reviewStage = stage(reviewEvent, (event) => event.data.passed === true);
+  const review = reviewStage
+    ? {
+        ...reviewStage,
+        by:
+          reviewEvent?.data.by === "person"
+            ? ("person" as const)
+            : ("reviewer" as const),
+      }
+    : null;
+  const security = stage(
+    latest("security.scan_completed", "security.gate_passed"),
+    (event) => event.type === "security.gate_passed",
+  );
+  const ran = [stage(verification, checks), review, security].filter(
+    (item): item is EvidenceStage => item !== null,
+  );
+  return {
+    finalSnapshotHash,
+    verification: stage(verification, checks),
+    review,
+    security,
+    complete: finalSnapshotHash !== null && ran.every((item) => item.current),
+  };
+}
+
 /**
  * A board of runs drawn only from their records and events: what each is
  * doing, which gates it passed, and who acts next. It claims nothing the

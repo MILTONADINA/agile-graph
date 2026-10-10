@@ -15,6 +15,7 @@ import { hash, id, now } from "./util.js";
 /** The SHA-256 of a plan's stored content, which an approval binds. */
 export const planSha256 = (plan: ExecutionPlan): string => hash(plan);
 import { redact } from "./policy.js";
+import { runEvidence, type RunEvidence } from "./overview.js";
 import {
   summarizeInferenceCalls,
   type AccountingSummary,
@@ -193,6 +194,12 @@ const STRUCTURAL_EVENT_KEYS: ReadonlySet<string> = new Set([
   "decisionIds",
   "memoryIds",
   "callId",
+  // Finding identities compared across attempts: a stored copy that
+  // redaction rewrote would never match the live one again.
+  "fingerprint",
+  "findingId",
+  "fixed",
+  "stillPresent",
 ]);
 const structural = (value: unknown): boolean =>
   typeof value === "string" ||
@@ -200,14 +207,15 @@ const structural = (value: unknown): boolean =>
 
 /**
  * Reads a retained run and its ordered events read-only, without opening the
- * engine or running crash recovery. Local CLI use only: it returns run
- * metadata that cloud MCP clients do not receive by default.
+ * engine or running crash recovery, with the evidence ledger projected from
+ * those events. Local CLI use only: it returns run metadata that cloud MCP
+ * clients do not receive by default.
  */
 export function readRunReceipt(
   dataDir: string,
   projectId: string,
   runId: string,
-): { run: RunRecord; events: RunEvent[] } {
+): { run: RunRecord; events: RunEvent[]; evidence: RunEvidence } {
   const file = path.join(dataDir, "runs.sqlite");
   if (!existsSync(file)) throw new Error("Run receipt database does not exist");
   const db = new Database(file, { readonly: true, fileMustExist: true });
@@ -226,7 +234,11 @@ export function readRunReceipt(
         )
         .all(projectId, runId)
         .map((item) => JSON.parse((item as { json: string }).json) as RunEvent);
-      return { run: JSON.parse(row.json) as RunRecord, events };
+      return {
+        run: JSON.parse(row.json) as RunRecord,
+        events,
+        evidence: runEvidence(events),
+      };
     })();
   } finally {
     db.close();

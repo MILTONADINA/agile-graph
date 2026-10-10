@@ -39,10 +39,23 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/mcp.test.ts :: lets a connected client plan, start, follow, list and cancel runs only when enabled
 - AC8: `graph-engine reviewer <id>` warns as soon as the reviewer is set when that provider is an installed agent (codex, claude or cursor), since installed agents cannot review yet and every run would refuse it at start; an API or local reviewer gets no such warning.
   - Test: packages/engine/tests/cli.test.ts :: warns when the reviewer is set to an installed agent, which cannot review, instead of only when a run starts
+- AC9: Each reviewer finding gets an engine-assigned ID, `R` and the first 10 hex characters of the SHA-256 of its path, line and whitespace-normalized message, recorded with the finding in `review.completed` and named in the feedback.
+  - Test: packages/engine/tests/review.test.ts :: gives each finding a stable ID that ignores whitespace
+  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed
+- AC10: When the latest AI review in the run asked for changes with blocking findings, the next review first checks each of them (at most 20; any beyond count as inconclusive) in a fresh, separate call to the reviewer carrying only that finding, the task and the current diff, with the same provider, secret and context-budget refusals as a review and the same worker slot and cost reservation. Each check is recorded as a `review.verify_fix` event. If any is not shown fixed, the review fails without a full review, records a failed `review.completed` listing the unfixed findings, and the feedback names each by its ID with the evidence; the full review runs only once all are fixed. A person's approval of the snapshot still stands in for all of this.
+  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed
+  - Test: packages/engine/tests/review.test.ts :: re-checks only the blocking findings of the latest AI review that asked for changes
+  - Test: packages/engine/tests/review.test.ts :: checks one earlier finding in a fresh structured call
+  - Test: packages/engine/tests/review.test.ts :: refuses the same inputs for a fix check as for a review
+  - Test: packages/engine/tests/execution.test.ts :: lets a person approve a run that stopped at an unfixed earlier finding
+- AC11: A failing review's feedback also lists its advisory findings, under a section labelled optional; a passing review's feedback stays empty.
+  - Test: packages/engine/tests/review.test.ts :: keeps advisory findings as optional feedback when a review fails
+- AC12: `graph-engine run-receipt` includes an evidence ledger projected from the run's events alone: the final snapshot (that of the latest required checks), and for the latest verification, review and security-gate results the snapshot each ran against, whether it passed and whether it is current (equal to the final snapshot), with `complete` true only when every gate that ran is current. It never changes gating.
+  - Test: packages/engine/tests/store-receipt.test.ts :: projects an evidence ledger of the snapshot each gate last ran against
 
 ## Security considerations
 
-The diff shown to the reviewer is built from raw bytes outside the repository, with no Git attributes, diff drivers or configuration, so a change cannot hide itself with `.gitattributes` tricks. The operator's own uncommitted files are excluded so they are neither reviewed as the worker's nor sent to a cloud reviewer. Cloud reviewers receive only exportable, secret-free diffs. A reviewer can only hold a change back: it cannot accept a change, skip checks or the security gate, or stand in for human acceptance. Stored review records redact evidence and messages.
+The diff shown to the reviewer is built from raw bytes outside the repository, with no Git attributes, diff drivers or configuration, so a change cannot hide itself with `.gitattributes` tricks. The operator's own uncommitted files are excluded so they are neither reviewed as the worker's nor sent to a cloud reviewer. Cloud reviewers receive only exportable, secret-free diffs. A reviewer can only hold a change back: it cannot accept a change, skip checks or the security gate, or stand in for human acceptance. A check of an earlier finding is a separate call that sees only that finding, the task and the diff, so the reviewer does not confirm its own finding while looking for new ones; it too can only hold a change back. Stored review records redact evidence and messages.
 
 ## Non-goals
 
