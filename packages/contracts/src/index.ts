@@ -120,6 +120,14 @@ export interface ProjectPolicy {
    * It is not in DEFAULT_POLICY, so policies without it keep their hash.
    */
   maxReadTurns?: number;
+  /**
+   * How many times a configured tester's tests are checked against simple
+   * mutants of the code the plan names before implementation, each time
+   * sending surviving mutants back to the tester for one more round of
+   * tests. Its calls come out of maxTurns. Absent or 0 means off; it is not
+   * in DEFAULT_POLICY, so policies without it keep their hash.
+   */
+  mutationRounds?: number;
   timeoutSeconds: number;
   /**
    * Installed coding workers only: absent inherits timeoutSeconds; null
@@ -789,6 +797,7 @@ export const policySchema = {
     maxOutputTokens: { type: "integer", minimum: 64, maximum: 128000 },
     maxTurns: { type: "integer", minimum: 1, maximum: 100 },
     maxReadTurns: { type: "integer", minimum: 0, maximum: 100 },
+    mutationRounds: { type: "integer", minimum: 0, maximum: 3 },
     timeoutSeconds: { type: "integer", minimum: 1, maximum: 86400 },
     installedWorkerTimeoutSeconds: {
       anyOf: [

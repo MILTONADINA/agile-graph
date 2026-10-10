@@ -80,6 +80,8 @@ export interface AddedFile {
  * view: a fresh copy of the workspace's allowed files. `options.added` writes new files into
  * that view only (the security audit's reproducer), so the workspace itself
  * is never written; an added path that already exists is refused.
+ * `options.replaced` overwrites files the view already has, in the view
+ * only; a replaced path the view lacks is refused.
  */
 export async function verifyInContainer(
   workspace: string,
@@ -87,7 +89,11 @@ export async function verifyInContainer(
   policy: ProjectPolicy,
   snapshotHash: string,
   signal?: AbortSignal,
-  options: { added?: readonly AddedFile[] } = {},
+  options: {
+    added?: readonly AddedFile[];
+    /** Existing files whose content the view replaces (mutation analysis). */
+    replaced?: readonly AddedFile[];
+  } = {},
 ): Promise<VerificationResult[]> {
   // A managed run can refresh the shared policy object while a check awaits.
   // Freeze this invocation's reviewed deadline before any filesystem/probe
@@ -138,6 +144,20 @@ export async function verifyInContainer(
         inputs.set(
           added.path,
           hash(Buffer.from(added.content).toString("base64")),
+        );
+      }
+      for (const replaced of options.replaced ?? []) {
+        if (!inputs.has(replaced.path))
+          throw new Error(
+            `A replaced verification file does not exist: ${replaced.path}`,
+          );
+        await writeFile(
+          await safePath(view, replaced.path, policy),
+          replaced.content,
+        );
+        inputs.set(
+          replaced.path,
+          hash(Buffer.from(replaced.content).toString("base64")),
         );
       }
     } catch (error) {

@@ -190,6 +190,19 @@ export interface RunEvidence {
    * snapshot and no gate's latest attempt is unfinished.
    */
   complete: boolean;
+  /**
+   * The tester's latest mutation analysis (policy.mutationRounds), present
+   * only when one ran. Advisory: it never gates or completes a run. `score`
+   * is killed / mutants, or null when nothing could be measured.
+   */
+  mutation?: {
+    eventId: string;
+    round: number;
+    status: string;
+    mutants: number;
+    killed: number;
+    score: number | null;
+  };
 }
 
 /**
@@ -293,8 +306,25 @@ export function runEvidence(
   )
     .filter(([, open]) => open)
     .map(([gate]) => gate);
+  const mutation = latest("mutation.analyzed");
+  const count = (value: unknown) => (typeof value === "number" ? value : 0);
   return {
     policyHash,
+    ...(mutation
+      ? {
+          mutation: {
+            eventId: mutation.id,
+            round: count(mutation.data.round),
+            status: String(mutation.data.status),
+            mutants: count(mutation.data.mutants),
+            killed: count(mutation.data.killed),
+            score:
+              typeof mutation.data.score === "number"
+                ? mutation.data.score
+                : null,
+          },
+        }
+      : {}),
     finalSnapshotHash,
     verification: stage(verification, checks),
     review,

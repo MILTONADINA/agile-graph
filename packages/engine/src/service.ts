@@ -191,7 +191,12 @@ import { dagParallelism } from "./scale.js";
 import { passedChecksSnapshot, stoppedAtReview } from "./overview.js";
 import { writeRunProvenance } from "./run-provenance.js";
 import { DEFAULT_TEST_FILES, TESTER_STEP_ID, testerStep } from "./tester.js";
-import { testerFocusPaths } from "./execution/tester-context.js";
+import { testerFocus } from "./execution/tester-context.js";
+import {
+  analyzeMutants,
+  mutationFeedback,
+  SURVIVORS_FED_BACK,
+} from "./execution/mutation.js";
 import {
   assertPlanVerificationSelection,
   resolveVerificationSelection,
@@ -214,7 +219,12 @@ import {
   type DagCheckpoint,
   type DagEvent,
 } from "./execution/dag.js";
-import type { DecisionBudget, DecisionBatchResult } from "./decision-batch.js";
+import {
+  decideBatch,
+  type DecisionBatchOptions,
+  type DecisionBudget,
+  type DecisionBatchResult,
+} from "./decision-batch.js";
 import {
   routeRetrieval,
   selectContext,
@@ -550,6 +560,108 @@ export class GraphEngine {
       signal,
       budget: this.decisionBudget(ownerId),
     };
+  }
+  /**
+   * One round of mutation analysis on a tester's staged tests: records the
+   * outcome as a `mutation.analyzed` event and returns the feedback for the
+   * tester when mutants survive, or undefined. Surviving mutants are put to
+   * the decision providers as `mutant_equivalence` questions; one is dropped
+   * only when that category is promoted and the answer is `equivalent`, so
+   * in shadow mode every survivor goes back and the answers are recorded.
+   */
+  private async mutationRound(input: {
+    run: RunRecord;
+    stepId: string;
+    round: number;
+    workspace: string;
+    staged: Map<string, { absolute: string; content: string }>;
+    targets: readonly string[];
+    snapshotHash: string;
+    signal?: AbortSignal;
+    withState: (
+      state: Record<string, unknown>,
+    ) => Omit<DecisionBatchOptions, "questions">;
+  }): Promise<string | undefined> {
+    const outcome = await analyzeMutants({
+      workspace: input.workspace,
+      tests: new Map(
+        [...input.staged].map(([file, { content }]) => [file, content]),
+      ),
+      targets: input.targets,
+      checks: input.run.plan.verification,
+      policy: this.config.policy,
+      snapshotHash: input.snapshotHash,
+      verify: this.deps.verify ?? verifyInContainer,
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+    let survivors = outcome.survivors.slice(0, SURVIVORS_FED_BACK);
+    let equivalent = 0;
+    if (survivors.length) {
+      // Local judgement only: the questions carry no source text and are
+      // never exportable; the mutated lines stay in the local state.
+      const lines = new Map<string, string[]>();
+      const lineOf = async (file: string, line: number) => {
+        if (!lines.has(file))
+          lines.set(
+            file,
+            (
+              input.staged.get(file)?.content ??
+              (await readFile(
+                await safePath(input.workspace, file, this.config.policy),
+                "utf8",
+              ))
+            ).split("\n"),
+          );
+        return lines.get(file)![line - 1] ?? "";
+      };
+      const mutants = await Promise.all(
+        survivors.map(async (mutant, index) => ({
+          id: `m${index + 1}`,
+          line: (await lineOf(mutant.path, mutant.line)).slice(0, 300),
+          change: mutant.description,
+        })),
+      );
+      const result = await decideBatch({
+        ...input.withState({ mutants }),
+        questions: mutants.map(({ id }) => ({
+          id,
+          category: "mutant_equivalence",
+          candidates: {
+            distinct: "The change can alter the program's observable behaviour",
+            equivalent:
+              "The change cannot alter the program's observable behaviour",
+          },
+          baseline: "distinct",
+          exportable: false,
+        })),
+      });
+      if (result.records.length)
+        this.captureDecision(input.run, "mutant_equivalence", result);
+      const kept = survivors.filter(
+        (_, index) => result.selections[`m${index + 1}`] !== "equivalent",
+      );
+      equivalent = survivors.length - kept.length;
+      survivors = kept;
+    }
+    this.store.event(
+      input.run.id,
+      "mutation.analyzed",
+      {
+        round: input.round,
+        status: outcome.status,
+        mutants: outcome.mutants,
+        killed: outcome.killed,
+        survived: outcome.survivors.length,
+        equivalent,
+        score: outcome.score,
+        // Locations and operators only, never source text.
+        survivors: survivors.map(
+          ({ path, line, description }) => `${path}:${line}: ${description}`,
+        ),
+      },
+      input.stepId,
+    );
+    return survivors.length ? mutationFeedback(survivors) : undefined;
   }
   private captureDecision(
     run: RunRecord,
@@ -2959,6 +3071,8 @@ export class GraphEngine {
           // A local measurement never stops a run.
         }
       };
+      // The code files the tester's focus named, for mutation analysis.
+      let testerTargets: string[] = [];
       const buildContext = async (tester?: {
         writes: readonly string[];
         exportOnly: boolean;
@@ -2972,8 +3086,8 @@ export class GraphEngine {
         });
         try {
           const snapshot = await latest.index();
-          const focusPaths = tester
-            ? await testerFocusPaths({
+          const focus = tester
+            ? await testerFocus({
                 engine: latest,
                 files: await gitFiles(workspace),
                 testFiles: tester.writes.length
@@ -2984,7 +3098,9 @@ export class GraphEngine {
                 allowed: (file) =>
                   isAllowedPath(file, this.config.policy, tester.exportOnly),
               })
-            : [];
+            : undefined;
+          if (focus) testerTargets = focus.code;
+          const focusPaths = focus?.paths ?? [];
           const current = await latest.getContext({
             query: run.plan.objective,
             budgetTokens,
@@ -3843,6 +3959,10 @@ export class GraphEngine {
             let repeatedReads = 0;
             let unexportablePatches = 0;
             let unusableOutputs = 0;
+            let mutationRoundsLeft =
+              step.id === TESTER_STEP_ID
+                ? (this.config.policy.mutationRounds ?? 0)
+                : 0;
             // Tests the tester wrote earlier in this plan, which implementing
             // steps must make pass and may not change.
             const testsWritten =
@@ -3993,8 +4113,9 @@ export class GraphEngine {
                 if (!unseen) {
                   // A patch that cannot apply goes back to the worker, as in
                   // single-step runs, instead of failing the whole plan.
+                  let staged: Awaited<ReturnType<typeof prepareProposal>>;
                   try {
-                    await prepareProposal(
+                    staged = await prepareProposal(
                       workspace,
                       result.proposal,
                       this.config.policy,
@@ -4013,6 +4134,40 @@ export class GraphEngine {
                       this.config.policy,
                     );
                     continue;
+                  }
+                  // Mutation analysis (policy.mutationRounds): surviving
+                  // mutants send the tester's tests back for another round.
+                  if (step.id === TESTER_STEP_ID && mutationRoundsLeft > 0) {
+                    mutationRoundsLeft--;
+                    const round =
+                      (this.config.policy.mutationRounds ?? 0) -
+                      mutationRoundsLeft;
+                    // Another round needs a model call within maxTurns.
+                    if (turn + 1 >= this.config.policy.maxTurns) {
+                      this.store.event(
+                        run.id,
+                        "mutation.analyzed",
+                        { round, status: "turn-budget" },
+                        step.id,
+                      );
+                      return result;
+                    }
+                    const feedback = await this.mutationRound({
+                      run,
+                      stepId: step.id,
+                      round,
+                      workspace,
+                      staged,
+                      targets: testerTargets,
+                      snapshotHash: state.snapshotHash,
+                      signal: state.signal,
+                      withState,
+                    });
+                    if (feedback) {
+                      returned(step.id, "mutation-survivors");
+                      patchFeedback = feedback;
+                      continue;
+                    }
                   }
                   return result;
                 }

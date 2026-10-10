@@ -32,7 +32,17 @@ function stem(file: string): string {
  * - Its tests: files matching the tester's write globs that import the named
  *   code or share its basename, nearest directory first.
  */
-export async function testerFocusPaths(options: {
+export async function testerFocusPaths(
+  options: Parameters<typeof testerFocus>[0],
+): Promise<string[]> {
+  return (await testerFocus(options)).paths;
+}
+
+/**
+ * testerFocusPaths, with the named code it found (not test files, at most
+ * eight): the files mutation analysis mutates.
+ */
+export async function testerFocus(options: {
   engine: ContextEngine;
   files: readonly string[];
   testFiles: readonly string[];
@@ -40,7 +50,7 @@ export async function testerFocusPaths(options: {
   snapshotId: string;
   /** Whether a path may appear; a cloud tester gets only exportable ones. */
   allowed: (file: string) => boolean;
-}): Promise<string[]> {
+}): Promise<{ paths: string[]; code: string[] }> {
   const isTest = globAllowlist(options.testFiles);
   const files = options.files.filter(
     (file) => options.allowed(file) && !containsSecret(file),
@@ -120,8 +130,11 @@ export async function testerFocusPaths(options: {
         exercised.push(target);
     }
   }
-  return [...new Set([...chosen, ...exercised, ...code])].slice(
-    0,
-    TESTER_FOCUS_LIMIT,
-  );
+  return {
+    paths: [...new Set([...chosen, ...exercised, ...code])].slice(
+      0,
+      TESTER_FOCUS_LIMIT,
+    ),
+    code,
+  };
 }
