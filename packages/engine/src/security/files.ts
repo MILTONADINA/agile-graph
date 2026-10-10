@@ -14,9 +14,9 @@ export function isDockerfile(file: string): boolean {
 // so an example such as .cursor/mcp.example.json is not configuration.
 const AGENT_SETTINGS = /(^|\/)\.claude\/settings(\.[a-z0-9_-]+)*\.json$/i;
 const MCP_CONFIG =
-  /(^|\/)(\.mcp\.json|\.cursor\/mcp\.json|\.vscode\/mcp\.json|\.codex\/config\.toml)$/i;
+  /(^|\/)(\.mcp\.json|\.cursor\/mcp\.json|\.vscode\/mcp\.json|\.vscode\/settings\.json|\.gemini\/settings\.json|\.codex\/config\.toml)$/i;
 const INSTRUCTION_FILE =
-  /(^|\/)(agents(\.override)?\.md|claude(\.local)?\.md|gemini\.md|skill\.md|\.cursorrules|\.github\/copilot-instructions\.md|\.cursor\/rules\/.+)$/i;
+  /(^|\/)(agents(\.override)?\.md|claude(\.local)?\.md|gemini\.md|skill\.md|\.cursorrules|\.windsurfrules|\.github\/copilot-instructions\.md|\.cursor\/rules\/.+)$/i;
 
 /** A Claude Code settings file: hooks, helpers and permissions. */
 export function isAgentSettings(file: string): boolean {

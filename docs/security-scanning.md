@@ -99,18 +99,32 @@ it. The built-in `agent-config` tool reads these files in-process, over the
 same tracked files as the other scanners, and reports ordinary findings with
 the tool name `agent-config`:
 
-| Rule                  | Files                                                                                                                                                             | Reports                                                                                                                                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hook-command`        | `.claude/settings*.json` at any depth                                                                                                                             | Each `type: "command"` hook, the `statusLine` command and the `apiKeyHelper`, `awsAuthRefresh`, `awsCredentialExport` and `otelHeadersHelper` commands, one finding each                                      |
-| `permission-widening` | `.claude/settings*.json`                                                                                                                                          | `permissions.allow` entries such as `Bash`, `Bash(*)`, `Write(*)`, `Edit(**)`, `WebFetch(domain:*)`, `mcp__*` or `*`; `defaultMode: "bypassPermissions"`; `dangerouslySkipPermissions: true`                  |
-| `mcp-server`          | `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json` (comments and trailing commas allowed) and `.codex/config.toml` (`[mcp_servers.*]` tables)                    | One finding per declared server                                                                                                                                                                               |
-| `prompt-injection`    | `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`, `CLAUDE.local.md`, `GEMINI.md`, `SKILL.md`, `.cursorrules`, `.cursor/rules/**`, `.github/copilot-instructions.md` | Lines telling the agent to ignore previous instructions or disregard the system prompt, `curl`/`wget` piped to a shell, "send … to http(s)://…", encoded blobs over 200 characters, invisible or bidi Unicode |
+| Rule                  | Files                                                                                                                                                                                                                                    | Reports                                                                                                                                                                                                                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook-command`        | `.claude/settings*.json` at any depth                                                                                                                                                                                                    | Each hook (`command`; `http`, by its host; `prompt` and `agent`), the `statusLine` command and the `apiKeyHelper`, `awsAuthRefresh`, `awsCredentialExport` and `otelHeadersHelper` commands, one finding each                                                                                                     |
+| `permission-widening` | `.claude/settings*.json`                                                                                                                                                                                                                 | `permissions.allow` or legacy `allowedTools` entries such as `Bash`, `Bash(*)`, `Write(*)`, `Edit(**)`, `WebFetch(domain:*)`, `mcp__*` or `*`; `defaultMode: "bypassPermissions"`; `dangerouslySkipPermissions: true`; `enableAllProjectMcpServers: true`; each server in `enabledMcpjsonServers`                 |
+| `endpoint-override`   | `.claude/settings*.json`                                                                                                                                                                                                                 | `env` variables that redirect the agent's connections, by name only: `*_BASE_URL` (such as `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`), `*_API_URL`, `*_API_BASE`, `*_ENDPOINT` (such as `OTEL_EXPORTER_OTLP_ENDPOINT`), `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and extra CA bundles such as `NODE_EXTRA_CA_CERTS` |
+| `mcp-server`          | `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.gemini/settings.json` (`mcpServers`), `.vscode/settings.json` (`mcp.servers`), all with comments and trailing commas allowed, and `.codex/config.toml` (`[mcp_servers.*]` tables) | One finding per declared server                                                                                                                                                                                                                                                                                   |
+| `prompt-injection`    | `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`, `CLAUDE.local.md`, `GEMINI.md`, `SKILL.md`, `.cursorrules`, `.windsurfrules`, `.cursor/rules/**`, `.github/copilot-instructions.md`                                                      | Lines telling the agent to ignore previous instructions or disregard the system prompt, `curl`/`wget` piped to a shell, "send … to http(s)://…", encoded blobs over 200 characters, invisible or bidi Unicode                                                                                                     |
 
 Files are matched by exact name, so an example such as
 `.cursor/mcp.example.json` is not read as configuration. A narrow
 permission such as `Bash(npm test:*)` is not reported, and the injection
 phrases are a short, conservative list chosen to keep false positives low;
-the rule is a tripwire for review, not a classifier.
+the rule is a tripwire for review, not a classifier. The invisible-Unicode
+check reports zero-width spaces, a byte-order mark after the start of the
+file, bidi embeddings, overrides and isolates and tag characters, but not the
+zero-width joiner of emoji sequences or the left-to-right and right-to-left
+marks of mixed-direction text. Claude Code custom commands and subagent
+definitions (`.claude/commands/`, `.claude/agents/`) are not read.
+
+Every file is hostile input. No pattern is built from file content, every
+pattern's gaps are bounded, long lines are checked in overlapping 4 KB
+windows (so a phrase at the end of a long line is still found), and lines
+are located through one index per file, so the check stays linear in the
+size of the file. A file whose analysis fails anyway is listed under
+`unscanned` like one that does not parse, and the other files are still
+checked.
 
 Findings never hold a command, its arguments, an environment value or a full
 URL. A hook is named by its event (`hooks.PostToolUse`), a server by its
@@ -118,7 +132,13 @@ name, a program only when the command starts with a bare program name
 (`node`, never a path) and a remote server only by its host. An
 injection finding names the pattern that matched, not the text. The
 fingerprint still covers the declaring lines, so editing an accepted hook's
-command makes it a new finding. A configuration file that does not parse is
+command makes it a new finding. For an MCP server, it also covers a hash of
+the server's definition (type, command, arguments, URL, working directory
+and the names, not the values, of its environment variables and headers),
+and for a hook a hash including its matcher, so changing a server's URL or
+arguments however far below its name, or widening a hook's matcher, is a new
+finding too, while rotating an environment value or editing elsewhere in the
+file is not. The hash is part of the fingerprint only and is not recorded. A configuration file that does not parse is
 listed under `unscanned` instead of being passed unchecked.
 
 Because the findings go through the same baseline, a worker in a managed
