@@ -189,6 +189,7 @@ import {
 } from "./planning.js";
 import { dagParallelism } from "./scale.js";
 import { passedChecksSnapshot, stoppedAtReview } from "./overview.js";
+import { writeRunProvenance } from "./run-provenance.js";
 import { DEFAULT_TEST_FILES, TESTER_STEP_ID, testerStep } from "./tester.js";
 import { testerFocusPaths } from "./execution/tester-context.js";
 import {
@@ -2108,6 +2109,23 @@ export class GraphEngine {
       decision.accepted ? "accepted" : "rejected",
       note,
     );
+    // An accepted result gets its unsigned provenance statement. The
+    // acceptance is already recorded, so a failure here is noted, not thrown.
+    if (decision.accepted)
+      try {
+        await writeRunProvenance({
+          root: this.root,
+          dataDir: this.dataDir,
+          run,
+          events: this.store.events(runId),
+          providers: await loadProviders(this.dataDir),
+          policy: this.config.policy,
+        });
+      } catch (error) {
+        this.store.event(runId, "provenance.capture_failed", {
+          error: errorMessage(error),
+        });
+      }
     // A rejection's reason may be a lesson for later work; it stays a
     // private proposal until a person accepts it as project memory.
     if (!decision.accepted && note)
