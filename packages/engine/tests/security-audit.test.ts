@@ -1584,6 +1584,45 @@ describe("security audit of a run", () => {
     });
   });
 
+  it("never reproduces on a workspace changed after the audited diff was built", async () => {
+    let workspacePath = "";
+    const { config, engine, run, reproduce } = await finishedRun({
+      // The workspace is edited while the verifier traces the diff: after
+      // the diff was built, before the first reproducer.
+      verifier: async (...args) => {
+        await writeFile(
+          path.join(workspacePath, "math.cjs"),
+          "exports.add = (a, b) => a + b + 0;\n",
+        );
+        return confirmedWith()(...args);
+      },
+      reproduce: sandboxReply(),
+    });
+    workspacePath = run.workspace!;
+    const audited = await workspaceFingerprint(run.workspace!, config.policy);
+    const result = await engine.securityAudit(run.id);
+    expect(reproduce).not.toHaveBeenCalled();
+    expect(result.snapshotHash).toBe(audited);
+    expect(await workspaceFingerprint(run.workspace!, config.policy)).not.toBe(
+      audited,
+    );
+    expect(result.counts).toMatchObject({
+      confirmed: 0,
+      needs_validation: 1,
+      traced: 1,
+    });
+    expect(result.findings.map((item) => item.verdict)).toEqual([
+      "needs_validation",
+    ]);
+    expect(result.reproducers[0]).toMatchObject({
+      outcome: "error",
+      snapshotHash: audited,
+      note: expect.stringContaining(
+        "workspace changed since the audited diff was built",
+      ),
+    });
+  });
+
   it("redacts the reproducer's output before recording it", async () => {
     const token = "Zq7Lm2Xp" + "9Rt4Vb8Nc3Kd";
     const { engine, run } = await finishedRun({
