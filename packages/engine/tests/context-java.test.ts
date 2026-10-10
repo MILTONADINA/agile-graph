@@ -500,36 +500,26 @@ describe("Java analyzer memory wiring", () => {
     async () => {
       const directory = await mkdtemp(path.join(tmpdir(), "graph-java-rss-"));
       try {
-        // A stand-in "java" that ignores its arguments and would run for 30s.
-        const executable = path.join(directory, "java");
-        await writeFile(executable, "#!/bin/sh\nexec /bin/sleep 30\n", {
-          mode: 0o755,
-        });
+        // A stand-in "java": Node itself, running for 30s. No script file is
+        // written and executed, which Linux can refuse (ETXTBSY, noexec /tmp).
+        const stand = {
+          executable: process.execPath,
+          classPath: directory,
+          args: ["-e", "setTimeout(() => {}, 30_000)"],
+        };
         // Control: under the limit, the stand-in runs until the deadline.
         const control = performance.now();
         await expect(
-          analyze(
-            { executable, classPath: directory },
-            "",
-            1500,
-            1000,
-            async () => 1,
-          ),
+          analyze(stand, "", 1500, 1000, async () => 1),
         ).rejects.toThrow("resource limit");
         expect(performance.now() - control).toBeGreaterThanOrEqual(1000);
         const sampled: number[] = [];
         const started = performance.now();
         await expect(
-          analyze(
-            { executable, classPath: directory },
-            "",
-            10_000,
-            1000,
-            async (pid) => {
-              sampled.push(pid);
-              return JAVA_LIMITS.rssKiB + 1;
-            },
-          ),
+          analyze(stand, "", 10_000, 1000, async (pid) => {
+            sampled.push(pid);
+            return JAVA_LIMITS.rssKiB + 1;
+          }),
         ).rejects.toThrow("resource limit");
         expect(sampled.length).toBeGreaterThan(0);
         expect(performance.now() - started).toBeLessThan(1000);

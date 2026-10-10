@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -175,8 +176,25 @@ describe("a scanner that writes no report", () => {
     const error = scan.errors.find((line) => line.startsWith("osv-scanner:"));
     expect(error).toContain("<tmp>/out/osv.json");
     const sarif = JSON.stringify(scanSarif(scan, [], "0.0.0-test"));
-    for (const host of [os.tmpdir(), await realpath(os.tmpdir()), root, data])
-      expect(sarif).not.toContain(host);
+    // No absolute path survives in any form: no temp directory (either
+    // slash, any case), no drive letter and no repository or data directory.
+    const forms = (host: string) => [
+      host,
+      host.replace(/\\/g, "/"),
+      JSON.stringify(host).slice(1, -1),
+    ];
+    for (const text of [error!, sarif]) {
+      for (const host of [
+        os.tmpdir(),
+        await realpath(os.tmpdir()),
+        realpathSync.native(os.tmpdir()),
+        root,
+        data,
+      ])
+        for (const form of forms(host))
+          expect(text.toLowerCase()).not.toContain(form.toLowerCase());
+      expect(text).not.toMatch(/\b[A-Za-z]:[\\/]/);
+    }
     // Each directory is replaced by its own placeholder.
     const hide = withoutHostPaths([
       [root, "<repo>"],
