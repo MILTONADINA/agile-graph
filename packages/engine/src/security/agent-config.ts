@@ -655,6 +655,23 @@ const bracketed = (name: keyof typeof KEYS, text: string, open: string) => {
 };
 
 /**
+ * A TOML line without its comment: the first "#" outside a basic or literal
+ * string starts one. Linear in the line's length.
+ */
+export function stripTomlComment(line: string): string {
+  let quote: string | undefined;
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index];
+    if (quote) {
+      if (quote === '"' && char === "\\") index++;
+      else if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "#") return line.slice(0, index);
+  }
+  return line;
+}
+
+/**
  * MCP servers in a Codex config.toml, read line by line without a TOML
  * parser: the common table, inline-table and dotted-key forms.
  */
@@ -672,7 +689,9 @@ export function codexServers(file: string, lines: Lines): Finding[] {
     return servers.get(name)!;
   };
   lines.forEach((raw, index) => {
-    const line = raw.replace(/^\uFEFF/, "");
+    // Comments are dropped first: a commented-out "command = ..." must never
+    // stand in for the active one in a server's definition hash.
+    const line = stripTomlComment(raw.replace(/^\uFEFF/, ""));
     const table = SERVER_TABLE.exec(line);
     if (table) {
       section = "server";

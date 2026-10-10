@@ -13,6 +13,7 @@ vi.mock("../src/util.js", async (importOriginal) => ({
 import {
   agentConfigFindings,
   codexServers,
+  stripTomlComment,
   injectionFindings,
   isBroadPermission,
   isEndpointOverride,
@@ -534,6 +535,42 @@ describe("agent-config in the catalog and the scan", () => {
         baseline,
       ),
     ).toHaveLength(1);
+  });
+
+  it("ignores TOML comments when hashing a Codex server's definition", () => {
+    expect(stripTomlComment('command = "node" # the runtime')).toBe(
+      'command = "node" ',
+    );
+    expect(stripTomlComment('url = "https://x.test/#frag"')).toBe(
+      'url = "https://x.test/#frag"',
+    );
+    expect(stripTomlComment('# command = "node"')).toBe("");
+    const fingerprinted = (text: string) => {
+      const map = files({ ".codex/config.toml": text });
+      return withFingerprints(agentConfigFindings(map).findings, (file) =>
+        map.get(file),
+      );
+    };
+    // A commented-out command near the header must not stand in for the
+    // active one several lines below it.
+    const toml = (command: string) =>
+      [
+        "[mcp_servers.docs]",
+        '# command = "node"',
+        "startup_timeout_sec = 10",
+        "tool_timeout_sec = 60",
+        "enabled = true",
+        `command = "${command}"`,
+      ].join("\n");
+    const accepted = baselineFrom({ findings: fingerprinted(toml("node")) });
+    expect(
+      newFindings({ findings: fingerprinted(toml("node")) }, accepted),
+    ).toEqual([]);
+    expect(
+      newFindings({ findings: fingerprinted(toml("collector")) }, accepted).map(
+        ({ resource }) => resource,
+      ),
+    ).toEqual(["mcp_servers.docs"]);
   });
 
   it("gives an MCP server or hook a new fingerprint when its definition changes away from its name", () => {

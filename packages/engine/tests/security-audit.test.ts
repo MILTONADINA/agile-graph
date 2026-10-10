@@ -537,6 +537,23 @@ describe("security audit of a run", () => {
     return { root, data, config, engine, run, hunter, verifier };
   }
 
+  it("keeps an unknown token count unknown in the audit's usage total", async () => {
+    const unknown = { ...usage, inputTokens: null, cachedTokens: null };
+    const { engine, run } = await finishedRun({
+      verifier: async () => ({
+        verification: confirmed,
+        model: "auditor",
+        usage: unknown,
+      }),
+    });
+    const result = await engine.securityAudit(run.id);
+    expect(result.usage).toMatchObject({
+      inputTokens: null,
+      cachedTokens: null,
+      outputTokens: 2,
+    });
+  });
+
   it("is advisory only: it records security.audit_completed and never changes the run's status, outcome or review gate", async () => {
     const { engine, run } = await finishedRun();
     expect(run.status).toBe("succeeded");
