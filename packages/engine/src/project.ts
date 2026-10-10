@@ -50,6 +50,14 @@ export function cloudMcpPolicy(exportPaths: string[]): ProjectPolicy {
     );
   if (globs.some((glob) => glob === "" || glob === "!"))
     throw new Error("An --export glob cannot be empty");
+  const doubled = globs.find((glob) => glob.startsWith("!!"));
+  if (doubled !== undefined)
+    throw new Error(
+      `An --export glob cannot start with "!!" (${doubled}); use one "!" to exclude`,
+    );
+  const repeated = globs.find((glob, index) => globs.indexOf(glob) !== index);
+  if (repeated !== undefined)
+    throw new Error(`--export ${repeated} is given more than once`);
   return {
     ...structuredClone(DEFAULT_POLICY),
     inference: "allowlisted",
@@ -88,6 +96,8 @@ export async function initializeProject(
     policy,
     verification: [],
   };
+  // Never write a file every later load would refuse.
+  assertProjectConfig(config);
   await writeJson(path.join(absolute, PROJECT_FILE), config);
   return config;
 }
