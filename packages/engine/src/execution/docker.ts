@@ -12,6 +12,7 @@ import {
   open,
   readFile,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { gitFiles } from "./workspace.js";
@@ -69,12 +70,24 @@ export interface VerificationResult {
   stderr: string;
   snapshotHash: string;
 }
+/** A file added to the verification view only, never to the workspace. */
+export interface AddedFile {
+  path: string;
+  content: string;
+}
+/**
+ * Runs registered checks in the offline sandbox on a temporary view: a copy
+ * of the workspace's allowed files. `options.added` writes new files into
+ * that view only (the security audit's reproducer), so the workspace itself
+ * is never written; an added path that already exists is refused.
+ */
 export async function verifyInContainer(
   workspace: string,
   checks: ProjectConfig["verification"],
   policy: ProjectPolicy,
   snapshotHash: string,
   signal?: AbortSignal,
+  options: { added?: readonly AddedFile[] } = {},
 ): Promise<VerificationResult[]> {
   // A managed run can refresh the shared policy object while a check awaits.
   // Freeze this invocation's reviewed deadline before any filesystem/probe
@@ -108,6 +121,21 @@ export async function verifyInContainer(
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         }
       }
+    for (const added of options.added ?? []) {
+      if (inputs.has(added.path))
+        throw new Error(
+          `An added verification file already exists: ${added.path}`,
+        );
+      // safePath refuses a path outside the policy or through a symlink;
+      // "wx" refuses a file that is already there.
+      const target = await safePath(view, added.path, policy);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, added.content, { flag: "wx" });
+      inputs.set(
+        added.path,
+        hash(Buffer.from(added.content).toString("base64")),
+      );
+    }
     for (const check of checks) {
       if (signal?.aborted) throw new Error("Run cancelled");
       const imageId = await checked(

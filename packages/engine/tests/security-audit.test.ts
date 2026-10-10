@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +16,16 @@ import {
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import { checked, hash, writeJson } from "../src/util.js";
 import { stoppedAtReview } from "../src/overview.js";
+import { workspaceFingerprint } from "../src/execution/workspace.js";
+import type { VerificationResult } from "../src/execution/docker.js";
+import {
+  DID_NOT_RUN_MARKERS,
+  judgeReproducer,
+  validateReproducer,
+  type AuditReproducer,
+  type ReproducerContext,
+  type ReproducerRun,
+} from "../src/security/reproducer.js";
 import {
   assertVendoredPins,
   auditRecord,
@@ -166,7 +176,7 @@ describe("audit records", () => {
 });
 
 describe("statically traced findings", () => {
-  it("never reports confirmed: a verifier's static trace is needs_validation with its full trace and expected result", () => {
+  it("reports a static trace as needs_validation with its full trace and expected result", () => {
     const traced = auditRecord(
       candidate(),
       {
@@ -211,6 +221,350 @@ describe("statically traced findings", () => {
     );
     expect(bare.errors).toEqual([]);
     expect(bare.record.verdict).toBe("needs_validation");
+  });
+});
+
+const reproducer: AuditReproducer = {
+  path: "math.test.cjs",
+  content:
+    "const test = require('node:test');\nconst assert = require('node:assert');\nconst { add } = require('./math.cjs');\ntest('add', () => assert.equal(add(2, 3), 5, 'injected command ran'));\n",
+  argv: ["node", "--test", "math.test.cjs"],
+  image: null,
+  expected: "injected command ran",
+};
+const sandboxResult = (
+  overrides: Partial<VerificationResult> = {},
+): VerificationResult => ({
+  argv: reproducer.argv,
+  image: "node:24-alpine",
+  imageId: `sha256:${"b".repeat(64)}`,
+  code: 1,
+  stdout: "not ok 1 - add\n  injected command ran\n",
+  stderr: "",
+  snapshotHash: "snapshot",
+  ...overrides,
+});
+const demonstrated: ReproducerRun = {
+  outcome: "demonstrated",
+  note: "The reproducer failed with exit code 1 and the expected failure text.",
+  path: reproducer.path,
+  argv: reproducer.argv,
+  expected: reproducer.expected,
+  image: "node:24-alpine",
+  imageId: `sha256:${"b".repeat(64)}`,
+  snapshotHash: "snapshot-hash",
+  exitCode: 1,
+  excerpt: "not ok 1 - add\n  injected command ran",
+};
+
+describe("audit reproducer demonstration", () => {
+  it("confirms only a demonstrated failure: a non-zero exit with the expected signal and no did-not-run marker", () => {
+    expect(
+      judgeReproducer([sandboxResult()], reproducer.expected),
+    ).toMatchObject({
+      outcome: "demonstrated",
+      exitCode: 1,
+      imageId: `sha256:${"b".repeat(64)}`,
+    });
+    // Line endings are normalized and stderr counts too.
+    expect(
+      judgeReproducer(
+        [
+          sandboxResult({
+            stdout: "",
+            stderr: "AssertionError:\r\n  injected\r\ncommand ran",
+          }),
+        ],
+        "injected\ncommand ran",
+      ).outcome,
+    ).toBe("demonstrated");
+    const confirmedRecord = auditRecord(
+      candidate(),
+      { ...confirmed, reproducer },
+      changed,
+      demonstrated,
+    );
+    expect(confirmedRecord.errors).toEqual([]);
+    expect(confirmedRecord.record.verdict).toBe("confirmed");
+    // Only a verifier-confirmed trace can be confirmed by a reproducer.
+    expect(
+      auditRecord(
+        candidate(),
+        {
+          ...rejected,
+          verdict: "needs_validation",
+          blockers: ["A caller is not shown."],
+          validation_plan: "Run add with a string.",
+        },
+        changed,
+        demonstrated,
+      ).record.verdict,
+    ).toBe("needs_validation");
+    // A demonstration the verifier gave no remediation for stays
+    // needs_validation, saying what is missing.
+    const partial = auditRecord(
+      candidate(),
+      { ...confirmed, remediation: null },
+      changed,
+      demonstrated,
+    );
+    expect(partial.errors).toEqual([]);
+    expect(partial.record.verdict).toBe("needs_validation");
+    expect((partial.record.blockers as string[]).join(" ")).toContain(
+      "needs the verifier's remediation",
+    );
+  });
+
+  it("keeps needs_validation when the reproducer passes, cannot start, errors before running, times out or misses the signal", () => {
+    const judge = (overrides: Partial<VerificationResult>) =>
+      judgeReproducer([sandboxResult(overrides)], reproducer.expected);
+    expect(judge({ code: 0 })).toMatchObject({
+      outcome: "not_demonstrated",
+      note: expect.stringContaining("passed"),
+    });
+    for (const code of [125, 126, 127])
+      expect(judge({ code }).note).toContain("could not start");
+    expect(judge({ code: 137 }).note).toContain("killed");
+    for (const marker of DID_NOT_RUN_MARKERS)
+      expect(
+        judge({ stdout: `${marker}\ninjected command ran\n` }).outcome,
+      ).toBe("not_demonstrated");
+    expect(
+      judge({
+        stdout: "",
+        stderr:
+          "file:///workspace/math.test.cjs:1\nSyntaxError: Unexpected token\ninjected command ran",
+      }).note,
+    ).toContain("errored before its test ran");
+    expect(
+      judge({ stdout: "not ok 1 - add\n  expected 5, got -1\n" }).note,
+    ).toContain("not with the expected failure text");
+    // No result, or more than one, is never a demonstration.
+    expect(judgeReproducer([], reproducer.expected).outcome).toBe("error");
+    expect(
+      judgeReproducer([sandboxResult(), sandboxResult()], reproducer.expected)
+        .outcome,
+    ).toBe("error");
+    // Each such outcome is recorded as needs_validation with a blocker.
+    const missed: ReproducerRun = {
+      ...demonstrated,
+      outcome: "not_demonstrated",
+      note: "The reproducer passed (exit code 0), so nothing failed.",
+      exitCode: 0,
+    };
+    const record = auditRecord(candidate(), confirmed, changed, missed);
+    expect(record.errors).toEqual([]);
+    expect(record.record.verdict).toBe("needs_validation");
+    expect(record.record.blockers).toEqual([
+      STATIC_TRACE_BLOCKER,
+      "Reproducer not demonstrated: The reproducer passed (exit code 0), so nothing failed.",
+    ]);
+    expect(
+      (record.record.validation_plan as { local: string }).local,
+    ).toContain("The sandboxed reproducer did not demonstrate");
+  });
+
+  it("fills a confirmed record's execution evidence from what ran", () => {
+    const { record, errors } = auditRecord(
+      candidate(),
+      { ...confirmed, reproducer },
+      changed,
+      demonstrated,
+    );
+    expect(errors).toEqual([]);
+    expect(validateFindings([record])).toEqual([]);
+    expect(record).toMatchObject({
+      verdict: "confirmed",
+      root_cause: confirmed.root_cause,
+      intended_behavior: confirmed.intended_behavior,
+      conditions: confirmed.conditions,
+      remediation: { strategy: confirmed.remediation },
+      severity: confirmed.severity,
+      confidence: confirmed.confidence,
+    });
+    const execution = record.execution as {
+      attacker_perspective: string;
+      payloads: string[];
+      instructions: string[];
+      observed_result: string;
+    };
+    expect(execution.attacker_perspective).toBe(
+      confirmed.reproduction!.attacker_perspective,
+    );
+    expect(execution.payloads).toEqual(["1; id"]);
+    const ran = execution.instructions.at(-1)!;
+    for (const fact of [
+      "node --test math.test.cjs",
+      "node:24-alpine",
+      `sha256:${"b".repeat(64)}`,
+      "--network=none",
+      "snapshot-hash",
+      "math.test.cjs",
+    ])
+      expect(ran).toContain(fact);
+    for (const fact of [
+      "Exit code 1",
+      '"injected command ran"',
+      `Image ID sha256:${"b".repeat(64)}`,
+      "Output excerpt (redacted): not ok 1 - add",
+    ])
+      expect(execution.observed_result).toContain(fact);
+    // Fields Cloudflare forbids on a confirmed record are absent.
+    for (const field of [
+      "claimed_root_cause",
+      "blockers",
+      "validation_plan",
+      "reason",
+    ])
+      expect(record).not.toHaveProperty(field);
+    // A reproduction without payloads names the reproducer as its payload.
+    const bare = auditRecord(
+      candidate(),
+      {
+        ...confirmed,
+        reproduction: { ...confirmed.reproduction!, payloads: [] },
+      },
+      changed,
+      demonstrated,
+    );
+    expect(bare.errors).toEqual([]);
+    expect((bare.record.execution as { payloads: string[] }).payloads).toEqual([
+      "math.test.cjs",
+    ]);
+  });
+});
+
+describe("audit reproducer validation", () => {
+  const context = (
+    overrides: Partial<ReproducerContext> = {},
+  ): ReproducerContext => ({
+    policy: DEFAULT_POLICY,
+    testFiles: ["**/*.test.*", "**/tests/**"],
+    changedFiles: ["src/math.cjs"],
+    existingFiles: new Set(["src/math.cjs", "src/old.test.cjs"]),
+    verification: [
+      { image: "node:24-alpine", argv: ["npm", "test"] },
+      { image: "toy-lint", argv: ["lint"], optional: true },
+    ],
+    cloud: false,
+    ...overrides,
+  });
+  const valid: AuditReproducer = {
+    ...reproducer,
+    path: "src/math.test.cjs",
+    argv: ["node", "--test", "src/math.test.cjs"],
+  };
+
+  it("refuses invalid reproducers before running them", () => {
+    expect(validateReproducer(valid, context())).toEqual({
+      ok: true,
+      image: "node:24-alpine",
+    });
+    expect(
+      validateReproducer({ ...valid, image: "toy-lint" }, context()),
+    ).toEqual({ ok: true, image: "toy-lint" });
+    const refused = (
+      change: Partial<AuditReproducer>,
+      reason: string,
+      overrides: Partial<ReproducerContext> = {},
+    ) => {
+      const result = validateReproducer(
+        { ...valid, ...change },
+        context(overrides),
+      );
+      expect(result.ok).toBe(false);
+      expect((result as { reason: string }).reason).toContain(reason);
+    };
+    const pathCase = (file: string, reason: string) =>
+      refused({ path: file, argv: ["node", "--test", file] }, reason);
+    pathCase("../escape.test.cjs", "not a safe relative project path");
+    pathCase("src/../escape.test.cjs", "not a safe relative project path");
+    pathCase("/tmp/escape.test.cjs", "not a safe relative project path");
+    pathCase("src\\math.test.cjs", "not a safe relative project path");
+    pathCase(".env.test.js", "not a safe relative project path");
+    pathCase(".graph/run.test.js", "not a safe relative project path");
+    pathCase("src/math.cjs", "does not match the project's test file globs");
+    pathCase("docs/math.test.cjs", "outside the area the run changed");
+    pathCase("src/old.test.cjs", "already exists");
+    refused({ content: "  \n" }, "content is empty");
+    refused({ content: "x".repeat(65_537) }, "larger than 65536 bytes");
+    refused({ content: "test\0" }, "NUL byte");
+    refused({ argv: [] }, "1 to 32 arguments");
+    refused(
+      { argv: [...Array(32).fill("x"), "src/math.test.cjs"] },
+      "1 to 32 arguments",
+    );
+    for (const argument of [
+      "src/math.test.cjs;id",
+      "$(id)",
+      "`id`",
+      "a|b",
+      "a&b",
+      "a>b",
+      "a b",
+      "'quoted'",
+      "a\nb",
+      "*.test.cjs",
+    ])
+      refused(
+        { argv: ["node", argument, "src/math.test.cjs"] },
+        "shell metacharacter",
+      );
+    refused(
+      { argv: ["/bin/sh", "-c", "src/math.test.cjs"] },
+      "starts with a shell",
+    );
+    refused({ argv: ["env", "src/math.test.cjs"] }, "starts with a shell");
+    refused(
+      { argv: ["node", "--test"] },
+      "does not name the reproducer's path",
+    );
+    refused({ expected: "ab" }, "4 to 500 characters");
+    refused({ expected: "x".repeat(501) }, "4 to 500 characters");
+    refused({ expected: "SyntaxError: x" }, "load or syntax error");
+    refused(
+      { image: "attacker/image:latest" },
+      "not a registered verification image",
+    );
+    refused({ image: null }, "no registered verification image", {
+      verification: [],
+    });
+  });
+
+  it("refuses a cloud auditor's reproducer outside the export paths and any reproducer holding a potential secret", () => {
+    const cloud = context({
+      cloud: true,
+      policy: { ...DEFAULT_POLICY, exportPaths: ["src/math.cjs"] },
+    });
+    expect(validateReproducer(valid, cloud)).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("policy.exportPaths"),
+    });
+    expect(
+      validateReproducer(
+        valid,
+        context({
+          cloud: true,
+          policy: { ...DEFAULT_POLICY, exportPaths: ["src/**"] },
+        }),
+      ),
+    ).toMatchObject({ ok: true });
+    // A local auditor's reproducer needs no export path.
+    expect(validateReproducer(valid, context())).toMatchObject({ ok: true });
+    const secret = `const serviceToken = "${"Zq7Lm2Xp" + "9Rt4Vb8Nc3Kd"}";\n`;
+    for (const cloudAuditor of [false, true])
+      expect(
+        validateReproducer(
+          { ...valid, content: secret + valid.content },
+          context({
+            cloud: cloudAuditor,
+            policy: { ...DEFAULT_POLICY, exportPaths: ["src/**"] },
+          }),
+        ),
+      ).toMatchObject({
+        ok: false,
+        reason: expect.stringContaining("potential secret"),
+      });
   });
 });
 
@@ -449,8 +803,12 @@ describe("security audit of a run", () => {
       hunter?: EngineDependencies["securityHunter"];
       verifier?: EngineDependencies["securityVerifier"];
       providers?: Parameters<typeof configureProvider>[1][];
+      /** The sandbox for an audit reproducer, a call with added files. */
+      reproduce?: NonNullable<EngineDependencies["verify"]>;
     } = {},
   ) {
+    // Docker is up for the run; a test may take it away before an audit.
+    const state = { docker: true };
     const root = await mkdtemp(path.join(os.tmpdir(), "graph-audit-"));
     roots.push(root);
     await checked("git", ["init", "-b", "dev"], { cwd: root });
@@ -499,8 +857,14 @@ describe("security audit of a run", () => {
       options.verifier ??
         (async () => ({ verification: confirmed, model: "auditor", usage })),
     );
+    const reproduce = vi.fn(
+      options.reproduce ??
+        (async () => {
+          throw new Error("No reproducer sandbox in this test");
+        }),
+    );
     const engine = await GraphEngine.open(root, {
-      dockerAvailable: async () => true,
+      dockerAvailable: async () => state.docker,
       worker: async () => ({
         model: "fixture",
         proposal: {
@@ -510,14 +874,16 @@ describe("security audit of a run", () => {
         },
         usage,
       }),
-      verify: async (_workspace, checks, _policy, snapshotHash) =>
-        checks.map((check) => ({
-          ...check,
-          code: 0,
-          stdout: "passed",
-          stderr: "",
-          snapshotHash,
-        })),
+      verify: async (workspace, checks, policy, snapshotHash, signal, extra) =>
+        extra?.added
+          ? reproduce(workspace, checks, policy, snapshotHash, signal, extra)
+          : checks.map((check) => ({
+              ...check,
+              code: 0,
+              stdout: "passed",
+              stderr: "",
+              snapshotHash,
+            })),
       review: async () => ({
         review: options.review ?? approve,
         model: "reviewer",
@@ -534,7 +900,17 @@ describe("security audit of a run", () => {
     const run = await engine.wait(
       (await engine.start(plan.id, { approvedByPerson: true })).id,
     );
-    return { root, data, config, engine, run, hunter, verifier };
+    return {
+      root,
+      data,
+      config,
+      engine,
+      run,
+      hunter,
+      verifier,
+      reproduce,
+      state,
+    };
   }
 
   it("keeps an unknown token count unknown in the audit's usage total", async () => {
@@ -567,7 +943,9 @@ describe("security audit of a run", () => {
       verified: 1,
       counts: { needs_validation: 1, traced: 1, rejected: 0, invalid: 0 },
     });
-    expect(result.counts).not.toHaveProperty("confirmed");
+    // Without a reproducer nothing is demonstrated, so nothing is confirmed.
+    expect(result.counts.confirmed).toBe(0);
+    expect(result.reproducers).toEqual([]);
     // No threat model in the project is fine.
     expect(result.threatModel).toBeNull();
     expect(result.findings.map((item) => item.verdict)).toEqual([
@@ -936,5 +1314,254 @@ describe("security audit of a run", () => {
         .events(run.id)
         .filter((event) => event.type === "security.audit_refused"),
     ).toHaveLength(1);
+  });
+
+  const confirmedWith = (proposal: AuditReproducer = reproducer) =>
+    (async () => ({
+      verification: { ...confirmed, reproducer: proposal },
+      model: "auditor",
+      usage,
+    })) satisfies EngineDependencies["securityVerifier"];
+  const sandboxReply =
+    (
+      overrides: Partial<VerificationResult> = {},
+    ): NonNullable<EngineDependencies["verify"]> =>
+    async (_workspace, checks, _policy, snapshotHash) =>
+      checks.map((check) =>
+        sandboxResult({ ...check, snapshotHash, ...overrides }),
+      );
+
+  it("runs a verifier's reproducer only through the offline sandbox, with a registered image, on a copy of the run's snapshot", async () => {
+    const { root, config, engine, run, hunter, verifier, reproduce } =
+      await finishedRun({
+        verifier: confirmedWith(),
+        reproduce: sandboxReply(),
+      });
+    const snapshot = await workspaceFingerprint(run.workspace!, config.policy);
+    const before = engine.store.events(run.id).length;
+    const result = await engine.securityAudit(run.id);
+    expect(reproduce).toHaveBeenCalledTimes(1);
+    const [workspace, checks, policy, snapshotHash, , extra] =
+      reproduce.mock.calls[0]!;
+    // The sandbox copies the run's retained workspace into its own temporary
+    // view; the checkout is never its source.
+    expect(workspace).toBe(run.workspace);
+    expect(path.resolve(workspace)).not.toBe(path.resolve(root));
+    expect(checks).toEqual([
+      { image: "node:24-alpine", argv: reproducer.argv },
+    ]);
+    expect(extra).toEqual({
+      added: [{ path: reproducer.path, content: reproducer.content }],
+    });
+    expect(snapshotHash).toBe(snapshot);
+    // Bounded by the policy timeout even where verification has none.
+    expect(policy.verificationTimeoutSeconds).toBe(
+      config.policy.verificationTimeoutSeconds ?? config.policy.timeoutSeconds,
+    );
+    expect(result.counts).toMatchObject({
+      confirmed: 1,
+      needs_validation: 0,
+      traced: 0,
+    });
+    expect(result.findings.map((item) => item.verdict)).toEqual(["confirmed"]);
+    expect(validateFindings(result.findings)).toEqual([]);
+    expect(result.reproducers).toEqual([
+      expect.objectContaining({
+        fingerprint: candidateFingerprint(candidate()),
+        outcome: "demonstrated",
+        image: "node:24-alpine",
+        imageId: `sha256:${"b".repeat(64)}`,
+        snapshotHash: snapshot,
+        exitCode: 1,
+      }),
+    ]);
+    // Running it costs no model call.
+    expect(hunter).toHaveBeenCalledTimes(1);
+    expect(verifier).toHaveBeenCalledTimes(1);
+    // The verifier was told where a reproducer may run.
+    expect(verifier.mock.calls[0]![0].sandbox).toEqual({
+      images: ["node:24-alpine"],
+      testFiles: expect.arrayContaining(["**/*.test.*"]),
+    });
+    expect(
+      engine.store
+        .events(run.id)
+        .slice(before)
+        .map((event) => event.type),
+    ).toEqual(["security.audit_started", "security.audit_completed"]);
+    // An unregistered image never runs, and neither does a reproducer
+    // proposed with a verdict other than confirmed.
+    const other = await finishedRun({
+      verifier: confirmedWith({ ...reproducer, image: "attacker/image:1" }),
+      reproduce: sandboxReply(),
+    });
+    const refused = await other.engine.securityAudit(other.run.id);
+    expect(other.reproduce).not.toHaveBeenCalled();
+    expect(refused.reproducers[0]).toMatchObject({
+      outcome: "refused",
+      note: expect.stringContaining("not a registered verification image"),
+    });
+    expect(refused.counts).toMatchObject({ confirmed: 0, traced: 1 });
+    const skipped = await finishedRun({
+      verifier: async () => ({
+        verification: {
+          ...rejected,
+          verdict: "needs_validation",
+          blockers: ["A caller is not shown."],
+          validation_plan: "Run add with a string.",
+          reproducer,
+        },
+        model: "auditor",
+        usage,
+      }),
+      reproduce: sandboxReply(),
+    });
+    const notRun = await skipped.engine.securityAudit(skipped.run.id);
+    expect(skipped.reproduce).not.toHaveBeenCalled();
+    expect(notRun.reproducers[0]?.outcome).toBe("skipped");
+  });
+
+  it("never writes the reproducer to the run workspace or the checkout", async () => {
+    const seen: boolean[] = [];
+    const exists = async (file: string) =>
+      access(file).then(
+        () => true,
+        () => false,
+      );
+    let workspacePath = "";
+    let rootPath = "";
+    const { root, config, engine, run } = await finishedRun({
+      verifier: confirmedWith(),
+      reproduce: async (
+        workspace,
+        checks,
+        policy,
+        snapshotHash,
+        signal,
+        extra,
+      ) => {
+        seen.push(
+          await exists(path.join(workspacePath, reproducer.path)),
+          await exists(path.join(rootPath, reproducer.path)),
+        );
+        return sandboxReply()(
+          workspace,
+          checks,
+          policy,
+          snapshotHash,
+          signal,
+          extra,
+        );
+      },
+    });
+    workspacePath = run.workspace!;
+    rootPath = root;
+    const before = await workspaceFingerprint(run.workspace!, config.policy);
+    const result = await engine.securityAudit(run.id);
+    expect(result.counts.confirmed).toBe(1);
+    expect(seen).toEqual([false, false]);
+    expect(await exists(path.join(run.workspace!, reproducer.path))).toBe(
+      false,
+    );
+    expect(await exists(path.join(root, reproducer.path))).toBe(false);
+    expect(await workspaceFingerprint(run.workspace!, config.policy)).toBe(
+      before,
+    );
+    // A path that exists in the run's workspace is refused, even when Git
+    // ignores it.
+    await writeFile(path.join(run.workspace!, "math.test.cjs"), "old\n");
+    const again = await engine.securityAudit(run.id);
+    expect(again.reproducers[0]).toMatchObject({
+      outcome: "refused",
+      note: expect.stringContaining("already exists"),
+    });
+  });
+
+  it("keeps a confirmed finding advisory: the run's status, outcome and review gate are unchanged", async () => {
+    const { engine, run } = await finishedRun({
+      verifier: confirmedWith(),
+      reproduce: sandboxReply(),
+    });
+    const outcomes = engine.store.outcomes(run.id);
+    const result = await engine.securityAudit(run.id);
+    expect(result.counts.confirmed).toBe(1);
+    expect(result.advisory).toBe(true);
+    expect(engine.store.run(run.id).status).toBe("succeeded");
+    expect(engine.store.outcomes(run.id)).toEqual(outcomes);
+    const stopped = await finishedRun({
+      review: changes,
+      verifier: confirmedWith(),
+      reproduce: sandboxReply(),
+    });
+    const events = stopped.engine.store.events(stopped.run.id).length;
+    const audited = await stopped.engine.securityAudit(stopped.run.id);
+    expect(audited.counts.confirmed).toBe(1);
+    // Only the audit's own advisory events were added: nothing a gate,
+    // status, completion or review reads.
+    expect(
+      stopped.engine.store
+        .events(stopped.run.id)
+        .slice(events)
+        .map((event) => event.type),
+    ).toEqual(["security.audit_started", "security.audit_completed"]);
+    expect(stopped.engine.store.run(stopped.run.id).status).toBe("failed");
+    expect(stoppedAtReview(stopped.engine.store.events(stopped.run.id))).toBe(
+      true,
+    );
+    await expect(
+      stopped.engine.approveReview(stopped.run.id, "I reviewed it myself"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps needs_validation with a note when Docker is unavailable", async () => {
+    const { engine, run, state, reproduce } = await finishedRun({
+      verifier: confirmedWith(),
+      reproduce: sandboxReply(),
+    });
+    state.docker = false;
+    const result = await engine.securityAudit(run.id);
+    expect(reproduce).not.toHaveBeenCalled();
+    expect(result.counts).toMatchObject({ confirmed: 0, traced: 1 });
+    expect(result.reproducers[0]).toMatchObject({
+      outcome: "unavailable",
+      note: expect.stringContaining("Docker is not available"),
+    });
+    expect(result.findings[0]!.blockers).toEqual([
+      STATIC_TRACE_BLOCKER,
+      expect.stringContaining("Docker is not available"),
+    ]);
+    // A sandbox that times out is an error, never a demonstration.
+    state.docker = true;
+    reproduce.mockImplementation(async () => {
+      throw new Error("Command terminated (timeout or cancellation)");
+    });
+    const timedOut = await engine.securityAudit(run.id);
+    expect(timedOut.counts).toMatchObject({ confirmed: 0, traced: 1 });
+    expect(timedOut.reproducers[0]).toMatchObject({
+      outcome: "error",
+      note: expect.stringContaining("timeout"),
+    });
+  });
+
+  it("redacts the reproducer's output before recording it", async () => {
+    const token = "Zq7Lm2Xp" + "9Rt4Vb8Nc3Kd";
+    const { engine, run } = await finishedRun({
+      verifier: confirmedWith(),
+      reproduce: sandboxReply({
+        stdout: `const serviceToken = "${token}";\ninjected command ran\n`,
+      }),
+    });
+    const result = await engine.securityAudit(run.id);
+    expect(result.counts.confirmed).toBe(1);
+    const completed = engine.store
+      .events(run.id)
+      .find((event) => event.type === "security.audit_completed")!;
+    expect(JSON.stringify(completed.data)).not.toContain(token);
+    expect(JSON.stringify(result)).not.toContain(token);
+    expect(result.reproducers[0]!.excerpt).toContain("[REDACTED]");
+    expect(
+      (result.findings[0]!.execution as { observed_result: string })
+        .observed_result,
+    ).toContain("[REDACTED]");
   });
 });

@@ -136,6 +136,13 @@ import {
   type VerifyCallInput,
 } from "./security/audit.js";
 import {
+  judgeReproducer,
+  reproducerError,
+  validateReproducer,
+  type AuditReproducer,
+  type ReproducerRun,
+} from "./security/reproducer.js";
+import {
   BASELINE_FILE,
   newFindings,
   OSV_DATABASE_ADVICE,
@@ -292,15 +299,20 @@ export interface SecurityAuditResult {
   /** Candidates past the verification cap, never reported as findings. */
   unverified: number;
   /**
-   * Never a confirmed count: nothing is executed, so a finding the verifier
-   * traced statically is a needs_validation record, counted also in traced.
+   * confirmed counts findings a reproducer demonstrated in the offline
+   * sandbox; traced counts the needs_validation records the verifier traced
+   * completely but nothing demonstrated. confirmed + traced is the number of
+   * verifier-confirmed findings.
    */
   counts: {
+    confirmed: number;
     needs_validation: number;
     traced: number;
     rejected: number;
     invalid: number;
   };
+  /** Each proposed reproducer's outcome, by finding fingerprint; advisory. */
+  reproducers: (ReproducerRun & { fingerprint: string })[];
   /** The threat model given to the hunter and verifiers, if one was found. */
   threatModel: { path: string; sha256: string } | null;
   /** Records valid under Cloudflare's report schema, sorted by fingerprint. */
@@ -2105,10 +2117,13 @@ export class GraphEngine {
    * security-audit method and report schema: the configured auditor (or,
    * without one, the reviewer) hunts for candidates in the run's diff, then a
    * separate verifier call per candidate (at most MAX_VERIFIED_CANDIDATES,
-   * reserved before the hunt) tries to disprove it. Nothing is executed, so
-   * no finding is reported as confirmed. Advisory only: it records
+   * reserved before the hunt) tries to disprove it. A verifier that traces
+   * a finding completely may propose a reproducer test, which runs only in
+   * the offline verification sandbox on a temporary copy of the run's
+   * snapshot; the finding is confirmed only when it is demonstrated there.
+   * Running it costs no model call. Advisory only: it records
    * security.audit_completed and never changes the run's status, outcome,
-   * gates or completion.
+   * gates or completion, whatever it confirms.
    */
   async securityAudit(
     runId: string,
@@ -2293,6 +2308,27 @@ export class GraphEngine {
       }[] = [];
       const changed = new Set(written);
       let traced = 0;
+      const reproducers: (ReproducerRun & { fingerprint: string })[] = [];
+      // Only a project with a registered verification image can run one.
+      const sandbox = this.config.verification.length
+        ? {
+            images: [
+              ...new Set(this.config.verification.map((check) => check.image)),
+            ],
+            testFiles: [
+              ...(this.config.tester?.writes?.length
+                ? this.config.tester.writes
+                : DEFAULT_TEST_FILES),
+            ],
+          }
+        : undefined;
+      const reproduce = this.auditReproducer({
+        workspace: run.workspace,
+        written,
+        auditor,
+        testFiles: sandbox?.testFiles ?? [...DEFAULT_TEST_FILES],
+        signal,
+      });
       for (const [index, candidate] of verified.entries()) {
         if (signal?.aborted) throw new Error("Security audit cancelled");
         const callId = verifierCalls[index]!;
@@ -2303,6 +2339,7 @@ export class GraphEngine {
             diff,
             threatModel: threatModel?.text,
             candidate,
+            ...(sandbox ? { sandbox } : {}),
             signal,
           }),
         );
@@ -2310,11 +2347,30 @@ export class GraphEngine {
         pending.delete(callId);
         inFlight = undefined;
         usage.push(result.usage);
+        // A reproducer runs between model calls and costs none.
+        const proposal = result.verification.reproducer ?? undefined;
+        const reproduced = proposal
+          ? result.verification.verdict === "confirmed"
+            ? await reproduce(proposal)
+            : {
+                outcome: "skipped" as const,
+                note: `Not run: only a verifier-confirmed trace is reproduced, and the verdict was ${result.verification.verdict}.`,
+                path: redact(proposal.path).slice(0, 1000),
+                argv: proposal.argv.slice(0, 32).map(redact),
+                expected: redact(proposal.expected).slice(0, 500),
+              }
+          : undefined;
         const { record, errors } = auditRecord(
           candidate,
           result.verification,
           changed,
+          reproduced,
         );
+        if (reproduced)
+          reproducers.push({
+            fingerprint: record.fingerprint,
+            ...reproduced,
+          });
         if (errors.length)
           invalid.push({
             fingerprint: record.fingerprint,
@@ -2323,7 +2379,11 @@ export class GraphEngine {
           });
         else {
           findings.push(record);
-          if (result.verification.verdict === "confirmed") traced++;
+          if (
+            result.verification.verdict === "confirmed" &&
+            record.verdict === "needs_validation"
+          )
+            traced++;
         }
       }
       findings.sort((left, right) =>
@@ -2380,6 +2440,8 @@ export class GraphEngine {
           ? { path: threatModel.path, sha256: threatModel.sha256 }
           : null,
         counts: {
+          confirmed: findings.filter((item) => item.verdict === "confirmed")
+            .length,
           needs_validation: findings.filter(
             (item) => item.verdict === "needs_validation",
           ).length,
@@ -2390,8 +2452,11 @@ export class GraphEngine {
         },
         findings: redacted,
         invalid,
+        reproducers: reproducers.sort((left, right) =>
+          left.fingerprint < right.fingerprint ? -1 : 1,
+        ),
         usage: total,
-        note: "Advisory: the audit never gates, completes or fails a run; only an owner can make it blocking.",
+        note: "Advisory: the audit never gates, completes or fails a run, even for a confirmed finding; only an owner can make it blocking.",
       };
       this.store.event(run.id, "security.audit_completed", {
         ...result,
@@ -2402,6 +2467,112 @@ export class GraphEngine {
         if (callId !== inFlight) this.store.releaseReservation(ownerId, callId);
       this.store.releaseWorker(slotId);
     }
+  }
+  /**
+   * Runs audit reproducers for one audit, one at a time. Each is validated
+   * first, then run only through the offline verification sandbox
+   * (verifyInContainer) with one check in a registered image, on a temporary
+   * view of the run's workspace snapshot plus the one new file: never on the
+   * run's workspace itself or the checkout. The time is bounded by the
+   * policy's verification timeout, or policy.timeoutSeconds when that is
+   * null. Docker is probed once, when the first reproducer needs it. Any
+   * sandbox error is an outcome, not an audit failure, unless the audit was
+   * cancelled.
+   */
+  private auditReproducer(input: {
+    workspace: string;
+    written: string[];
+    auditor: ProviderConfig;
+    testFiles: string[];
+    signal?: AbortSignal;
+  }): (proposal: AuditReproducer) => Promise<ReproducerRun> {
+    const { workspace, written, auditor, testFiles, signal } = input;
+    let docker: Promise<boolean> | undefined;
+    let snapshot: string | undefined;
+    return async (proposal) => {
+      const policy = this.config.policy;
+      const shown = {
+        path: redact(proposal.path).slice(0, 1000),
+        argv: proposal.argv.slice(0, 32).map((item) => redact(item)),
+        expected: redact(proposal.expected).slice(0, 500),
+      };
+      const done = (
+        outcome: ReproducerRun["outcome"],
+        note: string,
+        extra: Partial<ReproducerRun> = {},
+      ): ReproducerRun => ({ outcome, note: redact(note), ...shown, ...extra });
+      if (path.resolve(workspace) === path.resolve(this.root))
+        return done(
+          "refused",
+          "Not run: the run's workspace is the project checkout, and a reproducer never runs there.",
+        );
+      const existing = new Set(await gitFiles(workspace));
+      const checked = validateReproducer(proposal, {
+        policy,
+        testFiles,
+        changedFiles: written,
+        existingFiles: existing,
+        verification: this.config.verification,
+        cloud: auditor.kind !== "local",
+      });
+      if (!checked.ok) return done("refused", `Not run: ${checked.reason}.`);
+      try {
+        // A file Git ignores is not listed, but it is still there.
+        await lstat(path.join(workspace, proposal.path));
+        return done(
+          "refused",
+          "Not run: its path already exists; a reproducer must be a new file.",
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+          return done("refused", `Not run: ${errorMessage(error)}`);
+      }
+      docker ??= (this.deps.dockerAvailable ?? dockerAvailable)();
+      if (!(await docker))
+        return done(
+          "unavailable",
+          "Not run: Docker is not available, so the offline sandbox cannot run it.",
+          { image: checked.image },
+        );
+      const current = await workspaceFingerprint(workspace, policy);
+      snapshot ??= current;
+      if (current !== snapshot)
+        return done(
+          "error",
+          "Not run: the run's workspace changed during the audit.",
+          { image: checked.image },
+        );
+      try {
+        const results = await (this.deps.verify ?? verifyInContainer)(
+          workspace,
+          [{ image: checked.image, argv: proposal.argv }],
+          {
+            ...policy,
+            verificationTimeoutSeconds:
+              policy.verificationTimeoutSeconds ?? policy.timeoutSeconds,
+          },
+          snapshot,
+          signal,
+          { added: [{ path: proposal.path, content: proposal.content }] },
+        );
+        const judged = judgeReproducer(results, proposal.expected);
+        return done(judged.outcome, judged.note, {
+          image: checked.image,
+          snapshotHash: snapshot,
+          ...(judged.imageId === undefined ? {} : { imageId: judged.imageId }),
+          ...(judged.exitCode === undefined
+            ? {}
+            : { exitCode: judged.exitCode }),
+          ...(judged.excerpt === undefined ? {} : { excerpt: judged.excerpt }),
+        });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        return done("error", reproducerError(error), {
+          image: checked.image,
+          snapshotHash: snapshot,
+        });
+      }
+    };
   }
   /**
    * The project's threat model for an audit: audit.threatModel, which must
