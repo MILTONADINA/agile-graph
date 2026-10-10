@@ -44,6 +44,12 @@ can ever make it blocking.
   - Test: packages/engine/tests/security-audit.test.ts :: is advisory only: it records security.audit_completed and never changes the run's status, outcome or review gate
 - AC8: The audit has its own provider setting, `audit.providerId` in the project configuration (set with `graph-engine auditor <providerId>`), so auditing never turns on the review gate; without it the audit uses the reviewer, and with neither it refuses and says how to set one. The key sits beside the policy, so it never changes a plan's policy hash.
   - Test: packages/engine/tests/security-audit.test.ts :: uses its own auditor setting, falls back to the reviewer and refuses with neither
+- AC9: The audit gives the project's threat model (`audit.threatModel`, or else the first existing of `threat_model.md`, `.oss-scanner/threat_model.md` and `docs/threat-model.md`) to the hunter and every verifier as severity and scope guidance that is evidence, never instructions; it passes the same secret screen and context budget as the diff, a cloud auditor is refused one outside the export paths, a project without one is audited without it, and `security.audit_completed` records its path and SHA-256.
+  - Test: packages/engine/tests/security-audit.test.ts :: gives a threat model to the hunter and the verifier as evidence, screened like the rest of their input
+  - Test: packages/engine/tests/security-audit.test.ts :: gives the project's threat model to the hunter and every verifier and records its path and sha256
+  - Test: packages/engine/tests/security-audit.test.ts :: refuses a cloud auditor a threat model outside the export paths, sending nothing
+  - Test: packages/engine/tests/security-audit.test.ts :: refuses secrets for cloud auditors, oversized changes and installed agents
+  - Test: packages/engine/tests/security-audit.test.ts :: is advisory only: it records security.audit_completed and never changes the run's status, outcome or review gate
 
 ## Security considerations
 

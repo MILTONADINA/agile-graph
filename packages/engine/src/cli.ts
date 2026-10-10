@@ -978,14 +978,27 @@ cli
 cli
   .command("auditor [providerId]")
   .description(
-    "Set the API or local provider graph-engine security-audit uses, without turning on the review gate, or show the current auditor; without one, audits use the reviewer",
+    "Set the API or local provider graph-engine security-audit uses, without turning on the review gate, or show the audit settings; without an auditor, audits use the reviewer",
   )
-  .option("--clear", "Stop using a separate auditor; audits use the reviewer")
+  .option(
+    "--threat-model <path>",
+    "Repository-relative path of the project's threat model, which guides the audit's severity and scope; without it, the first of threat_model.md, .oss-scanner/threat_model.md and docs/threat-model.md that exists",
+  )
+  .option(
+    "--clear",
+    "Remove the audit settings; audits use the reviewer and the default threat model locations",
+  )
   .action(async (providerId, options) => {
     const project = await loadProject(root());
+    const threatModel = options.threatModel as string | undefined;
     if (options.clear) delete project.audit;
-    else if (providerId) project.audit = { providerId };
-    if (options.clear || providerId) {
+    else if (providerId || threatModel)
+      project.audit = {
+        ...project.audit,
+        ...(providerId ? { providerId } : {}),
+        ...(threatModel ? { threatModel } : {}),
+      };
+    if (options.clear || providerId || threatModel) {
       assertProjectConfig(project);
       await writeJson(path.join(root(), PROJECT_FILE), project);
     }

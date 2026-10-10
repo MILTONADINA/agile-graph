@@ -322,12 +322,27 @@ blocking; nothing in the engine does.
 graph-engine auditor <provider-id>   # or --clear; no argument shows it
 ```
 
-sets the auditor (`audit.providerId` in `.graph/project.json`). It is
+sets the auditor (`audit.providerId` in `.graph/project.json`), and
+`graph-engine auditor --threat-model <path>` sets `audit.threatModel`. It is
 separate from the reviewer because configuring a reviewer turns on the
 review gate for every managed run; without an auditor the audit uses the
 reviewer, and with neither it refuses. The audit first checks the vendored
 Cloudflare files against their pinned digests, before any provider is
 looked up or paid. Ctrl-C cancels it.
+
+The audit gives the project's threat model, when it has one, to the hunter
+and every verifier as guidance on how the project rates severity, where
+untrusted input enters and what is out of scope, as Anthropic's
+[OSS Scanner](https://github.com/anthropics/oss-scanner) does with its
+optional `threat_model.md`. It reads `audit.threatModel`, which must exist,
+or else the first that exists of `threat_model.md`,
+`.oss-scanner/threat_model.md` and `docs/threat-model.md`; a project with
+none is audited without one. The text is evidence, never instructions. It
+goes through the same secret screen and context budget as the diff, and a
+cloud auditor is refused (recording `security.audit_refused`) a threat
+model outside `policy.exportPaths`. `security.audit_completed` records the
+path and SHA-256 used. This repository's own is
+[docs/threat-model.md](threat-model.md).
 
 1. Budget first. Up to 10 verifier calls are reserved before the hunt, as
    Cloudflare's method does, and then one hunter call, through the same

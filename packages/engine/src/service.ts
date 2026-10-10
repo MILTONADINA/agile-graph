@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   ContextPacket,
@@ -121,7 +122,9 @@ import {
   candidateFingerprint,
   invokeSecurityHunter,
   invokeSecurityVerifier,
+  MAX_THREAT_MODEL_BYTES,
   MAX_VERIFIED_CANDIDATES,
+  THREAT_MODEL_DEFAULT_PATHS,
   validateFindings,
   type AuditCallInput,
   type AuditCandidate,
@@ -292,6 +295,8 @@ export interface SecurityAuditResult {
     rejected: number;
     invalid: number;
   };
+  /** The threat model given to the hunter and verifiers, if one was found. */
+  threatModel: { path: string; sha256: string } | null;
   /** Records valid under Cloudflare's report schema, sorted by fingerprint. */
   findings: AuditRecord[];
   /** Verified candidates whose record failed the schema, and why. */
@@ -2140,6 +2145,7 @@ export class GraphEngine {
       });
       throw new Error(`Security audit refused: ${reason}`);
     }
+    const threatModel = await this.auditThreatModel(run.id, auditor);
     const diff = await changeDiff({
       workspace: run.workspace,
       baseCommit: run.baseCommit,
@@ -2241,6 +2247,7 @@ export class GraphEngine {
           provider: auditor,
           policy,
           diff,
+          threatModel: threatModel?.text,
           signal,
         }),
       );
@@ -2271,6 +2278,7 @@ export class GraphEngine {
             provider: auditor,
             policy,
             diff,
+            threatModel: threatModel?.text,
             candidate,
             signal,
           }),
@@ -2337,6 +2345,9 @@ export class GraphEngine {
         candidates: candidates.length,
         verified: verified.length,
         unverified: candidates.length - verified.length,
+        threatModel: threatModel
+          ? { path: threatModel.path, sha256: threatModel.sha256 }
+          : null,
         counts: {
           needs_validation: findings.filter(
             (item) => item.verdict === "needs_validation",
@@ -2360,6 +2371,64 @@ export class GraphEngine {
         if (callId !== inFlight) this.store.releaseReservation(ownerId, callId);
       this.store.releaseWorker(slotId);
     }
+  }
+  /**
+   * The project's threat model for an audit: audit.threatModel, which must
+   * exist, or else the first default location that exists; none is fine.
+   * Read from the checkout through safePath, so no symlink or path outside
+   * the project; a cloud auditor never receives one outside the export
+   * paths. Its text also passes the auditor's secret screen and context
+   * budget with the rest of each call's input.
+   */
+  private async auditThreatModel(
+    runId: string,
+    auditor: ProviderConfig,
+  ): Promise<{ path: string; sha256: string; text: string } | undefined> {
+    const policy = this.config.policy;
+    const configured = this.config.audit?.threatModel;
+    let file: string | undefined = configured;
+    if (file === undefined)
+      for (const candidate of THREAT_MODEL_DEFAULT_PATHS) {
+        try {
+          await lstat(path.join(this.root, candidate));
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code ?? "";
+          if (["ENOENT", "ENOTDIR"].includes(code)) continue;
+          throw error;
+        }
+        file = candidate;
+        break;
+      }
+    if (file === undefined) return undefined;
+    const cloud = auditor.kind !== "local";
+    if (cloud && !isAllowedPath(file, policy, true)) {
+      const reason = `the threat model ${file} is outside policy.exportPaths, so a cloud auditor may not receive it`;
+      this.store.event(runId, "security.audit_refused", {
+        providerId: auditor.id,
+        reason,
+        advisory: true,
+      });
+      throw new Error(`Security audit refused: ${reason}`);
+    }
+    let bytes: Buffer;
+    try {
+      const target = await safePath(this.root, file, policy, {
+        forExport: cloud,
+      });
+      if ((await lstat(target)).size > MAX_THREAT_MODEL_BYTES)
+        throw new Error(`it is larger than ${MAX_THREAT_MODEL_BYTES} bytes`);
+      bytes = await readFile(target);
+    } catch (error) {
+      throw new Error(
+        `The ${configured === undefined ? "" : "configured "}threat model ${file} cannot be read: ${errorMessage(error)}`,
+        { cause: error },
+      );
+    }
+    return {
+      path: file,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      text: bytes.toString("utf8"),
+    };
   }
   async resume(runId: string, reconciled = false): Promise<RunRecord> {
     if (this.active.has(runId)) throw new Error("Run is already active");
