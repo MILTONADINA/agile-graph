@@ -727,30 +727,59 @@ export async function runSecurityScan(options: {
 /**
  * Replaces each host directory (and its resolved form, as tools report
  * symlinked temp paths such as /private/var on macOS) with a placeholder,
- * longest first so a nested directory keeps its own placeholder.
+ * longest first so a nested directory keeps its own placeholder. On Windows
+ * a directory also matches with either slash, in any letter case and in its
+ * long (realpath) or given short (8.3) form, and the rest of a replaced path
+ * is written with "/".
  */
 export function withoutHostPaths(
   pairs: readonly (readonly [string, string])[],
+  platform: NodeJS.Platform = process.platform,
 ): (text: string) => string {
+  const windows = platform === "win32";
   const all: [string, string][] = [];
   for (const [directory, placeholder] of pairs) {
     if (!path.isAbsolute(directory)) continue;
     const variants = new Set([path.resolve(directory)]);
-    try {
-      variants.add(realpathSync.native(directory));
-    } catch {
-      // A directory that is gone keeps its given form only.
-    }
+    for (const resolve of [realpathSync.native, realpathSync])
+      try {
+        variants.add(resolve(directory));
+      } catch {
+        // A directory that is gone keeps its given form only.
+      }
     for (const variant of variants)
       if (variant !== path.parse(variant).root)
-        all.push([variant, placeholder]);
+        all.push([variant.replace(/[\\/]+$/, ""), placeholder]);
   }
   all.sort(([a], [b]) => b.length - a.length);
-  return (text) => {
-    for (const [directory, placeholder] of all)
-      text = text.split(directory).join(placeholder);
-    return text;
-  };
+  if (all.length === 0) return (text) => text;
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = (directory: string) =>
+    windows
+      ? directory
+          .split(/[\\/]+/)
+          .map(escape)
+          .join("[\\\\/]+")
+      : escape(directory);
+  const placeholders = new Map(
+    all.map(([directory, placeholder]) => [
+      windows ? directory.replace(/[\\/]+/g, "/").toLowerCase() : directory,
+      placeholder,
+    ]),
+  );
+  const matcher = new RegExp(
+    `(${all.map(([directory]) => pattern(directory)).join("|")})${
+      windows ? "((?:[\\\\/][^\\s\\\\/'\":;,]+)*)" : "()"
+    }`,
+    windows ? "gi" : "g",
+  );
+  return (text) =>
+    text.replace(matcher, (_match, directory: string, rest: string) => {
+      const key = windows
+        ? directory.replace(/[\\/]+/g, "/").toLowerCase()
+        : directory;
+      return `${placeholders.get(key) ?? "<host>"}${rest.replace(/\\/g, "/")}`;
+    });
 }
 
 /** The scanner image's ID, or a clear error when it is not built. */

@@ -464,9 +464,12 @@ export function watchRss(options: {
   };
 }
 // Exported for tests, which pass a stand-in runtime and sampler to check that
-// an over-limit report actually kills the child.
+// an over-limit report actually kills the child. A test may also replace the
+// JVM arguments, so its stand-in can be Node itself rather than a script file.
 export function analyze(
-  runtime: Pick<JavaRuntime, "executable" | "classPath">,
+  runtime: Pick<JavaRuntime, "executable" | "classPath"> & {
+    args?: readonly string[];
+  },
   input: string,
   timeoutMs: number,
   maxBytes: number,
@@ -476,7 +479,9 @@ export function analyze(
     const started = performance.now(),
       child = spawn(
         runtime.executable,
-        [...JVM_FLAGS, "-cp", runtime.classPath, "SnapshotJava"],
+        runtime.args
+          ? [...runtime.args]
+          : [...JVM_FLAGS, "-cp", runtime.classPath, "SnapshotJava"],
         {
           cwd: "/",
           env: environment(),
