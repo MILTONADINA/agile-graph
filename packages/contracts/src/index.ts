@@ -105,6 +105,13 @@ export interface ProjectPolicy {
   maxContextTokens: number;
   maxOutputTokens: number;
   maxTurns: number;
+  /**
+   * How many of a run's maxTurns model calls may end request-only (asking
+   * for files and proposing no change). It comes out of maxTurns, never on
+   * top of it, so it is at most maxTurns. Absent means floor(maxTurns / 2).
+   * It is not in DEFAULT_POLICY, so policies without it keep their hash.
+   */
+  maxReadTurns?: number;
   timeoutSeconds: number;
   /**
    * Installed coding workers only: absent inherits timeoutSeconds; null
@@ -757,6 +764,7 @@ export const policySchema = {
     maxContextTokens: { type: "integer", minimum: 256, maximum: 1000000 },
     maxOutputTokens: { type: "integer", minimum: 64, maximum: 128000 },
     maxTurns: { type: "integer", minimum: 1, maximum: 100 },
+    maxReadTurns: { type: "integer", minimum: 0, maximum: 100 },
     timeoutSeconds: { type: "integer", minimum: 1, maximum: 86400 },
     installedWorkerTimeoutSeconds: {
       anyOf: [
@@ -908,6 +916,25 @@ const validatePolicy = ajv.compile(policySchema);
 const validateGenerator = ajv.compile(generatorSchema);
 const validateVerificationCatalogue = ajv.compile(verificationCatalogueSchema);
 const validateVerificationSelection = ajv.compile(verificationSelectionSchema);
+/**
+ * The request-only model calls a run may make: policy.maxReadTurns, or half
+ * of policy.maxTurns rounded down when it is absent. A part of maxTurns.
+ */
+export function readTurnBudget(
+  policy: Pick<ProjectPolicy, "maxTurns" | "maxReadTurns">,
+): number {
+  return Math.min(
+    policy.maxReadTurns ?? Math.floor(policy.maxTurns / 2),
+    policy.maxTurns,
+  );
+}
+// Limits JSON Schema cannot relate: the read budget is part of maxTurns.
+function policyLimitError(policy: ProjectPolicy): string | undefined {
+  return policy.maxReadTurns !== undefined &&
+    policy.maxReadTurns > policy.maxTurns
+    ? `maxReadTurns (${policy.maxReadTurns}) must be at most maxTurns (${policy.maxTurns}): the read budget comes out of maxTurns`
+    : undefined;
+}
 /** Validate a standalone policy at public interfaces without a fake project. */
 export function assertProjectPolicy(
   value: unknown,
@@ -916,6 +943,8 @@ export function assertProjectPolicy(
     throw new Error(
       `Invalid project policy: ${ajv.errorsText(validatePolicy.errors)}`,
     );
+  const limits = policyLimitError(value as unknown as ProjectPolicy);
+  if (limits) throw new Error(`Invalid project policy: ${limits}`);
 }
 export function assertVerificationCatalogue(
   value: unknown,
@@ -1064,6 +1093,8 @@ export function assertProjectConfig(
     throw new Error(
       `Invalid project configuration: ${ajv.errorsText(validateProject.errors)}`,
     );
+  const limits = policyLimitError((value as unknown as ProjectConfig).policy);
+  if (limits) throw new Error(`Invalid project configuration: ${limits}`);
   const ids = (
     (value as unknown as ProjectConfig).security?.liveTargets ?? []
   ).map((target) => target.id);

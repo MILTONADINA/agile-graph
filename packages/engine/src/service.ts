@@ -21,6 +21,7 @@ import {
   assertInstalledWorkerBinding,
   isApiKind,
   isInstalledKind,
+  readTurnBudget,
   sameGeneratorRegistration,
 } from "@graph-engineering/contracts";
 import { ContextEngine } from "./context/index.js";
@@ -148,6 +149,9 @@ import {
   patchFeedbackFor,
   recordShown,
   RepeatedRequestError,
+  READ_BUDGET_NOTICE,
+  READ_BUDGET_REFUSAL,
+  READ_BUDGET_STOPPED,
   REPEATED_REQUEST_FEEDBACK,
   requestedSourcePacket,
   SuppliedLines,
@@ -173,7 +177,8 @@ import {
 } from "./planning.js";
 import { dagParallelism } from "./scale.js";
 import { passedChecksSnapshot, stoppedAtReview } from "./overview.js";
-import { TESTER_STEP_ID, testerStep } from "./tester.js";
+import { DEFAULT_TEST_FILES, TESTER_STEP_ID, testerStep } from "./tester.js";
+import { testerFocusPaths } from "./execution/tester-context.js";
 import {
   assertPlanVerificationSelection,
   resolveVerificationSelection,
@@ -2687,7 +2692,12 @@ export class GraphEngine {
       originalPacket.items = originalPacket.items.filter((item) =>
         selection.selectedIds.includes(item.id),
       );
-      const currentContext = async () => {
+      // A tester's first packet leads with the existing tests near the code
+      // the plan names and the code they import (tester-read-budget spec).
+      const currentContext = async (tester?: {
+        writes: readonly string[];
+        exportOnly: boolean;
+      }) => {
         const latest = new ContextEngine({
           projectId: this.config.projectId,
           root: workspace,
@@ -2696,13 +2706,27 @@ export class GraphEngine {
           ...(this.deps.now ? { now: this.deps.now } : {}),
         });
         try {
-          await latest.index();
+          const snapshot = await latest.index();
+          const focusPaths = tester
+            ? await testerFocusPaths({
+                engine: latest,
+                files: await gitFiles(workspace),
+                testFiles: tester.writes.length
+                  ? tester.writes
+                  : DEFAULT_TEST_FILES,
+                text: [run.plan.objective, ...run.plan.acceptance],
+                snapshotId: snapshot.id,
+                allowed: (file) =>
+                  isAllowedPath(file, this.config.policy, tester.exportOnly),
+              })
+            : [];
           const current = await latest.getContext({
             query: run.plan.objective,
             budgetTokens,
             mandatory: originalPacket.mandatory,
             retrieval: retrieval.scope,
             retainExpired,
+            ...(focusPaths.length ? { focusPaths } : {}),
           });
           // Provenance and export authorization come from the main context
           // database each time the run executes. Text that only the run
@@ -3253,6 +3277,47 @@ export class GraphEngine {
       // run's events: a reason code, never the proposal.
       const returned = (stepId: string, reason: string) =>
         this.store.event(run.id, "proposal.returned", { reason }, stepId);
+      // The run's read budget: how many model calls may end request-only
+      // (files requested, no change proposed). It is part of policy.maxTurns,
+      // which still bounds every call; a resumed run keeps its count.
+      const readBudget = readTurnBudget(this.config.policy);
+      let readTurns = priorEvents.filter(
+        (event) => event.type === "worker.read",
+      ).length;
+      // Tells a worker to stop requesting once the budget is spent, unless
+      // the feedback already refuses its request for that reason.
+      const readNotice = (feedback: string) =>
+        readTurns >= readBudget && feedback !== READ_BUDGET_REFUSAL
+          ? READ_BUDGET_NOTICE
+          : "";
+      // A request-only result after the budget is spent is refused with
+      // feedback once; a second in a row stops the run. True when refused.
+      const refuseRead = (
+        stepId: string,
+        proposal: WorkerResult["proposal"],
+        repeated: number,
+      ): boolean => {
+        if (
+          !proposal.requests.length ||
+          proposal.changes.length ||
+          readTurns < readBudget
+        )
+          return false;
+        this.store.event(run.id, "worker.read", { refused: true }, stepId);
+        if (repeated > 1) throw new Error(READ_BUDGET_STOPPED);
+        returned(stepId, "read-budget");
+        return true;
+      };
+      // Counts a request-only result that will be answered with sources.
+      const countRead = (
+        stepId: string,
+        proposal: WorkerResult["proposal"],
+      ) => {
+        if (!proposal.changes.length) {
+          readTurns++;
+          this.store.event(run.id, "worker.read", {}, stepId);
+        }
+      };
       let repairedByTester = false;
       // The exact files a tester repair may change. Membership, never
       // globs: a path such as app/[id]/page.test.tsx is not a pattern.
@@ -3494,11 +3559,19 @@ export class GraphEngine {
               provider,
               stepRole(step.id, provider.id),
             );
-            let stepPacket: ContextPacket = await currentContext();
+            let stepPacket: ContextPacket = await currentContext(
+              step.id === TESTER_STEP_ID
+                ? {
+                    writes: step.writes ?? [],
+                    exportOnly: provider.kind !== "local",
+                  }
+                : undefined,
+            );
             const supplied = new SuppliedLines();
             const shown = new SuppliedLines();
             let patchFeedback = "";
             let repeatedRequests = 0;
+            let repeatedReads = 0;
             let unexportablePatches = 0;
             // Tests the tester wrote earlier in this plan, which implementing
             // steps must make pass and may not change.
@@ -3517,6 +3590,9 @@ export class GraphEngine {
               await this.refresh();
               if (hash(this.config.policy) !== run.plan.policyHash)
                 throw new Error("Policy changed during DAG execution");
+              const stepFeedback = [patchFeedback, readNotice(patchFeedback)]
+                .filter(Boolean)
+                .join("\n\n");
               const stepInput: WorkerInput = {
                 provider,
                 policy: this.config.policy,
@@ -3526,7 +3602,7 @@ export class GraphEngine {
                   : step.objective,
                 acceptance: run.plan.acceptance,
                 effort: step.effort,
-                ...(patchFeedback ? { feedback: patchFeedback } : {}),
+                ...(stepFeedback ? { feedback: stepFeedback } : {}),
                 signal: state.signal,
               };
               recordShown(shown, fitWorkerContext(stepInput).context);
@@ -3547,7 +3623,15 @@ export class GraphEngine {
               await this.refresh();
               if (hash(this.config.policy) !== run.plan.policyHash)
                 throw new Error("Policy changed before DAG patch application");
-              if (result.proposal.requests.length) {
+              if (refuseRead(step.id, result.proposal, ++repeatedReads)) {
+                patchFeedback = READ_BUDGET_REFUSAL;
+                continue;
+              }
+              repeatedReads = 0;
+              // Once the read budget is spent, a request with changes is a
+              // proposal and its requests go unanswered.
+              if (result.proposal.requests.length && readTurns < readBudget) {
+                countRead(step.id, result.proposal);
                 try {
                   stepPacket = await requestedSourcePacket({
                     workspace,
@@ -3892,6 +3976,7 @@ export class GraphEngine {
           const shown = new SuppliedLines();
           let patchFeedback = "";
           let repeatedRequests = 0;
+          let repeatedReads = 0;
           let unexportablePatches = 0;
           for (let turn = 0; turn < this.config.policy.maxTurns; turn++) {
             await this.refresh();
@@ -3928,6 +4013,7 @@ export class GraphEngine {
                   ? "Required verification failed. Request explicitly exportable source to investigate."
                   : "",
               patchFeedback,
+              readNotice(patchFeedback),
               reviewFeedback &&
                 (provider.kind === "local" || reviewFeedbackExportable
                   ? reviewFeedback
@@ -3979,7 +4065,15 @@ export class GraphEngine {
             await this.refresh();
             if (hash(this.config.policy) !== run.plan.policyHash)
               throw new Error("Policy changed before patch application");
-            if (result.proposal.requests.length) {
+            if (refuseRead(step.id, result.proposal, ++repeatedReads)) {
+              patchFeedback = READ_BUDGET_REFUSAL;
+              continue;
+            }
+            repeatedReads = 0;
+            // Once the read budget is spent, a request with changes is a
+            // proposal and its requests go unanswered.
+            if (result.proposal.requests.length && readTurns < readBudget) {
+              countRead(step.id, result.proposal);
               try {
                 stepPacket = await requestedSourcePacket({
                   workspace,

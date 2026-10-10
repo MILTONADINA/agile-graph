@@ -578,6 +578,22 @@ export const REPEATED_REQUEST_FEEDBACK =
   "Your last request added nothing new: you already have those sources, or they do not fit the context budget. Propose your change now from the context you have, or request a different file or a smaller line range such as path#L1-L80. Another request that adds nothing stops the run.";
 
 /**
+ * What a worker is told once the run's read budget (policy.maxReadTurns) is
+ * spent: the request-only calls it allows have all been made. Names no path,
+ * so a cloud worker may receive it.
+ */
+export const READ_BUDGET_NOTICE =
+  "This run has used its read budget (policy.maxReadTurns): stop requesting files and propose your change now with the evidence you have.";
+
+/** What a worker is told when it requests files after that. */
+export const READ_BUDGET_REFUSAL =
+  "Your request was refused: this run has used its read budget (policy.maxReadTurns), so no more files will be sent. Propose your change now with the evidence you have. Another answer that only requests files stops the run.";
+
+/** The run's error when a worker keeps requesting after the refusal. */
+export const READ_BUDGET_STOPPED =
+  "The worker kept requesting files after the run's read budget (policy.maxReadTurns) was spent and it was told to propose with the evidence it had";
+
+/**
  * The refused paths as a worker or run error may show them: a path whose
  * name looks like a credential is counted, never repeated, since a cloud
  * worker's instructions holding a potential secret are refused at dispatch
