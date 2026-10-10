@@ -667,18 +667,34 @@ describe("step write scopes and timeouts", () => {
   it("gives each step its own timeout rather than one for the whole plan", async () => {
     const workspace = await fixture();
     const policy = { ...DEFAULT_POLICY, timeoutSeconds: 1 };
+    // Control each step's deadline directly instead of racing a real clock:
+    // the first step's deadline expiring must not reach the second step.
+    const deadlines: AbortController[] = [];
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+      const controller = new AbortController();
+      deadlines.push(controller);
+      return controller.signal;
+    });
+    const seen: AbortSignal[] = [];
     const result = await runDag({
       workspace,
       policy,
       steps: [step("one"), step("two", ["one"])],
       saveCheckpoint: async () => {},
       generate: async (current, state) => {
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        if (state.signal.aborted) throw new Error("step timed out");
+        expect(state.signal.aborted).toBe(false);
+        seen.push(state.signal);
+        // Expire every earlier step's allowance, as a whole-plan deadline
+        // shared with this step would expire by now.
+        for (const deadline of deadlines.slice(0, -1))
+          deadline.abort(new DOMException("timed out", "TimeoutError"));
         return proposal(`${current.id}.txt`, current.id);
       },
     });
     expect(result.appliedStepIds).toEqual(["one", "two"]);
+    expect(timeout.mock.calls).toEqual([[1000], [1000]]);
+    expect(seen[0]!.aborted).toBe(true);
+    expect(seen[1]!.aborted).toBe(false);
   });
 });
 

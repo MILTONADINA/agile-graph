@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   createServer,
   type IncomingMessage,
@@ -66,51 +66,90 @@ const call = (endpoint: string, timeoutSeconds: number, signal?: AbortSignal) =>
     acceptance: ["sum is correct"],
     signal,
   });
-async function elapsed(promise: Promise<unknown>) {
-  const started = Date.now();
-  const outcome = await promise.then(
+async function outcome(promise: Promise<unknown>) {
+  return promise.then(
     () => ({ error: undefined }),
     (error: unknown) => ({ error }),
   );
-  return { ...outcome, ms: Date.now() - started };
 }
+// Replaces the policy deadline with one the test fires, so no assertion
+// depends on how quickly a loaded machine runs timers.
+function controlledDeadlines() {
+  const deadlines: AbortController[] = [];
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+    const controller = new AbortController();
+    deadlines.push(controller);
+    return controller.signal;
+  });
+  const expire = (index: number) =>
+    deadlines[index]!.abort(new DOMException("timed out", "TimeoutError"));
+  return { timeout, expire };
+}
+function signalled() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => (resolve = done));
+  return { promise, resolve };
+}
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 it("waits for provider headers exactly as long as the policy timeout", async () => {
   const encodings: (string | undefined)[] = [];
+  const requested = signalled();
   const { endpoint } = await provider((response, request) => {
     encodings.push(request.headers["accept-encoding"]);
+    requested.resolve();
     setTimeout(() => {
       response.setHeader("Content-Type", "application/json");
       response.end(completion);
     }, 1500);
   });
-  const late = await elapsed(call(endpoint, 1));
+  const { timeout, expire } = controlledDeadlines();
+  const pending = outcome(call(endpoint, 1));
+  await requested.promise;
+  expire(0);
+  const late = await pending;
   expect((late.error as Error).name).toBe("TimeoutError");
-  expect(late.ms).toBeLessThan(1400);
+  // Headers arriving later than the first call's deadline still complete a
+  // call whose own deadline has not passed.
   const result = await call(endpoint, 3);
   expect(result.proposal.summary).toBe("Fix");
+  expect(timeout.mock.calls).toEqual([[1000], [3000]]);
   expect(encodings).toEqual(["identity", "identity"]);
 });
 
 it("stops reading a stalled or trickling body when cancelled or timed out", async () => {
+  const stalledWritten = signalled();
   const { endpoint: stalled } = await provider((response) => {
     response.setHeader("Content-Type", "application/json");
-    response.write(completion.slice(0, 20));
+    response.write(completion.slice(0, 20), () => stalledWritten.resolve());
   });
+  const { timeout, expire } = controlledDeadlines();
   const controller = new AbortController();
-  setTimeout(() => controller.abort(new Error("Run cancelled")), 200);
-  const cancelled = await elapsed(call(stalled, 20, controller.signal));
+  const pendingCancel = outcome(call(stalled, 20, controller.signal));
+  await stalledWritten.promise;
+  controller.abort(new Error("Run cancelled"));
+  const cancelled = await pendingCancel;
   expect((cancelled.error as Error).message).toBe("Run cancelled");
-  expect(cancelled.ms).toBeLessThan(1500);
 
+  let writes = 0;
+  const trickled = signalled();
   const { endpoint: trickling } = await provider((response) => {
     response.setHeader("Content-Type", "application/json");
-    const timer = setInterval(() => response.write(" "), 100);
+    const timer = setInterval(() => {
+      response.write(" ");
+      if (++writes === 3) trickled.resolve();
+    }, 20);
     response.on("close", () => clearInterval(timer));
   });
-  const timedOut = await elapsed(call(trickling, 1));
+  const pendingTimeout = outcome(call(trickling, 1));
+  await trickled.promise;
+  // A trickling body keeps arriving; only the call's deadline ends it.
+  expire(1);
+  const timedOut = await pendingTimeout;
   expect((timedOut.error as Error).name).toBe("TimeoutError");
-  expect(timedOut.ms).toBeLessThan(1500);
+  expect(timeout.mock.calls).toEqual([[20_000], [1000]]);
 });
 
 it("refuses error statuses and redirects and closes their connections", async () => {

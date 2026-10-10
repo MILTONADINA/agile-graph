@@ -1652,16 +1652,18 @@ describe("repository scale in managed runs", () => {
       config.policy.maxWorkers = 4;
     });
     let active = 0,
-      peak = 0;
+      peak = 0,
+      bothStarted!: () => void;
+    // Released by the second concurrent worker, not by a wall-clock wait, so
+    // slow dispatch cannot let the first worker finish before its sibling.
+    const pair = new Promise<void>((resolve) => (bothStarted = resolve));
     const engine = await open(root, {
       worker: vi.fn(async (input: WorkerInput) => {
         active++;
         peak = Math.max(peak, active);
-        // Wait for a sibling to start, then hold long enough for a third to
-        // join if the cap allowed it, however slowly steps are dispatched.
-        const started = Date.now();
-        while (active < 2 && Date.now() - started < 2000)
-          await new Promise((resolve) => setTimeout(resolve, 10));
+        if (active === 2) bothStarted();
+        await pair;
+        // Hold so a third worker would join here if the cap allowed it.
         await new Promise((resolve) => setTimeout(resolve, 300));
         active--;
         const change =

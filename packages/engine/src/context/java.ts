@@ -403,6 +403,61 @@ export function validateJavaOutput(
     resolvedImports: updates.filter((edge) => edge.kind === "imports").length,
   };
 }
+/** One resident-set reading in KiB, or undefined when ps gave none. */
+function sampleRss(pid: number): Promise<number | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      "/bin/ps",
+      ["-o", "rss=", "-p", String(pid)],
+      { env: {}, timeout: 1000, maxBuffer: 1000 },
+      (error, stdout) => {
+        const rss = Number(stdout.trim());
+        resolve(
+          !error && stdout.trim() && Number.isFinite(rss) ? rss : undefined,
+        );
+      },
+    );
+  });
+}
+
+/**
+ * Samples a process's resident set until stopped and reports only a reading
+ * above the limit. A failed, empty or slow sample is not evidence of memory
+ * use (ps fails under load or after the child exits), so it never kills the
+ * process; the analyzer's wall-clock deadline still bounds the run.
+ */
+export function watchRss(options: {
+  sample: () => Promise<number | undefined>;
+  limitKiB: number;
+  onOverLimit: () => void;
+  running?: () => boolean;
+  intervalMs?: number;
+}): () => void {
+  let stopped = false,
+    timer: ReturnType<typeof setTimeout> | undefined;
+  const active = () => !stopped && (options.running?.() ?? true);
+  const tick = async () => {
+    if (!active()) return;
+    let rss: number | undefined;
+    try {
+      rss = await options.sample();
+    } catch {
+      rss = undefined;
+    }
+    if (!active()) return;
+    if (rss !== undefined && Number.isFinite(rss) && rss > options.limitKiB) {
+      stopped = true;
+      options.onOverLimit();
+      return;
+    }
+    timer = setTimeout(() => void tick(), options.intervalMs ?? 40);
+  };
+  void tick();
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
+}
 function analyze(
   runtime: JavaRuntime,
   input: string,
@@ -423,9 +478,7 @@ function analyze(
       );
     let bytes = 0,
       failed = false,
-      finished = false,
-      invalidSamples = 0,
-      monitor: ReturnType<typeof setTimeout> | undefined;
+      unwatch: (() => void) | undefined;
     const chunks: Buffer[] = [];
     const stop = () => {
       failed = true;
@@ -435,45 +488,15 @@ function analyze(
       stop,
       Math.max(0, timeoutMs - (performance.now() - started)),
     );
-    const sample = () => {
-      if (
-        finished ||
-        child.exitCode !== null ||
-        child.signalCode !== null ||
-        !child.pid
-      )
-        return;
-      execFile(
-        "/bin/ps",
-        ["-o", "rss=", "-p", String(child.pid)],
-        { env: {}, timeout: 1000, maxBuffer: 1000 },
-        (error, stdout, stderr) => {
-          if (finished || child.exitCode !== null || child.signalCode !== null)
-            return;
-          const rss = Number(stdout.trim());
-          if (
-            (!error && stdout.trim() && rss === 0) ||
-            (error?.code === 1 && !stdout.trim() && !stderr.trim())
-          ) {
-            // ps can observe an exited child before Node delivers its exit
-            // event. One bounded resample avoids rejecting a valid short run.
-            if (++invalidSamples > 1) stop();
-            else monitor = setTimeout(sample, 40);
-          } else if (
-            error ||
-            !Number.isFinite(rss) ||
-            rss <= 0 ||
-            rss > JAVA_LIMITS.rssKiB
-          )
-            stop();
-          else {
-            invalidSamples = 0;
-            monitor = setTimeout(sample, 40);
-          }
-        },
-      );
-    };
-    if (process.platform !== "win32") sample();
+    if (process.platform !== "win32" && child.pid) {
+      const pid = child.pid;
+      unwatch = watchRss({
+        sample: () => sampleRss(pid),
+        limitKiB: JAVA_LIMITS.rssKiB,
+        onOverLimit: stop,
+        running: () => child.exitCode === null && child.signalCode === null,
+      });
+    }
     child.stdout.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
       if (bytes > maxBytes) stop();
@@ -484,9 +507,8 @@ function analyze(
       if (bytes > maxBytes) stop();
     });
     const clean = () => {
-      finished = true;
       clearTimeout(deadline);
-      if (monitor) clearTimeout(monitor);
+      unwatch?.();
     };
     child.on("error", (error) => {
       clean();

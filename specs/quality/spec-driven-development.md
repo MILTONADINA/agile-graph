@@ -31,8 +31,9 @@ runs it, and plans can be created straight from a ready spec.
   - Test: packages/engine/tests/specs.test.ts :: counts only a runnable test with exactly the linked name
   - Test: packages/engine/tests/specs.test.ts :: finds tests after a glob string or a regex that look like comments
   - Test: packages/engine/tests/specs.test.ts :: does not follow a symlinked test file
-- AC6: In a repository with CI workflows, a criterion proven only by tests that need an environment switch no CI step sets for that file fails the check.
+- AC6: In a repository with CI workflows, a criterion proven only by tests that need an environment switch no CI step sets for that file fails the check. Finding a switch on an enclosing `describe` block takes one linear pass over the test file, however many gated blocks it opens.
   - Test: packages/engine/tests/specs.test.ts :: reads the switch a linked test needs
+  - Test: packages/engine/tests/specs.test.ts :: reads switches in a file of many unclosed gated blocks in one linear pass
   - Test: packages/engine/tests/specs.test.ts :: fails a criterion proven only by a switched-off test that no CI step runs
 - AC7: `plan --spec` takes the objective and criteria from a ready spec and records the spec's path and hash on the plan.
   - Test: packages/engine/tests/outcomes.test.ts :: takes the objective and criteria from a ready spec and records it on the plan

@@ -573,6 +573,25 @@ describe("tests that only run behind an environment switch", () => {
     expect(testSwitch(block, "runs everywhere")).toBeUndefined();
   });
 
+  it("reads switches in a file of many unclosed gated blocks in one linear pass", () => {
+    // Each unclosed block once cost a scan to the end of the file.
+    const hostile = [
+      ...Array.from(
+        { length: 20_000 },
+        (_, index) =>
+          `describe.runIf(process.env.GATE_${index} === "1")("b${index}", () => {`,
+      ),
+      `  it("deep", () => {});`,
+      `describe.runIf(process.env.LAST === "1")("closed", () => {`,
+      `  it("inner", () => {});`,
+      `});`,
+    ].join("\n");
+    const started = performance.now();
+    expect(testSwitch(hostile, "deep")).toBeUndefined();
+    expect(testSwitch(hostile, "inner")).toBe("LAST");
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+
   it("fails a criterion proven only by a switched-off test that no CI step runs", async () => {
     const files = {
       "specs/billing/invoice-list.md": spec({}),
