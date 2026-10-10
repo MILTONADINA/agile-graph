@@ -419,21 +419,69 @@ path and SHA-256 used. This repository's own is
    disprove it: a complete trace from entrypoint through propagation to
    sink (with evidence and a reproduction), `needs_validation` (with the
    missing facts and a safe local check) or `rejected` (with the reason). Candidates past the cap are counted as
-   unverified and never reported as findings.
-4. Validate. Each record is built in Cloudflare's `report-schema.json`
+   unverified and never reported as findings. With a complete trace the
+   verifier may also propose a reproducer: a new test file, the argv that
+   runs just that test with the project's test runner, a registered image
+   and the failure text the test prints because of the flaw.
+4. Reproduce. Each proposed reproducer runs offline, as described below,
+   at no model cost; none runs for a verdict other than a complete trace.
+5. Validate. Each record is built in Cloudflare's `report-schema.json`
    format with an engine-made fingerprint and checked by Cloudflare's own
    `validate-findings.cjs`, vendored unmodified and pinned by SHA-256 in
    `packages/engine/vendor/cloudflare-security-audit/`. A record that fails,
    or cites a file the change did not touch, is listed under `invalid` with
    the validator's errors instead of as a finding.
 
-Nothing is executed, so no record is ever `confirmed`: Cloudflare's method
-reserves that verdict for a demonstrated finding. A finding the verifier
-traced completely is reported as `needs_validation`, keeping the full
-trace, with a blocker saying it was not executed and a `validation_plan`
-holding the verifier's reproduction and the result it expects. The
-result's `counts.traced` says how many of the `needs_validation` records
-are such static traces.
+A record is `confirmed` only when its reproducer demonstrated it, since
+Cloudflare's method reserves that verdict for a demonstrated finding. The
+reproducer runs only in the offline verification sandbox that managed runs
+use for their checks (`--network=none`, all capabilities dropped,
+`--pull=never`, memory, CPU and process limits), as one check in one of the
+project's registered verification images (`graph-engine check-add`; a null
+image means the first mandatory check's), on a temporary copy of the run's
+workspace snapshot with the one new file added. It is never written to the
+run's workspace or the checkout, and the copy is removed afterwards. Its
+time is bounded by `policy.verificationTimeoutSeconds`, or
+`policy.timeoutSeconds` when that is null.
+
+The engine first refuses a reproducer whose path is not a safe relative
+project path matching the project's test file globs (`tester.writes`, or
+the tester's defaults), in the changed area (a top-level directory the run
+changed, or anywhere when it changed a top-level file) and new; whose
+content is empty, over 64 KiB, holds a NUL byte or a potential secret;
+whose argv is not 1 to 32 plain arguments (no shell metacharacters, quotes
+or spaces) naming the file and not starting with a shell; whose expected
+text is not 4 to 500 characters or is itself a load error; or whose image
+is not registered. A cloud auditor's reproducer must also have a path in
+`policy.exportPaths`.
+
+The finding is demonstrated exactly when the sandbox returned a result (a
+timeout, output overflow, missing image, Docker error or changed input is
+an error), the test exited with a code from 1 to 124 (0 is a pass, 125 to
+127 mean it could not start and 128 or more mean a signal killed it), its
+standard output and error together contain the expected text, and that
+output shows none of the did-not-run markers (`SyntaxError`,
+`Cannot find module`, `Cannot find package`, `ERR_MODULE_NOT_FOUND`,
+`ModuleNotFoundError`, `ImportError`, `No test files found`,
+`No tests found`, `no tests ran`, `command not found`,
+`executable file not found`, ignoring case). The confirmed record's
+`execution` says what ran (the argv, image, image ID, sandbox flags and
+snapshot hash) and, in `observed_result`, the exit code, the expected text
+and a redacted excerpt of the output's tail; its `remediation`, `severity`
+and root cause come from the verifier, and a demonstration whose verifier
+gave none of one of them stays `needs_validation`.
+
+Anything short of a demonstration, including a refused reproducer or one
+that could not run because Docker is unavailable, leaves a finding the
+verifier traced completely as `needs_validation`, keeping the full trace,
+with a blocker saying it was not demonstrated, a second blocker with the
+reproducer's outcome when one was proposed, and a `validation_plan` holding
+the verifier's reproduction and the result it expects. The result's
+`counts.confirmed` counts demonstrated findings, `counts.traced` the
+`needs_validation` records that are such static traces, and `reproducers`
+lists every proposed reproducer's outcome. A confirmed finding is still
+advisory: it never reaches the security gate, the run's status, its
+completion or its review.
 
 The auditor has the reviewer's restrictions: it must be an API (`openai`,
 `anthropic` or `chat`) or local provider the policy allows; a cloud provider never receives a potential

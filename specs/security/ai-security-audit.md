@@ -39,8 +39,8 @@ can ever make it blocking.
   - Test: packages/engine/tests/vendor-pins.test.ts :: keeps the vendored Cloudflare files byte-identical to their pinned sha256
   - Test: packages/engine/tests/vendor-pins.test.ts :: records the upstream commit and license in the vendor README and NOTICE
   - Test: packages/engine/tests/security-audit.test.ts :: checks the vendored files' pins before anything else
-- AC7: No finding is ever `confirmed`: Cloudflare's method reserves that verdict for a demonstrated finding, and the audit executes nothing. A verifier's "confirmed" is a static trace, reported as `needs_validation` with its full entrypoint, propagation and sink trace, a blocker saying it was not executed, and a local validation plan holding the verifier's reproduction and expected result; the result counts these as `traced`.
-  - Test: packages/engine/tests/security-audit.test.ts :: never reports confirmed: a verifier's static trace is needs_validation with its full trace and expected result
+- AC7: A finding is `confirmed` only when a reproducer demonstrated it (AC12); a verifier's "confirmed" is otherwise a static trace, reported as `needs_validation` with its full entrypoint, propagation and sink trace, a blocker saying it was not executed (and, when a reproducer was proposed, a second blocker with its outcome), and a local validation plan holding the verifier's reproduction and expected result. The result counts those as `traced` and demonstrated findings as `confirmed`, so `confirmed + traced` is the number of verifier-confirmed findings.
+  - Test: packages/engine/tests/security-audit.test.ts :: reports a static trace as needs_validation with its full trace and expected result
   - Test: packages/engine/tests/security-audit.test.ts :: is advisory only: it records security.audit_completed and never changes the run's status, outcome or review gate
 - AC8: The audit has its own provider setting, `audit.providerId` in the project configuration (set with `graph-engine auditor <providerId>`), so auditing never turns on the review gate; without it the audit uses the reviewer, and with neither it refuses and says how to set one. The key sits beside the policy, so it never changes a plan's policy hash.
   - Test: packages/engine/tests/security-audit.test.ts :: uses its own auditor setting, falls back to the reviewer and refuses with neither
@@ -50,6 +50,26 @@ can ever make it blocking.
   - Test: packages/engine/tests/security-audit.test.ts :: refuses a cloud auditor a threat model outside the export paths, sending nothing
   - Test: packages/engine/tests/security-audit.test.ts :: refuses secrets for cloud auditors, oversized changes and installed agents
   - Test: packages/engine/tests/security-audit.test.ts :: is advisory only: it records security.audit_completed and never changes the run's status, outcome or review gate
+
+- AC10: A verifier that answers "confirmed" may propose a reproducer (`path`, `content`, `argv`, `image`, `expected`). The engine runs it only through the offline verification sandbox (`verifyInContainer`: `--network=none`, all capabilities dropped, `--pull=never`, memory, CPU and process limits) with one check whose image is one of the project's registered verification images (`check-add`; a null image means the first mandatory one), never another image, on a temporary copy of the run's workspace snapshot plus that one file, bounded by the policy's verification timeout (`policy.timeoutSeconds` when that is null). A reproducer proposed with another verdict is never run. Running it costs no model call and reserves none.
+  - Test: packages/engine/tests/security-audit.test.ts :: runs a verifier's reproducer only through the offline sandbox, with a registered image, on a copy of the run's snapshot
+  - Test: packages/engine/tests/audit-reproducer-sandbox.test.ts :: adds a reproducer only to the temporary verification view and runs it with no network
+- AC11: The reproducer is never written to the run's workspace or the owner's checkout: it exists only in the sandbox's temporary view, which is removed afterwards; a path that already exists in the snapshot is refused, and the sandbox refuses a run whose source inputs or reproducer changed.
+  - Test: packages/engine/tests/security-audit.test.ts :: never writes the reproducer to the run workspace or the checkout
+  - Test: packages/engine/tests/audit-reproducer-sandbox.test.ts :: adds a reproducer only to the temporary verification view and runs it with no network
+  - Test: packages/engine/tests/audit-reproducer-sandbox.test.ts :: refuses an added file that already exists or leaves the view
+- AC12: Only a demonstrated failure confirms. A reproducer is demonstrated exactly when (a) the sandbox returned a result instead of throwing (a timeout, output overflow, a missing image, a Docker error or a changed input is an error), (b) the test exited with a code from 1 to 124 (0 passed; 125 to 127 mean Docker or the command could not start it; 128 and above mean a signal killed it), (c) its standard output and error together contain the verifier's `expected` text, compared after normalizing line endings, and (d) that output contains none of the did-not-run markers (`SyntaxError`, `Cannot find module`, `Cannot find package`, `ERR_MODULE_NOT_FOUND`, `ModuleNotFoundError`, `ImportError`, `No test files found`, `No tests found`, `no tests ran`, `command not found`, `executable file not found`, compared without case), and `expected` contains none either. Anything else leaves the finding `needs_validation` with the outcome noted. A demonstrated finding is recorded as `confirmed` only when the verifier also gave the root cause, intended behavior, reproduction, remediation and severity Cloudflare's schema requires; otherwise it stays `needs_validation`, saying which is missing.
+  - Test: packages/engine/tests/security-audit.test.ts :: confirms only a demonstrated failure: a non-zero exit with the expected signal and no did-not-run marker
+  - Test: packages/engine/tests/security-audit.test.ts :: keeps needs_validation when the reproducer passes, cannot start, errors before running, times out or misses the signal
+  - Test: packages/engine/tests/security-audit.test.ts :: fills a confirmed record's execution evidence from what ran
+- AC13: A confirmed finding is still advisory: it is recorded only in `security.audit_completed` and the printed result, and never changes the run's status, outcome, review gate, security gate or completion.
+  - Test: packages/engine/tests/security-audit.test.ts :: keeps a confirmed finding advisory: the run's status, outcome and review gate are unchanged
+- AC14: A reproducer is refused, and not run, unless its path is a safe relative project path (no `..`, absolute path, backslash or excluded or protected path) that matches the project's test file globs (`tester.writes`, or the tester's defaults), lies in the changed area (its first path segment is the first segment of a file the run changed, or anywhere when the run changed a top-level file) and does not exist in the run's workspace; its content is non-empty, at most 64 KiB and free of NUL bytes; its argv is 1 to 32 plain arguments (letters, digits and `_ . / : = @ + , % -` only, so no shell metacharacters), does not start with a shell or `env`, and names the reproducer's path; its `expected` text is 4 to 500 characters; and its image, when given, is a registered verification image. A project with no registered verification image runs no reproducer.
+  - Test: packages/engine/tests/security-audit.test.ts :: refuses invalid reproducers before running them
+- AC15: A cloud auditor's reproducer must have an exportable path (`policy.exportPaths`), and no reproducer whose content holds a potential secret is run. When Docker is unavailable a reproducer cannot run and its finding stays `needs_validation` with a note. The reproducer's output is redacted before it is recorded, and only an excerpt of its tail is kept.
+  - Test: packages/engine/tests/security-audit.test.ts :: refuses a cloud auditor's reproducer outside the export paths and any reproducer holding a potential secret
+  - Test: packages/engine/tests/security-audit.test.ts :: keeps needs_validation with a note when Docker is unavailable
+  - Test: packages/engine/tests/security-audit.test.ts :: redacts the reproducer's output before recording it
 
 ## Security considerations
 
@@ -68,13 +88,24 @@ so they cannot spend a run's own budget; a call refused before sending gives
 its reservation back. The vendored files' digests are checked first in every
 audit.
 
+A reproducer is model-written code, so it runs only in the offline
+verification sandbox, never on the project: with no network, no
+capabilities and no image pulls, in one of the operator's registered
+verification images, on a temporary copy of the run's snapshot that is
+removed afterwards. Its argv is a plain array with no shell. A model-chosen
+`expected` text cannot confirm a test that never ran, since the exit code
+and the did-not-run markers are checked too, but a reproducer written to
+print that text and fail can still confirm a finding; this is why a
+confirmed finding stays advisory and gates nothing.
+
 ## Non-goals
 
 - Gating, completing or failing a run on audit findings, or any automatic
   path to make the audit blocking. Only the owner can decide that.
-- Executing reproductions, and so any `confirmed` record. The verifier's
-  instructions still let it answer "confirmed" for a complete static trace;
-  the engine reports that as `needs_validation`.
+- Executing reproductions anywhere but the offline verification sandbox,
+  in an unregistered image, or with network access; running a reproducer
+  for a verdict other than "confirmed"; or a second model call to repair a
+  reproducer that did not demonstrate its finding.
 - Cloudflare's coverage ledger: `validate-coverage-ledger.cjs` is vendored
   for reference only.
 - Audits from MCP clients or the dashboard.

@@ -1767,7 +1767,7 @@ cli
 cli
   .command("security-audit <runId>")
   .description(
-    "Advisory AI security audit of a stopped run's change on Cloudflare's security-audit method: the configured auditor (graph-engine auditor), or else the reviewer, hunts for candidate vulnerabilities in the run's diff, then a separate verifier call per candidate (at most 10, reserved first) rejects it or reports it as needing validation; nothing is executed, so no finding is confirmed. Findings follow Cloudflare's report schema; the audit never gates, completes or fails a run",
+    "Advisory AI security audit of a stopped run's change on Cloudflare's security-audit method: the configured auditor (graph-engine auditor), or else the reviewer, hunts for candidate vulnerabilities in the run's diff, then a separate verifier call per candidate (at most 10, reserved first) rejects it or reports it as needing validation; a finding is confirmed only when the verifier's reproducer test fails as expected in the offline verification sandbox (no network, a registered image, a temporary copy of the run's snapshot). Findings follow Cloudflare's report schema; the audit never gates, completes or fails a run",
   )
   .action(async (runId) => {
     const engine = await GraphEngine.open(root());
