@@ -651,6 +651,9 @@ export class GraphEngine {
         status: outcome.status,
         mutants: outcome.mutants,
         killed: outcome.killed,
+        ...("inconclusive" in outcome
+          ? { inconclusive: outcome.inconclusive }
+          : {}),
         survived: outcome.survivors.length,
         equivalent,
         score: outcome.score,
@@ -4138,11 +4141,12 @@ export class GraphEngine {
                   // Mutation analysis (policy.mutationRounds): surviving
                   // mutants send the tester's tests back for another round.
                   if (step.id === TESTER_STEP_ID && mutationRoundsLeft > 0) {
-                    mutationRoundsLeft--;
                     const round =
                       (this.config.policy.mutationRounds ?? 0) -
-                      mutationRoundsLeft;
-                    // Another round needs a model call within maxTurns.
+                      mutationRoundsLeft +
+                      1;
+                    // Another round needs a model call within maxTurns; a
+                    // skipped round is not counted as used.
                     if (turn + 1 >= this.config.policy.maxTurns) {
                       this.store.event(
                         run.id,
@@ -4152,17 +4156,32 @@ export class GraphEngine {
                       );
                       return result;
                     }
-                    const feedback = await this.mutationRound({
-                      run,
-                      stepId: step.id,
-                      round,
-                      workspace,
-                      staged,
-                      targets: testerTargets,
-                      snapshotHash: state.snapshotHash,
-                      signal: state.signal,
-                      withState,
-                    });
+                    mutationRoundsLeft--;
+                    let feedback: string | undefined;
+                    try {
+                      feedback = await this.mutationRound({
+                        run,
+                        stepId: step.id,
+                        round,
+                        workspace,
+                        staged,
+                        targets: testerTargets,
+                        snapshotHash: state.snapshotHash,
+                        signal: state.signal,
+                        withState,
+                      });
+                    } catch (error) {
+                      if (state.signal?.aborted) throw error;
+                      // Advisory: a failed analysis never fails the step.
+                      // No error text, which could quote source.
+                      this.store.event(
+                        run.id,
+                        "mutation.analyzed",
+                        { round, status: "error" },
+                        step.id,
+                      );
+                      return result;
+                    }
                     if (feedback) {
                       returned(step.id, "mutation-survivors");
                       patchFeedback = feedback;
