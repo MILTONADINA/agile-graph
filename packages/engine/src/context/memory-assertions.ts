@@ -199,7 +199,7 @@ export function parseReviewedAssertions(
  */
 export function parseMemoryExpiry(input: unknown): string {
   const parsed = timestamp.safeParse(input);
-  if (!parsed.success)
+  if (!parsed.success || !realCalendarDate(parsed.data))
     throw new Error(
       "A memory expiry must be an ISO 8601 date-time with a time zone, for example 2026-12-31T23:59:59Z",
     );
@@ -207,22 +207,38 @@ export function parseMemoryExpiry(input: unknown): string {
 }
 
 /**
+ * The written date and time exist on the calendar: Date would roll
+ * 2030-02-31 over to 2 March, so the fields must survive a round trip.
+ */
+function realCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(
+    value,
+  );
+  if (!match) return false;
+  const [year, month, day, hour, minute, second = 0] = match
+    .slice(1)
+    .map((field) => Number(field ?? 0));
+  const date = new Date(
+    Date.UTC(year!, month! - 1, day!, hour!, minute!, second),
+  );
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month! - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second
+  );
+}
+
+/**
  * When a memory stops applying, in epoch milliseconds, or undefined when it
- * never expires. That is the earlier of its own validUntil and, when every
- * reviewed assertion has a validUntil, the latest of those: a memory whose
- * claims have all lapsed no longer describes the project.
+ * never expires. Only the memory's own validUntil counts: a reviewed claim's
+ * validUntil says when that fact held, not when the memory leaves context.
  */
 export function memoryExpiresAt(record: MemoryRecord): number | undefined {
-  const own = record.validUntil ? Date.parse(record.validUntil) : undefined;
-  const claims = record.assertions?.claims ?? [];
-  const claimed =
-    claims.length && claims.every((claim) => claim.validUntil)
-      ? Math.max(...claims.map((claim) => Date.parse(claim.validUntil!)))
-      : undefined;
-  const ends = [own, claimed].filter((value): value is number =>
-    Number.isFinite(value),
-  );
-  return ends.length ? Math.min(...ends) : undefined;
+  const end = record.validUntil ? Date.parse(record.validUntil) : NaN;
+  return Number.isFinite(end) ? end : undefined;
 }
 
 /** A memory is expired from the instant its validity ends. */

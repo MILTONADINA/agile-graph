@@ -1469,9 +1469,14 @@ export class ContextEngine {
       throw new Error("Invalid superseded memory id");
     if (record.assertions !== undefined)
       record.assertions = parseReviewedAssertions(record.assertions);
-    // Format only: a stored memory whose expiry has passed is still valid.
-    if (record.validUntil !== undefined)
+    // A stored memory whose expiry has passed is still valid, but one that
+    // expires at or before its own creation (a hand-edited or tampered
+    // shared file) is not.
+    if (record.validUntil !== undefined) {
       record.validUntil = parseMemoryExpiry(record.validUntil);
+      if (Date.parse(record.validUntil) <= Date.parse(record.createdAt))
+        throw new Error("A memory cannot expire before it was created");
+    }
   }
   /** A new expiry a person gives must still lie ahead. */
   private futureExpiry(input: string): string {
@@ -1596,7 +1601,7 @@ export class ContextEngine {
       text: input.text,
       visibility: "private",
       status: "proposed",
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(this.now()).toISOString(),
       sources: input.sources ?? [],
       ...(input.supersedes ? { supersedes: input.supersedes } : {}),
       ...(validUntil ? { validUntil } : {}),
