@@ -21,12 +21,15 @@ export type MutationOutcome =
       score: null;
     }
   | {
-      status: "analyzed";
+      /** time-budget: the deadline passed before every mutant ran. */
+      status: "analyzed" | "time-budget";
       mutants: number;
       killed: number;
+      /** Mutants with no verdict (not run, or no failing result): unscored. */
+      inconclusive: number;
       survivors: Omit<Mutant, "content">[];
-      /** killed / mutants. */
-      score: number;
+      /** killed / (killed + survivors), or null when nothing was scored. */
+      score: number | null;
     };
 
 /**
@@ -48,7 +51,19 @@ export async function analyzeMutants(options: {
   snapshotHash: string;
   verify: typeof verifyInContainer;
   signal?: AbortSignal;
+  /** Milliseconds clock; tests inject one. */
+  now?: () => number;
 }): Promise<MutationOutcome> {
+  const now = options.now ?? (() => performance.now());
+  // The whole analysis (baseline and mutants) shares one check timeout:
+  // once it has passed, no further mutant starts.
+  const timeoutSeconds =
+    options.policy.verificationTimeoutSeconds === null
+      ? null
+      : (options.policy.verificationTimeoutSeconds ??
+        options.policy.timeoutSeconds);
+  const deadline =
+    timeoutSeconds === null ? Infinity : now() + timeoutSeconds * 1000;
   const added: AddedFile[] = [],
     replaced: AddedFile[] = [];
   for (const [file, content] of options.tests) {
@@ -117,22 +132,28 @@ export async function analyzeMutants(options: {
       score: null,
     };
   const survivors: Mutant[] = [];
+  let killed = 0,
+    ran = 0;
   for (const mutant of mutants) {
     if (options.signal?.aborted) throw new Error("Run cancelled");
+    if (now() >= deadline) break;
+    ran++;
     const results = await run(passing, [
       { path: mutant.path, content: mutant.content },
     ]);
-    const killed =
-      results.length < passing.length ||
-      results.some((result) => result.code !== 0);
-    if (!killed) survivors.push(mutant);
+    // Killed only by a check's own failing result; a run that returned
+    // fewer results with none failing has no verdict and is not scored.
+    if (results.some((result) => result.code !== 0)) killed++;
+    else if (results.length === passing.length) survivors.push(mutant);
   }
+  const scored = killed + survivors.length;
   return {
-    status: "analyzed",
+    status: ran < mutants.length ? "time-budget" : "analyzed",
     mutants: mutants.length,
-    killed: mutants.length - survivors.length,
+    killed,
+    inconclusive: mutants.length - scored,
     survivors: survivors.map(strip),
-    score: (mutants.length - survivors.length) / mutants.length,
+    score: scored ? killed / scored : null,
   };
 }
 

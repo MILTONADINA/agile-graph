@@ -357,4 +357,78 @@ describe("mutation feedback to the tester", () => {
       "src/clamp.js:3: replaced > with >=",
     );
   }, 60000);
+
+  it("records an analysis error and accepts the tester's proposal when the sandbox throws", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.mutationRounds = 1;
+    });
+    const { verify: inner } = sandbox();
+    const verify: typeof inner = async (...args) => {
+      if (args[5]) throw new Error("docker unavailable");
+      return inner(...args);
+    };
+    const { run, analyses, testerInputs } = await runWith(root, verify, () =>
+      tests("test('weak', () => {});\n"),
+    );
+    expect(run.status).toBe("succeeded");
+    expect(testerInputs).toHaveLength(1);
+    expect(analyses.map((event) => event.data)).toEqual([
+      { round: 1, status: "error" },
+    ]);
+  }, 60000);
+
+  it("counts a mutant whose sandbox run returned no failing result as inconclusive, not killed", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.mutationRounds = 1;
+    });
+    const { verify: inner } = sandbox();
+    const verify: typeof inner = async (...args) => {
+      const mutated = (args[5]?.replaced ?? []).some(
+        (file) => file.path === "src/clamp.js",
+      );
+      return mutated ? [] : inner(...args);
+    };
+    const { run, analyses } = await runWith(root, verify, () =>
+      tests("test('weak', () => {});\n"),
+    );
+    expect(run.status).toBe("succeeded");
+    expect(analyses.map((event) => event.data)).toMatchObject([
+      {
+        status: "analyzed",
+        mutants: 4,
+        killed: 0,
+        inconclusive: 4,
+        survived: 0,
+        score: null,
+      },
+    ]);
+  }, 60000);
+
+  it("starts no mutant once the analysis has used the check timeout", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.mutationRounds = 1;
+      config.policy.verificationTimeoutSeconds = 1;
+    });
+    const { verify: inner, calls } = sandbox();
+    const verify: typeof inner = async (...args) => {
+      if (args[5]) await new Promise((done) => setTimeout(done, 1100));
+      return inner(...args);
+    };
+    const { run, analyses, testerInputs } = await runWith(root, verify, () =>
+      tests("test('weak', () => {});\n"),
+    );
+    expect(run.status).toBe("succeeded");
+    expect(analyses.map((event) => event.data)).toMatchObject([
+      {
+        status: "time-budget",
+        mutants: 4,
+        killed: 0,
+        inconclusive: 4,
+        score: null,
+      },
+    ]);
+    // Only the baseline ran.
+    expect(calls).toHaveLength(1);
+    expect(testerInputs).toHaveLength(1);
+  }, 60000);
 });

@@ -45,7 +45,16 @@ mutants, or null) and the survivors' locations. The run receipt's evidence
 ledger carries the latest one as `mutation`; it is advisory and never gates
 a run. A round needs one more model call within `policy.maxTurns`: when the
 tester's proposal came on its last turn, the round is recorded as
-`turn-budget` and the proposal is accepted. Re-proposals and file requests
+`turn-budget` and the proposal is accepted. The whole analysis (baseline and
+mutants) shares one check timeout (`verificationTimeoutSeconds`, else
+`timeoutSeconds`): once it has passed no further mutant starts, the round
+is recorded as `time-budget`, and survivors found so far still go back. A
+mutant is killed only by a failing result from a check; a run with no
+failing result and fewer results than checks is `inconclusive`, and
+unrun or inconclusive mutants are left out of the score (killed / scored,
+or null). Because the analysis is advisory, any error in it (a sandbox,
+overlay or read failure) records the round as `error`, with no error
+text, and the proposal is accepted. Re-proposals and file requests
 count against `maxTurns` and the read budget as any call does.
 
 Each surviving mutant is also put to the configured decision providers as a
@@ -70,6 +79,12 @@ tester and the answers are only recorded.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: never spends a round when no model call is left within maxTurns
 - AC6: Each survivor is put to the decision providers as a local-only `mutant_equivalence` question, and in shadow mode every survivor still goes back to the tester.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: asks the local decision provider about each survivor and still feeds every survivor back in shadow mode
+- AC7: An error during the analysis never fails the tester step: the round is recorded as `error` with no error text and the proposal is accepted.
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: records an analysis error and accepts the tester's proposal when the sandbox throws
+- AC8: A mutant counts as killed only when a check returns a failing result on it; a run that returns no failing result is inconclusive and left out of the score.
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: counts a mutant whose sandbox run returned no failing result as inconclusive, not killed
+- AC9: Once the analysis has used one check timeout, no further mutant starts and the round is recorded as `time-budget` with unrun mutants left out of the score.
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: starts no mutant once the analysis has used the check timeout
 
 ## Security considerations
 
