@@ -142,6 +142,7 @@ export async function routePlan(options: {
       workerKind: provider.kind,
       maxContextTokens: contextLimit,
     },
+    stateTruncated: objective.length > 800,
   });
   const selected = (category: string, fallback: string) =>
     result.selections[category] ?? fallback;

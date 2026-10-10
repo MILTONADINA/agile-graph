@@ -11,8 +11,13 @@ import {
   type PromotionScope,
   type PromotionDispatchBinding,
 } from "./promotion-authority.js";
-export { decideBatch } from "./decision-batch.js";
+export {
+  decideBatch,
+  decisionAction,
+  DECISION_ESCALATION_FLOOR,
+} from "./decision-batch.js";
 export type {
+  DecisionAction,
   DecisionQuestion,
   DecisionBatchOptions,
   DecisionBatchResult,
@@ -21,8 +26,23 @@ export type {
   DecisionReservation,
 } from "./decision-batch.js";
 
+/**
+ * Where a decision provider runs. `local` providers receive the raw `state`
+ * and must use a loopback endpoint; `hosted` providers receive only the
+ * separately reviewed `cloudState`, need every question marked `exportable`,
+ * are disabled by offline policy and are metered under a cost cap. The engine
+ * keys every privacy and cost guard on this property, never on the id.
+ */
+export type DecisionHosting = "local" | "hosted";
+/** The built-in providers and the only hosting each may declare. */
+export const BUILT_IN_DECISION_HOSTING: Readonly<
+  Record<string, DecisionHosting>
+> = Object.freeze({ laya: "local", jev: "hosted" });
 export interface DecisionProvider {
-  id: "laya" | "jev";
+  /** `laya`, `jev`, or another id that declares its `hosting` explicitly. */
+  id: string;
+  /** Defaults to `local` for `laya` and `hosted` for `jev`; required otherwise. */
+  hosting?: DecisionHosting;
   endpoint: string;
   model: string;
   apiKeyEnv?: string;
@@ -125,7 +145,8 @@ export function canPromote(
 }
 export const decisionProviderSchema = z
   .object({
-    id: z.enum(["laya", "jev"]),
+    id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+    hosting: z.enum(["local", "hosted"]).optional(),
     endpoint: z.string().url(),
     model: z.string().min(1),
     apiKeyEnv: z
@@ -173,7 +194,39 @@ export const decisionProviderSchema = z
       ])
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((provider, context) => {
+    const builtIn = Object.hasOwn(BUILT_IN_DECISION_HOSTING, provider.id)
+      ? BUILT_IN_DECISION_HOSTING[provider.id]
+      : undefined;
+    // A built-in id cannot be relabelled: "jev" configured as local would
+    // otherwise receive raw state without the hosted export guard.
+    if (builtIn && provider.hosting && provider.hosting !== builtIn)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["hosting"],
+        message: `Decision provider ${provider.id} must be ${builtIn}`,
+      });
+    // No silent default for an unknown id: its operator states where it runs.
+    if (!builtIn && !provider.hosting)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["hosting"],
+        message: `Decision provider ${provider.id} must declare hosting`,
+      });
+  });
+/**
+ * The hosting the engine enforces for a provider. A built-in id always gets
+ * its fixed hosting, whatever the object claims; an unknown id without a
+ * declaration is treated as hosted, the stricter side.
+ */
+export function providerHosting(
+  provider: Pick<DecisionProvider, "id" | "hosting">,
+): DecisionHosting {
+  if (Object.hasOwn(BUILT_IN_DECISION_HOSTING, provider.id))
+    return BUILT_IN_DECISION_HOSTING[provider.id]!;
+  return provider.hosting === "local" ? "local" : "hosted";
+}
 export async function decisionProviders(
   dataDir: string,
 ): Promise<DecisionProvider[]> {
@@ -204,6 +257,7 @@ export async function decide(options: {
   promotionBinding?: PromotionDispatchBinding;
   signal?: AbortSignal;
   budget?: DecisionBudget;
+  stateTruncated?: boolean;
 }): Promise<DecisionRecord[]> {
   const result = await decideBatch({
     ...options,

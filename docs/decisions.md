@@ -36,6 +36,37 @@ Hosted decisions require a separately supplied `cloudState` and an explicit
 descriptions, and state all need export review. The presence of a Jev provider
 does not grant permission to upload arbitrary local state. Oversized or
 secret-bearing requests abstain; no text is silently truncated at dispatch.
+These guards follow a provider's `hosting`, not its id; see
+[Provider hosting](#provider-hosting).
+
+## Action labels
+
+Every new decision record carries an `action` the engine derives; the model's
+answer never sets it directly:
+
+| Action     | When                                                                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`     | Mode `promoted`, an applied selection, confidence at or above the promotion threshold in use, and complete context.                          |
+| `escalate` | The provider call failed; the answer was refused, malformed or withheld; confidence is missing; or confidence is below the threshold in use. |
+| `review`   | Anything else, including every usable shadow answer. Shadow records are never `auto`.                                                        |
+
+The threshold in use is the matching promotion report's `minimumConfidence`.
+With no matching report the engine applies `DECISION_ESCALATION_FLOOR`, 0.5:
+the lowest threshold `evaluateDecisions` can fit and the minimum a report may
+carry. A record revoked by cancellation or policy drift is relabelled
+`escalate`.
+
+Context is complete unless the caller cut its state. `decideBatch` never
+truncates state (oversized state abstains and escalates), so the caller says
+so with `stateTruncated: true`; the engine's own routing, worker-selection and
+run-stage callers set it whenever they slice the objective. Records store the
+result as `evidence.contextComplete`. The filtered `cloudState` sent to a
+hosted provider is a reviewed export scope, not a truncation.
+
+The label is advisory and grants no authority. `auto` is only reachable
+through promotion, which admits no route until a verified grant issuer exists.
+Records stored before the label existed have no `action`; readers treat it as
+optional.
 
 ## Decision-call deadlines
 
@@ -184,6 +215,27 @@ base directory. Keep credentials in environment variables, not this JSON:
 ]
 ```
 
+### Provider hosting
+
+Each entry may set `hosting` to `"local"` or `"hosted"`. It defaults to
+`local` for `laya` and `hosted` for `jev`, so existing files need no change.
+Any other id is allowed but must declare `hosting`. The engine keys every
+guard on this property, never on the id:
+
+- `local`: receives the raw `state`, must use a loopback endpoint, and is
+  not metered.
+- `hosted`: receives only `cloudState`, needs every question `exportable`, is
+  disabled by local inference or denied networking, and follows the metered
+  pricing, reservation and cost-cap rules below.
+
+A built-in id cannot be relabelled: `jev` configured `local`, or `laya`
+configured `hosted`, is refused when `decisions.json` loads and when a batch
+validates its providers. Refusing is safer than defaulting, because a `jev`
+entry marked `local` would otherwise receive raw local state without export
+review. A provider id other than `laya` or `jev` cannot be promoted yet, since
+promotion evidence and route identity accept only those two; it stays in
+shadow.
+
 Add `laya` to the project's allowed `policy.providers`. Local Laya is permitted
 with local inference and denied outbound networking. Jev requires its `jev`
 provider entry, an explicit permitted HTTPS endpoint, cloud inference policy,
@@ -268,9 +320,10 @@ persistent `DecisionBudget` implementation. Its `reserve` callback must
 atomically reserve the complete batch price against the enclosing task/project
 ceiling **before** the request is sent. Its `settle` callback persists one
 debit per `callId`. Unknown pricing, a missing ledger, or exhausted budget
-abstains without calling Jev. A zero configured price is not treated as proof
-of zero cost: under a numeric cap Jev needs a positive reviewed price, so
-`maxCostUsd: 0` admits no Jev call. An ambiguous dispatched failure retains the
+abstains without calling the hosted provider. A zero configured price is not
+treated as proof of zero cost: under a numeric cap a hosted provider, Jev
+included, needs a positive reviewed price, so `maxCostUsd: 0` admits no hosted
+call. An ambiguous dispatched failure retains the
 conservative reservation; it is not refunded on an assumption that the service
 did not bill. Accounting persistence failure or a reported charge above the
 reservation prevents using the answer or escalating further. The engine's
