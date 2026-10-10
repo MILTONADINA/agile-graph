@@ -11,7 +11,7 @@ import {
   type Usage,
 } from "@graph-engineering/contracts";
 import { assertProvider, containsSecret } from "../policy.js";
-import { tokensForBytes } from "../tokens.js";
+import { inputTokenCeiling, strictTokensForBytes } from "../tokens.js";
 import {
   callStructuredProvider,
   nodeProviderFetch,
@@ -479,12 +479,11 @@ async function auditCall<T>(
     throw new AuditNotSentError(
       `Security ${role} input contains a potential secret; a cloud auditor cannot receive it`,
     );
-  const ceiling = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
+  const ceiling = inputTokenCeiling(policy, provider);
+  // Strict one-token-per-byte count: the audit refuses rather than judge
+  // input a provider might cut (tokens.ts).
   if (
-    tokensForBytes(
+    strictTokensForBytes(
       Buffer.byteLength(
         user + call.instructions + JSON.stringify(call.schema),
       ) + 256,

@@ -13,6 +13,7 @@ import {
   VERIFY_FIX_INSTRUCTIONS,
   type WorkerReview,
 } from "../src/workers/review.js";
+import { inputTokenCeiling, tokensForBytes } from "../src/tokens.js";
 
 const approve: WorkerReview = {
   verdict: "approve",
@@ -286,6 +287,50 @@ describe("review worker", () => {
     },
     diff: "-a - b\n+a + b",
     ...overrides,
+  });
+
+  it("refuses a change too large for the reviewer under the strict one-token-per-byte count with the output reserved, never truncating it", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            model: "reviewer-model",
+            choices: [{ message: { content: JSON.stringify(approve) } }],
+            usage: { prompt_tokens: 12, completion_tokens: 3 },
+          }),
+        ),
+    );
+    // 12 KB of dense diff: within the default policy's input ceiling (16,000
+    // less a reserved 8,000) by the workers' two-bytes-per-token estimate,
+    // but over it at one token per byte, so the gate refuses it.
+    const diff = "+0x" + "0123456789abcdef".repeat(750);
+    expect(tokensForBytes(Buffer.byteLength(diff) + 256)).toBeLessThanOrEqual(
+      inputTokenCeiling(DEFAULT_POLICY),
+    );
+    await expect(invokeReviewWorker(input({ diff }), fetch)).rejects.toThrow(
+      "too large for the reviewer's context budget",
+    );
+    await expect(invokeVerifyFix(fixInput({ diff }), fetch)).rejects.toThrow(
+      "too large for the reviewer's context budget",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    // The same diff fits once the output reservation is small.
+    const roomy = {
+      ...DEFAULT_POLICY,
+      providers: ["reviewer"],
+      maxOutputTokens: 64,
+    };
+    await expect(
+      invokeReviewWorker(input({ diff, policy: roomy }), fetch),
+    ).resolves.toMatchObject({ review: approve });
+    // ...but not when the output cap would leave too little of the window.
+    await expect(
+      invokeReviewWorker(
+        input({ diff, policy: { ...roomy, maxOutputTokens: 4000 } }),
+        fetch,
+      ),
+    ).rejects.toThrow("too large for the reviewer's context budget");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("checks one earlier finding in a fresh structured call", async () => {

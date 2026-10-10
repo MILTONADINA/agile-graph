@@ -25,10 +25,11 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/execution.test.ts :: reviews the run's whole change against its base commit after a publication commit
 - AC5: The reviewer a run started with is kept across a resume, even if the project's setting changes.
   - Test: packages/engine/tests/execution.test.ts :: keeps the reviewer a run started with across a resume
-- AC6: A cloud reviewer is not sent non-exportable or secret-bearing changes, an oversized change is not truncated, and in those cases the review fails. A non-exportable change is recorded as a blocked review, not a started one, since nothing reached the reviewer.
+- AC6: A cloud reviewer is not sent non-exportable or secret-bearing changes, an oversized change is not truncated, and in those cases the review fails. A change is oversized when its request, counted strictly at one token per UTF-8 byte, exceeds the reviewer's input ceiling (the smaller context limit less the output reservation, as workers AC12 says), so the gate never judges input a provider might cut; fix checks are refused the same way. A non-exportable change is recorded as a blocked review, not a started one, since nothing reached the reviewer.
   - Test: packages/engine/tests/execution.test.ts :: refuses a cloud reviewer for non-exportable changes and reports a failed review
   - Test: packages/engine/tests/execution.test.ts :: lets a person approve a change a cloud reviewer may not receive
   - Test: packages/engine/tests/review.test.ts :: refuses secrets for cloud reviewers, oversized changes and installed agents
+  - Test: packages/engine/tests/review.test.ts :: refuses a change too large for the reviewer under the strict one-token-per-byte count with the output reserved, never truncating it
 
 - AC7: A person can approve a run's change in place of the reviewer, from the command line only, when the run's latest attempt stopped at review after its required checks passed and its retained workspace still matches that snapshot, including a change a cloud reviewer may not receive; the run then completes, and its review is recorded as approved by a person, shown separately from AI approvals.
   - Test: packages/engine/tests/execution.test.ts :: lets a person approve in place of the reviewer, recorded as a person's approval

@@ -1662,7 +1662,14 @@ describe("repository scale in managed runs", () => {
         active++;
         peak = Math.max(peak, active);
         if (active === 2) bothStarted();
-        await pair;
+        // A regression that never runs two at once fails the peak assertion
+        // after a generous wait instead of hanging the suite.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          pair,
+          new Promise<void>((resolve) => (timer = setTimeout(resolve, 30_000))),
+        ]);
+        clearTimeout(timer);
         // Hold so a third worker would join here if the cap allowed it.
         await new Promise((resolve) => setTimeout(resolve, 300));
         active--;
@@ -1688,7 +1695,7 @@ describe("repository scale in managed runs", () => {
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).toBe("succeeded");
     expect(peak).toBe(2);
-  });
+  }, 120_000);
 
   it("keeps workers inside the working set, and a plan inside the working set it was made for", async () => {
     const { root, config } = await fixture((value) => {

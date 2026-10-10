@@ -14,6 +14,7 @@ import {
   type PromotionEvidence,
 } from "./decisions.js";
 import type { PromotionDispatchBinding } from "./promotion-authority.js";
+import { inputTokenCeiling } from "./tokens.js";
 import { VERIFY_FIX_LIMIT } from "./workers/review.js";
 
 export const WORKFLOWS = {
@@ -77,12 +78,7 @@ export async function routePlan(options: {
         : "feature";
   const contextLimit = Math.max(
     1,
-    Math.floor(
-      Math.min(
-        policy.maxContextTokens,
-        provider.maxContextTokens ?? policy.maxContextTokens,
-      ) * 0.7,
-    ),
+    Math.floor(inputTokenCeiling(policy, provider) * 0.7),
   );
   const budgets = [
     ...new Set(

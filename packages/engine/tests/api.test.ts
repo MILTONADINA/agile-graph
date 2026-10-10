@@ -11,6 +11,7 @@ import {
   invokeApiWorker,
   proposalJsonSchema,
   StructuredOutputError,
+  structuredOutputRetryFeedback,
   structuredOutputFeedback,
   workerRequestBytes,
   workerRequestTokens,
@@ -20,6 +21,8 @@ import {
 import {
   BYTES_PER_TOKEN,
   estimateTokens,
+  inputTokenCeiling,
+  strictTokensForBytes,
   tokensForBytes,
 } from "../src/tokens.js";
 
@@ -31,48 +34,62 @@ const replyWith = (body: unknown) =>
   });
 
 it("estimates tokens conservatively from UTF-8 bytes, one estimate for every budget", () => {
-  expect(BYTES_PER_TOKEN).toBe(3);
+  // Dense code, digits, JSON escapes and hex or base64 run near 1.5 to 2.5
+  // bytes per token, so two bytes per token is the conservative estimate.
+  expect(BYTES_PER_TOKEN).toBe(2);
   expect(tokensForBytes(0)).toBe(0);
   expect(tokensForBytes(1)).toBe(1);
-  expect(tokensForBytes(3000)).toBe(1000);
-  expect(tokensForBytes(3001)).toBe(1001);
-  expect(estimateTokens("abc".repeat(10))).toBe(10);
+  expect(tokensForBytes(3000)).toBe(1500);
+  expect(tokensForBytes(3001)).toBe(1501);
+  expect(estimateTokens("abc".repeat(10))).toBe(15);
   // Multi-byte text is counted by its bytes, never by characters.
-  expect(estimateTokens("é".repeat(3))).toBe(2);
+  expect(estimateTokens("é".repeat(3))).toBe(3);
+  // The gates' strict estimate counts one token per byte.
+  expect(strictTokensForBytes(3001)).toBe(3001);
 });
 
-it("gives a 16k-token model a realistic window: accepts a request over 16k bytes that fits in tokens, and still refuses an oversize one", async () => {
-  const input = (bytes: number): WorkerInput => ({
-    provider: { id: "local", kind: "local", model: "fixture" },
-    policy: {
-      ...DEFAULT_POLICY,
-      providers: ["local"],
-      maxContextTokens: 16_000,
-    },
-    objective: "Fix",
-    acceptance: ["tests pass"],
-    context: {
-      version: "1.0.0",
-      projectId: "project",
-      snapshotId: "snapshot",
-      query: "fix",
-      mandatory: ["tests pass"],
-      estimatedTokens: 0,
-      budgetTokens: 16_000,
-      coverage: { semantic: false, graph: "syntactic", warnings: [] },
-      items: [{ id: "file", kind: "code", text: "a".repeat(bytes), score: 1 }],
-    },
-  });
-  const fits = input(30_000);
-  expect(workerRequestBytes(fits)).toBeGreaterThan(16_000);
-  expect(workerRequestTokens(fits)).toBe(
-    tokensForBytes(workerRequestBytes(fits)),
-  );
-  expect(workerRequestTokens(fits)).toBeLessThanOrEqual(16_000);
-  expect(fitWorkerContext(fits).context.items.map((item) => item.id)).toEqual([
-    "file",
-  ]);
-  const fetch = vi.fn<ProviderFetch>(() =>
+it("reserves the output cap in every input ceiling, at most half the window", () => {
+  const policy = { ...DEFAULT_POLICY, maxContextTokens: 16_000 };
+  // The defaults (16,000 each) keep half the window for input.
+  expect(inputTokenCeiling({ ...policy, maxOutputTokens: 16_000 })).toBe(8000);
+  expect(inputTokenCeiling({ ...policy, maxOutputTokens: 4000 })).toBe(12_000);
+  // A smaller provider window is the one reserved from.
+  expect(
+    inputTokenCeiling(
+      { ...policy, maxOutputTokens: 4000 },
+      { maxContextTokens: 8192 },
+    ),
+  ).toBe(4192);
+  expect(
+    inputTokenCeiling(
+      { ...policy, maxOutputTokens: 16_000 },
+      { maxContextTokens: 8192 },
+    ),
+  ).toBe(4096);
+});
+
+const sizedInput = (
+  text: string,
+  limits: { maxContextTokens: number; maxOutputTokens: number },
+): WorkerInput => ({
+  provider: { id: "local", kind: "local", model: "fixture" },
+  policy: { ...DEFAULT_POLICY, providers: ["local"], ...limits },
+  objective: "Fix",
+  acceptance: ["tests pass"],
+  context: {
+    version: "1.0.0",
+    projectId: "project",
+    snapshotId: "snapshot",
+    query: "fix",
+    mandatory: ["tests pass"],
+    estimatedTokens: 0,
+    budgetTokens: limits.maxContextTokens,
+    coverage: { semantic: false, graph: "syntactic", warnings: [] },
+    items: [{ id: "file", kind: "code", text, score: 1 }],
+  },
+});
+const proposalReply = () =>
+  vi.fn<ProviderFetch>(() =>
     replyWith({
       model: "fixture",
       choices: [
@@ -90,17 +107,59 @@ it("gives a 16k-token model a realistic window: accepts a request over 16k bytes
       usage: { prompt_tokens: 9000, completion_tokens: 20 },
     }),
   );
+
+it("gives a 16k-token model a realistic window less its output reservation, and refuses or fits a dense oversize request", async () => {
+  const limits = { maxContextTokens: 16_000, maxOutputTokens: 4000 };
+  const fits = sizedInput("a".repeat(16_000), limits);
+  expect(workerRequestBytes(fits)).toBeGreaterThan(16_000);
+  expect(workerRequestTokens(fits)).toBe(
+    tokensForBytes(workerRequestBytes(fits)),
+  );
+  expect(workerRequestTokens(fits)).toBeLessThanOrEqual(12_000);
+  expect(fitWorkerContext(fits).context.items.map((item) => item.id)).toEqual([
+    "file",
+  ]);
+  const fetch = proposalReply();
   await expect(invokeApiWorker(fits, fetch)).resolves.toMatchObject({
     proposal: { summary: "Fix" },
   });
   expect(fetch).toHaveBeenCalledTimes(1);
-  const oversize = input(60_000);
-  expect(workerRequestTokens(oversize)).toBeGreaterThan(16_000);
-  await expect(invokeApiWorker(oversize, fetch)).rejects.toThrow(
+  // Dense hex, which real tokenizers split near two bytes per token: 30 KB
+  // fitted the old three-bytes-per-token count with no output reservation,
+  // but input plus output would exceed the real 16k window.
+  const dense = sizedInput("0123456789abcdef".repeat(30_000 / 16), limits);
+  expect(Math.ceil(workerRequestBytes(dense) / 3)).toBeLessThan(16_000);
+  expect(workerRequestTokens(dense)).toBeGreaterThan(12_000);
+  await expect(invokeApiWorker(dense, fetch)).rejects.toThrow(
     "Worker request exceeds configured context budget",
   );
-  expect(() => fitWorkerContext(oversize)).not.toThrow();
-  expect(fitWorkerContext(oversize).context.items).toEqual([]);
+  expect(() => fitWorkerContext(dense)).not.toThrow();
+  expect(fitWorkerContext(dense).context.items).toEqual([]);
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("applies the output reservation: a request that fits the window alone is refused once the output cap is reserved", async () => {
+  const text = "x".repeat(4000);
+  const tokens = workerRequestTokens(
+    sizedInput(text, { maxContextTokens: 1_000_000, maxOutputTokens: 64 }),
+  );
+  const window = tokens + 100;
+  const small = sizedInput(text, {
+    maxContextTokens: window,
+    maxOutputTokens: 64,
+  });
+  const large = sizedInput(text, {
+    maxContextTokens: window,
+    maxOutputTokens: 1000,
+  });
+  const fetch = proposalReply();
+  await expect(invokeApiWorker(small, fetch)).resolves.toMatchObject({
+    proposal: { summary: "Fix" },
+  });
+  await expect(invokeApiWorker(large, fetch)).rejects.toThrow(
+    "Worker request exceeds configured context budget",
+  );
+  expect(fitWorkerContext(large).context.items).toEqual([]);
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
@@ -165,6 +224,41 @@ it("reports malformed or schema-invalid worker output as a recoverable Structure
     expect(structuredOutputFeedback(error as StructuredOutputError)).toContain(
       "not a valid JSON proposal",
     );
+  }
+});
+
+it("keeps pending patch feedback when a retry follows unusable structured output", () => {
+  const error = new StructuredOutputError("cut", "truncated-output", {
+    inputTokens: 1,
+    outputTokens: 1,
+    costUsd: 0,
+  } as never);
+  const retry = structuredOutputFeedback(error);
+  expect(structuredOutputRetryFeedback(error, "")).toBe(retry);
+  const pending =
+    "The patch was refused: src/a.ts is outside this step's write scope.";
+  const combined = structuredOutputRetryFeedback(error, pending);
+  expect(combined.startsWith(retry)).toBe(true);
+  expect(combined).toContain(pending);
+});
+
+it("treats an empty completed answer as a recoverable malformed output, not a terminal error", async () => {
+  for (const content of ["", null]) {
+    const error = await invokeApiWorker(
+      outputInput(localProvider, localPolicy),
+      () =>
+        replyWith({
+          model: "fixture",
+          choices: [{ message: { content }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 70, completion_tokens: 0 },
+        }),
+    ).catch((caught: unknown) => caught);
+    expect(error, String(content)).toBeInstanceOf(StructuredOutputError);
+    expect((error as StructuredOutputError).reason).toBe("malformed-output");
+    expect((error as StructuredOutputError).usage).toMatchObject({
+      inputTokens: 70,
+      outputTokens: 0,
+    });
   }
 });
 
@@ -275,7 +369,12 @@ it("detects truncated structured output from chat completions, the Responses API
 it("budgets serialized metadata and framing without trimming mandatory evidence", () => {
   const input: WorkerInput = {
     provider: { id: "local", kind: "local", model: "fixture" },
-    policy: { ...DEFAULT_POLICY, providers: ["local"], maxContextTokens: 2000 },
+    policy: {
+      ...DEFAULT_POLICY,
+      providers: ["local"],
+      maxContextTokens: 2600,
+      maxOutputTokens: 600,
+    },
     objective: "Fix the regression",
     acceptance: ["Keep required behavior"],
     context: {
@@ -295,6 +394,7 @@ it("budgets serialized metadata and framing without trimming mandatory evidence"
   };
   expect(workerRequestTokens(input)).toBeGreaterThan(2000);
   const result = fitWorkerContext(input);
+  // The 2,600-token window less the 600-token output reservation.
   expect(workerRequestTokens(result)).toBeLessThanOrEqual(2000);
   expect(result.context.items.map((item) => item.id)).toEqual(["useful"]);
   expect(result.context.mandatory).toEqual(input.context.mandatory);

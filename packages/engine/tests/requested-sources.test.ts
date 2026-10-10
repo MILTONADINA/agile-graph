@@ -17,6 +17,9 @@ import {
 } from "../src/execution/requested-sources.js";
 import { workerRequestTokens, type WorkerInput } from "../src/workers/api.js";
 import { BYTES_PER_TOKEN, tokensForBytes } from "../src/tokens.js";
+
+// A small output reservation, so a context limit is nearly all input.
+const OUTPUT_RESERVATION = 64;
 import { containsSecret } from "../src/policy.js";
 import { checked } from "../src/util.js";
 
@@ -55,10 +58,11 @@ const input = (
   policy: {
     ...DEFAULT_POLICY,
     // The fixtures below are sized in bytes: keep the default's byte room
-    // under the token estimate (tokens.ts).
-    maxContextTokens: Math.floor(
-      DEFAULT_POLICY.maxContextTokens / BYTES_PER_TOKEN,
-    ),
+    // under the token estimate, with a small output reservation (tokens.ts).
+    maxContextTokens:
+      Math.floor(DEFAULT_POLICY.maxContextTokens / BYTES_PER_TOKEN) +
+      OUTPUT_RESERVATION,
+    maxOutputTokens: OUTPUT_RESERVATION,
     providers: [provider.id],
     ...(provider.kind === "local"
       ? {}
@@ -305,7 +309,9 @@ describe("requested source packets", () => {
             ...second,
             items: second.items.filter((item) => item.id !== "retrieved"),
           }),
-        ) + tokensForBytes(120),
+        ) +
+        tokensForBytes(120) +
+        OUTPUT_RESERVATION,
     };
     // c.ts is the same size as b.ts, so retrieval must go to make room.
     const evicted = await request(root, ["c.ts"], supplied, tight);
@@ -489,8 +495,9 @@ describe("requested sources under a tight budget", () => {
       acceptance: ["It changes"],
     };
     // Room for one file with its JSON framing, not two.
+    input.policy.maxOutputTokens = OUTPUT_RESERVATION;
     input.policy.maxContextTokens =
-      workerRequestTokens(input) + tokensForBytes(7000);
+      workerRequestTokens(input) + tokensForBytes(7000) + OUTPUT_RESERVATION;
     const result = await requestedSourcePacket({
       workspace: root,
       input,

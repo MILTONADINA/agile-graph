@@ -97,6 +97,10 @@ An operator wants a worker model to implement a planned change without touching 
   - Test: packages/engine/tests/cli.test.ts :: says to run init or pass -C when there is no project, and init still creates one
 - AC24: Each verification check runs on its own fresh copy of the workspace's allowed files (plus any audit reproducer added to the view), so a file an earlier check writes cannot change what a later check sees; after each check its inputs are checked for changes before the next check runs. Checks are therefore isolated and must each be self-contained: a check cannot use an earlier check's output (a `test` check that needs the `dist/` a `build` check wrote must build it itself).
   - Test: packages/engine/tests/verification-inputs.test.ts :: gives each check a fresh view so an earlier check cannot plant a file a later check sees
+- AC25: A managed run never sends a request larger than its input ceiling: the planner, API, local, installed and Cursor workers count UTF-8 bytes at two per token and the review and audit gates at one per token, against the smaller of the policy's and the provider's `maxContextTokens` less an output reservation (`policy.maxOutputTokens`, at most half that window), as workers AC12 says. Optional evidence is fitted; mandatory text, and any change a gate judges, is refused rather than truncated.
+  - Test: packages/engine/tests/api.test.ts :: applies the output reservation: a request that fits the window alone is refused once the output cap is reserved
+  - Test: packages/engine/tests/review.test.ts :: refuses a change too large for the reviewer under the strict one-token-per-byte count with the output reserved, never truncating it
+  - Test: packages/engine/tests/security-audit.test.ts :: refuses a change too large for the auditor under the strict one-token-per-byte count with the output reserved
 
 ## Security considerations
 

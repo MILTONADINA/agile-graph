@@ -18,7 +18,7 @@ import {
   contextForProvider,
 } from "../policy.js";
 import { isDecisionCredentialEnvName } from "../util.js";
-import { tokensForBytes } from "../tokens.js";
+import { inputTokenCeiling, tokensForBytes } from "../tokens.js";
 
 export const proposalSchema = z
   .object({
@@ -150,10 +150,7 @@ export function workerRequestTokens(input: WorkerInput): number {
 // items to the serialized request before reserving money or calling a worker.
 // Mandatory requirements, provenance, task and feedback are never truncated.
 export function fitWorkerContext(input: WorkerInput): WorkerInput {
-  const ceiling = Math.min(
-    input.policy.maxContextTokens,
-    input.provider.maxContextTokens ?? input.policy.maxContextTokens,
-  );
+  const ceiling = inputTokenCeiling(input.policy, input.provider);
   const context = contextForProvider(
     input.context,
     input.provider,
@@ -265,6 +262,19 @@ export function structuredOutputFeedback(error: StructuredOutputError): string {
   return error.reason === "truncated-output"
     ? "Your previous answer was cut off at the output token limit, so it was not valid JSON and nothing was applied. Return a shorter proposal: fewer or smaller changes, with before strings just long enough to be unique, and a brief summary."
     : `Your previous answer was not a valid JSON proposal for the required schema (${error.message.slice(0, 300)}), so nothing was applied. Return only one JSON object with summary, changes and requests, exactly as the schema requires.`;
+}
+// The feedback for a retry after unusable structured output. Feedback still
+// pending from an earlier rejection (a refused patch, a scope or tester
+// refusal) is kept after it, so the retry does not lose why the previous
+// usable proposal was refused.
+export function structuredOutputRetryFeedback(
+  error: StructuredOutputError,
+  pending: string,
+): string {
+  const retry = structuredOutputFeedback(error);
+  return pending && pending !== retry
+    ? `${retry}\n\nThe earlier rejection still applies: ${pending}`
+    : retry;
 }
 // Sends one structured-output request to an API or local provider and returns
 // the model's JSON text with the raw response. Shared by implementation and
@@ -456,8 +466,15 @@ export async function callStructuredProvider(
             .map((c: any) => c.text)
             .join("")
         : result.choices?.[0]?.message?.content;
+  // An empty answer that otherwise completed (finish_reason "stop") is a
+  // malformed structured output, retried within the same bound as one that
+  // does not parse.
   if (typeof text !== "string" || !text)
-    throw new Error("Provider returned no structured patch");
+    throw new StructuredOutputError(
+      `Provider ${provider.id} returned no structured output`,
+      "malformed-output",
+      usageFrom(provider, result),
+    );
   return { text, result };
 }
 
@@ -513,13 +530,7 @@ export async function invokeApiWorker(
   });
   // Estimated tokens (tokens.ts) with framing/schema overhead reserved;
   // never silently trim mandatory context.
-  if (
-    workerRequestTokens(input) >
-    Math.min(
-      policy.maxContextTokens,
-      provider.maxContextTokens ?? policy.maxContextTokens,
-    )
-  )
+  if (workerRequestTokens(input) > inputTokenCeiling(policy, provider))
     throw new Error("Worker request exceeds configured context budget");
   const { text, result } = await callStructuredProvider(
     {

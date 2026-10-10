@@ -589,7 +589,101 @@ describe("tests that only run behind an environment switch", () => {
     const started = performance.now();
     expect(testSwitch(hostile, "deep")).toBeUndefined();
     expect(testSwitch(hostile, "inner")).toBe("LAST");
-    expect(performance.now() - started).toBeLessThan(3000);
+    // A generous bound: the old quadratic scan took minutes on this input,
+    // so a regression still fails while a slow CI machine does not.
+    expect(performance.now() - started).toBeLessThan(20_000);
+  });
+
+  it("finds the same switch as the previous per-block brace scan on random and adversarial input", () => {
+    // A copy of the algorithm testSwitch used before the linear pass.
+    const GATE =
+      "\\.(runIf|skipIf)\\(\\s*(!?)\\(?\\s*process\\.env\\.([A-Za-z0-9_]+)\\s*(===|!==)\\s*[\"'`]1[\"'`]\\s*\\)?\\s*\\)";
+    const switchOf = (
+      kind: string,
+      negated: string,
+      variable: string,
+      op: string,
+    ) =>
+      (
+        kind === "runIf"
+          ? negated !== "!" && op === "==="
+          : (negated === "!" && op === "===") ||
+            (negated !== "!" && op === "!==")
+      )
+        ? variable
+        : undefined;
+    const previous = (text: string, name: string): string | undefined => {
+      const quoted = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const own = new RegExp(
+        `(?:^|[^.\\w])(?:it|test)${GATE}\\(\\s*(["'\`])${quoted}\\5`,
+        "m",
+      ).exec(text);
+      if (own) return switchOf(own[1]!, own[2]!, own[3]!, own[4]!);
+      const at = new RegExp(
+        `(?:^|[^.\\w])(?:it|test)(?:\\.\\w+(?:\\([^)]*\\))?)?\\(\\s*(["'\`])${quoted}\\1`,
+        "m",
+      ).exec(text)?.index;
+      if (at === undefined) return undefined;
+      const blocks = new RegExp(`(?:^|[^.\\w])describe${GATE}\\(`, "gm");
+      let found: string | undefined;
+      for (const match of text.matchAll(blocks)) {
+        const open = text.indexOf("{", match.index + match[0].length);
+        if (open < 0 || open > at) continue;
+        let depth = 0;
+        let close = -1;
+        for (let index = open; index < text.length; index++) {
+          if (text[index] === "{") depth++;
+          else if (text[index] === "}" && --depth === 0) {
+            close = index;
+            break;
+          }
+        }
+        if (close > at)
+          found = switchOf(match[1]!, match[2]!, match[3]!, match[4]!) ?? found;
+      }
+      return found;
+    };
+    // A small seeded generator, so a failure reproduces.
+    let seed = 0x2f6e2b1;
+    const random = (limit: number) => {
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+      return (seed >>> 8) % limit;
+    };
+    const pieces = [
+      'describe.runIf(process.env.A === "1")("a", () => {',
+      'describe.skipIf(process.env.B !== "1")("b", () => {',
+      'describe.skipIf(!(process.env.C === "1"))("c", () => {',
+      'describe.runIf(process.env.D !== "1")("d", () => {',
+      'describe("plain", () => {',
+      'it("target", () => {});',
+      'it.runIf(process.env.E === "1")("target", () => {});',
+      'it("other", () => {});',
+      "});",
+      "{",
+      "}",
+      "}}",
+      "{{",
+      "const x = { y: 1 };",
+      "",
+    ];
+    const cases: string[] = [
+      // Adversarial: unbalanced closings before, unclosed openings after.
+      '}}}\ndescribe.runIf(process.env.A === "1")("a", () => {\nit("target", () => {});\n});',
+      'describe.runIf(process.env.A === "1")("a", () => {\n{\nit("target", () => {});',
+      'describe.runIf(process.env.A === "1")("a", () => {}\nit("target", () => {});',
+      '{\ndescribe.runIf(process.env.A === "1")("a", () => {\n}\n}\nit("target", () => {});',
+      'it("target", () => {});\ndescribe.runIf(process.env.A === "1")("a", () => {\n});',
+    ];
+    for (let index = 0; index < 3000; index++)
+      cases.push(
+        Array.from(
+          { length: 1 + random(24) },
+          () => pieces[random(pieces.length)],
+        ).join(random(2) ? "\n" : " "),
+      );
+    for (const text of cases)
+      for (const name of ["target", "other"])
+        expect(testSwitch(text, name), text).toBe(previous(text, name));
   });
 
   it("fails a criterion proven only by a switched-off test that no CI step runs", async () => {

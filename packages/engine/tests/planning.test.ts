@@ -54,7 +54,8 @@ describe("bounded routing", () => {
     expect(result).toEqual({
       workflow: "bug-fix",
       effort: "high",
-      contextBudgetTokens: 11200,
+      // 70% of the 16,000-token window less its 8,000-token output reservation.
+      contextBudgetTokens: 5600,
       records: [],
       usage: [],
     });
@@ -74,7 +75,8 @@ describe("bounded routing", () => {
       evidence: [],
     });
     expect(result.workflow).toBe("refactor");
-    expect(result.contextBudgetTokens).toBe(1433);
+    // 70% of the 2,048-token window less half of it reserved for output.
+    expect(result.contextBudgetTokens).toBe(716);
   });
 });
 

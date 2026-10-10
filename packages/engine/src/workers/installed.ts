@@ -22,7 +22,7 @@ import {
   contextForProvider,
 } from "../policy.js";
 import { command, isDecisionCredentialEnvName } from "../util.js";
-import { tokensForBytes } from "../tokens.js";
+import { inputTokenCeiling, tokensForBytes } from "../tokens.js";
 import {
   proposalJsonSchema,
   proposalSchema,
@@ -816,10 +816,7 @@ async function invokeCodexWorker(
     context: packet,
     feedback: input.feedback ?? null,
   });
-  const budget = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
+  const budget = inputTokenCeiling(policy, provider);
   if (
     tokensForBytes(
       Buffer.byteLength(
@@ -1106,10 +1103,7 @@ async function invokeCursorWorker(
       `Cursor SDK requires ${provider.apiKeyEnv}; no browser login or paid call is started`,
     );
   const packet = contextForProvider(input.context, provider, policy);
-  const budget = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
+  const budget = inputTokenCeiling(policy, provider);
   const prompt = `${WORKER_INSTRUCTIONS}\n\nRequired JSON schema:\n${JSON.stringify(proposalJsonSchema)}\n\nTask packet:\n${JSON.stringify(
     {
       task: input.objective,
@@ -1258,10 +1252,7 @@ export async function invokeInstalledWorker(
     context: packet,
     feedback: input.feedback ?? null,
   });
-  const budget = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
+  const budget = inputTokenCeiling(policy, provider);
   if (
     tokensForBytes(
       Buffer.byteLength(

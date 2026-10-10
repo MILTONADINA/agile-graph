@@ -17,7 +17,7 @@ import {
   usageFrom,
   type ProviderFetch,
 } from "./api.js";
-import { tokensForBytes } from "../tokens.js";
+import { inputTokenCeiling, tokensForBytes } from "../tokens.js";
 
 /** The most steps one decomposition proposes; a person reviews each. */
 export const MAX_PROPOSED_STEPS = 12;
@@ -111,10 +111,7 @@ export async function invokePlanWorker(
       "The task contains a potential secret; a cloud planner cannot receive it",
     );
   const packet = contextForProvider(input.context, provider, policy);
-  const ceiling = Math.min(
-    policy.maxContextTokens,
-    provider.maxContextTokens ?? policy.maxContextTokens,
-  );
+  const ceiling = inputTokenCeiling(policy, provider);
   // Like worker requests, the serialized request's estimated tokens
   // (tokens.ts) must fit the ceiling; the lowest-scoring context goes first.
   const items = [...packet.items].sort((a, b) => b.score - a.score);
