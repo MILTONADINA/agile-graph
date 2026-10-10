@@ -17,6 +17,7 @@ import {
   type DagEvent,
 } from "../src/execution/dag.js";
 import { checked } from "../src/util.js";
+import { planSha256 } from "../src/store.js";
 import type { WorkerResult } from "../src/workers/api.js";
 
 const roots: string[] = [];
@@ -853,5 +854,46 @@ describe("generator step validation", () => {
         },
       ]),
     ).toThrow("Template step generate-client cannot set generatorId");
+  });
+});
+
+describe("acceptance-criteria coverage on steps", () => {
+  it("accepts covers on a step and leaves the hash of a plan without it unchanged", () => {
+    // A plan stored before steps could name covers; its planSha256 was
+    // pinned then, and an approval binds it, so it must never move.
+    const plan = {
+      version: "1.0.0" as const,
+      id: "plan-before-covers",
+      projectId: "toy",
+      snapshotId: "snapshot",
+      policyHash: "a".repeat(64),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      objective: "Fix addition",
+      acceptance: ["AC1: 2 + 3 is 5"],
+      steps: [
+        {
+          id: "fix",
+          kind: "worker" as const,
+          objective: "Fix addition",
+          dependsOn: [],
+          providerId: "local",
+          writes: ["math.cjs"],
+        },
+      ],
+      verification: [],
+      publication: "none" as const,
+    };
+    const pinned =
+      "18827a7e49393459e7ceb85ccdb0dc3d01b8702ff8f663e60f9d122f9c625ffb";
+    expect(planSha256(plan)).toBe(pinned);
+    const validated = validateDag(plan.steps).steps;
+    expect(validated[0]).not.toHaveProperty("covers");
+    expect(planSha256({ ...plan, steps: validated })).toBe(pinned);
+
+    const covering = validateDag([{ ...plan.steps[0]!, covers: ["AC1"] }])
+      .steps[0]!;
+    expect(covering.covers).toEqual(["AC1"]);
+    expect(planSha256({ ...plan, steps: [covering] })).not.toBe(pinned);
+    expect(() => validateDag([{ ...plan.steps[0]!, covers: [] }])).toThrow();
   });
 });

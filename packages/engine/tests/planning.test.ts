@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import type { RunEvent } from "@graph-engineering/contracts";
 import {
   LIKELY_FIX_CHECKS_PER_REPAIR,
+  acCoverage,
   likelyWorkerTurns,
   requiresSecurityReview,
   routePlan,
+  unmetCriteria,
 } from "../src/planning.js";
 import { VERIFY_FIX_LIMIT } from "../src/workers/review.js";
 
@@ -110,5 +113,67 @@ describe("turn estimates", () => {
       likelyWorkerTurns(plan, { reviewer: true, maxAttempts: 1 }) -
         likelyWorkerTurns(plan, { reviewer: false, maxAttempts: 1 }),
     ).toBe(1);
+  });
+});
+
+describe("acceptance-criteria coverage", () => {
+  it("reports criteria no step covers and covers entries naming no criterion", () => {
+    const acceptance = [
+      "AC1: Invoices are listed",
+      "AC2: Anonymous requests are refused",
+      "AC3: Totals are in cents",
+      "Without an ID, so never counted",
+    ];
+    expect(
+      acCoverage(acceptance, [
+        { covers: ["AC1", "AC9"] },
+        {},
+        { covers: ["AC3", "AC1", "ac2", "AC9"] },
+      ]),
+    ).toEqual({ uncovered: ["AC2"], unknown: ["AC9", "ac2"] });
+    expect(acCoverage(acceptance, [{ covers: ["AC1", "AC2", "AC3"] }])).toEqual(
+      { uncovered: [], unknown: [] },
+    );
+    expect(acCoverage(["No IDs here"], [{ covers: ["AC1"] }])).toEqual({
+      uncovered: [],
+      unknown: ["AC1"],
+    });
+  });
+});
+
+describe("unmet criteria for a follow-up", () => {
+  const review = (data: Record<string, unknown>): RunEvent => ({
+    version: "1.0.0",
+    id: `event-${Math.random()}`,
+    runId: "run",
+    projectId: "toy",
+    at: "2026-01-01T00:00:00.000Z",
+    type: "review.completed",
+    data,
+  });
+  it("takes the criteria the latest AI review did not find met, by position", () => {
+    const acceptance = ["AC1: one", "AC2: two", "AC3: three", "AC4: four"];
+    const events = [
+      review({ criteria: [{ met: "no" }, { met: "no" }] }),
+      review({
+        criteria: [{ met: "yes" }, { met: "no" }, { met: "unknown" }],
+      }),
+      // A person's approval judges no criterion and is not the AI's review.
+      review({ by: "person", passed: true }),
+    ];
+    // The fourth criterion went unanswered, which counts as unknown.
+    expect(unmetCriteria(acceptance, events)).toEqual([
+      "AC2: two",
+      "AC3: three",
+      "AC4: four",
+    ]);
+    expect(
+      unmetCriteria(acceptance.slice(0, 1), [
+        review({ criteria: [{ met: "yes" }] }),
+      ]),
+    ).toEqual([]);
+    expect(
+      unmetCriteria(acceptance, [review({ by: "person", passed: true })]),
+    ).toBeUndefined();
   });
 });

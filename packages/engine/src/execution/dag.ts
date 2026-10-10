@@ -133,6 +133,9 @@ const stepSchema = z
         message: "writes needs at least one pattern that is not an exclusion",
       })
       .optional(),
+    // Any text, not only AC IDs: an entry naming no criterion is reported as
+    // unknown coverage at review rather than refusing the whole plan.
+    covers: z.array(z.string().min(1).max(64)).min(1).max(50).optional(),
   })
   .strict();
 const completedSchema = z

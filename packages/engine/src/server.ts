@@ -310,6 +310,11 @@ export function createServer(
                     .min(1)
                     .max(50)
                     .optional(),
+                  covers: z
+                    .array(z.string().min(1).max(64))
+                    .min(1)
+                    .max(50)
+                    .optional(),
                 })
                 .strict(),
             )

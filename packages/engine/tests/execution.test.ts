@@ -33,7 +33,7 @@ import { invokeApiWorker } from "../src/workers/api.js";
 import { findingId } from "../src/workers/review.js";
 import { checked, writeJson } from "../src/util.js";
 import * as util from "../src/util.js";
-import { RunStore } from "../src/store.js";
+import { planSha256, RunStore } from "../src/store.js";
 import { ContextEngine } from "../src/context/index.js";
 
 const roots: string[] = [];
@@ -1522,6 +1522,76 @@ describe("managed execution", () => {
     } finally {
       other.close();
     }
+  });
+  it("converges a finished run into a new plan of only its unmet criteria, changing nothing else", async () => {
+    const { root } = await fixture();
+    const engine = await GraphEngine.open(root);
+    engines.push(engine);
+    const original = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["AC1: 2 + 3 is 5", "AC2: 0 + 0 is 0", "AC3: 1 + 1 is 2"],
+    });
+    const timestamp = new Date().toISOString();
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      costUsd: 0,
+      estimated: true,
+    };
+    const finished = (id: string, status: RunRecord["status"]) => {
+      engine.store.saveRun({
+        id,
+        plan: original,
+        status,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        usage,
+      });
+      return id;
+    };
+    const reviewed = finished("reviewed", "failed");
+    engine.store.event(reviewed, "review.completed", {
+      providerId: "local",
+      passed: false,
+      criteria: [
+        { met: "yes", evidence: "fixed" },
+        { met: "no", evidence: "still 1" },
+        { met: "unknown", evidence: "not shown" },
+      ],
+    });
+    const beforeRun = engine.store.run(reviewed);
+    const beforeEvents = engine.store.events(reviewed);
+    const beforeHash = planSha256(engine.store.plan(original.id));
+
+    const converged = await engine.convergeRun(reviewed);
+    expect(converged.unmet).toEqual(["AC2: 0 + 0 is 0", "AC3: 1 + 1 is 2"]);
+    const followUp = converged.plan!;
+    expect(followUp.id).not.toBe(original.id);
+    expect(followUp.objective).toBe("Follow-up of run reviewed: Fix addition");
+    expect(followUp.acceptance).toEqual(converged.unmet);
+    expect(engine.store.plan(followUp.id)).toEqual(followUp);
+    // Add-only: the run, its events and its plan are as they were.
+    expect(engine.store.run(reviewed)).toEqual(beforeRun);
+    expect(engine.store.events(reviewed)).toEqual(beforeEvents);
+    expect(planSha256(engine.store.plan(original.id))).toBe(beforeHash);
+
+    const met = finished("met", "succeeded");
+    engine.store.event(met, "review.completed", {
+      providerId: "local",
+      passed: true,
+      criteria: [{ met: "yes" }, { met: "yes" }, { met: "yes" }],
+    });
+    const createPlan = vi.spyOn(engine, "createPlan");
+    expect(await engine.convergeRun(met)).toEqual({ runId: met, unmet: [] });
+    expect(createPlan).not.toHaveBeenCalled();
+
+    await expect(
+      engine.convergeRun(finished("unreviewed", "failed")),
+    ).rejects.toThrow("has no completed AI review");
+    await expect(
+      engine.convergeRun(finished("active", "running")),
+    ).rejects.toThrow("converge only a run that has finished");
   });
   it("does not export private source or filenames from verification logs", async () => {
     const { root, config, data } = await fixture();

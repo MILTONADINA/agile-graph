@@ -37,6 +37,7 @@ import {
   submitAutomaticFeedback,
 } from "./feedback-auto.js";
 import { checkSpecs, specTemplate, SPECS_DIR } from "./specs.js";
+import { acCoverage, namesCoverage } from "./planning.js";
 import {
   addKnowledgePack,
   citeKnowledge,
@@ -1287,6 +1288,39 @@ cli
       );
     }),
   );
+cli
+  .command("converge <runId>")
+  .description(
+    "Plan a follow-up of a finished run: a new plan holding only the acceptance criteria its latest AI review did not find met. The run and its plan are left unchanged; with every criterion met, nothing is created",
+  )
+  .option("--provider <id>")
+  .option("--effort <effort>")
+  .option(
+    "--check <id>",
+    "Select a registered check ID (repeatable); include every mandatory ID; omitted means all checks",
+    (value: string, previous: string[] | undefined) => [
+      ...(previous ?? []),
+      value,
+    ],
+  )
+  .action(async (runId, options) =>
+    withEngine(async (engine) => {
+      const converged = await engine.convergeRun(runId, {
+        providerId: options.provider,
+        effort: options.effort,
+        ...(options.check !== undefined
+          ? { checkIds: options.check as string[] }
+          : {}),
+      });
+      if (!converged.plan)
+        return {
+          runId,
+          unmet: [],
+          message: `Run ${runId}'s latest AI review found every acceptance criterion met; no follow-up plan was created`,
+        };
+      return warnAboutPlan(engine, converged.plan);
+    }),
+  );
 // Say before the run, not when it refuses or stops half way, that a plan
 // has no verification commands or needs more model calls than its roles'
 // shared run-wide budget allows.
@@ -1319,7 +1353,13 @@ function shownPlan(plan: import("@graph-engineering/contracts").ExecutionPlan) {
       generatorId: step.generatorId ?? null,
       inputs: step.inputs ?? null,
       writes: step.writes ?? null,
+      covers: step.covers ?? null,
     })),
+    // Advisory, beside the steps that claim it: which criteria no step
+    // names, and which names match no criterion.
+    ...(namesCoverage(plan.steps)
+      ? { coverage: acCoverage(plan.acceptance, plan.steps) }
+      : {}),
     verification: plan.verification,
     ...(plan.verificationSelection
       ? { verificationSelection: plan.verificationSelection }
@@ -1533,6 +1573,9 @@ cli
       const plan = `graph-engine plan ${JSON.stringify(objective)} --accept ...`;
       return {
         ...proposal,
+        ...(namesCoverage(proposal.steps)
+          ? { coverage: acCoverage(options.accept, proposal.steps) }
+          : {}),
         // A file bound as source is moved before planning, so the next
         // step cannot name where it is now.
         next: bound

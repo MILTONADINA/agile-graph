@@ -151,6 +151,7 @@ import {
   likelyWorkerTurns,
   requiresSecurityReview,
   routePlan,
+  unmetCriteria,
   WORKFLOWS,
 } from "./planning.js";
 import { dagParallelism } from "./scale.js";
@@ -800,7 +801,10 @@ export class GraphEngine {
       exportOnly &&
       [
         result.decomposition.rationale,
-        ...result.decomposition.steps.map((step) => step.objective),
+        ...result.decomposition.steps.flatMap((step) => [
+          step.objective,
+          ...(step.covers ?? []),
+        ]),
       ].some(containsSecret)
     )
       throw new Error(
@@ -814,6 +818,9 @@ export class GraphEngine {
         dependsOn: step.dependsOn,
         providerId: implementer.id,
         ...(input.effort ? { effort: input.effort } : {}),
+        // Only when the planner named some, so a step without coverage has
+        // no covers key and its plan hashes as before.
+        ...(step.covers?.length ? { covers: step.covers } : {}),
       })),
     ).steps;
     return {
@@ -1223,6 +1230,42 @@ export class GraphEngine {
       acceptance,
       spec: { id: spec.id, path: relative, sha256: hash(text) },
     });
+  }
+  /**
+   * Converges on what a finished run left undone: a new plan whose
+   * acceptance criteria are only those the run's latest AI review did not
+   * find met, with the run's objective under a "Follow-up of run" prefix
+   * that links back to it. Add-only: the run and its plan are never
+   * changed, and the new plan goes through createPlan, so policy, approval
+   * and hashing are the ordinary ones. With every criterion met it creates
+   * nothing.
+   */
+  async convergeRun(
+    runId: string,
+    options: { providerId?: string; effort?: string; checkIds?: string[] } = {},
+  ): Promise<{ runId: string; unmet: string[]; plan?: ExecutionPlan }> {
+    await this.refresh();
+    const run = this.store.run(runId);
+    // A run still in progress may yet be reviewed again; one that needs
+    // reconciliation has an unknown result.
+    if (!["succeeded", "failed", "cancelled"].includes(run.status))
+      throw new Error(
+        `Run ${runId} is ${run.status}; converge only a run that has finished`,
+      );
+    const unmet = unmetCriteria(run.plan.acceptance, this.store.events(runId));
+    if (!unmet)
+      throw new Error(
+        `Run ${runId} has no completed AI review, so nothing says which criteria are unmet`,
+      );
+    if (!unmet.length) return { runId, unmet };
+    // The spec binding is not carried over: its hash stands for the spec's
+    // whole set of criteria, and the follow-up holds only some of them.
+    const plan = await this.createPlan({
+      ...options,
+      objective: `Follow-up of run ${runId}: ${run.plan.objective}`,
+      acceptance: unmet,
+    });
+    return { runId, unmet, plan };
   }
   async createPlan(input: {
     objective: string;
