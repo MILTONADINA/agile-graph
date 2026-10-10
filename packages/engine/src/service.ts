@@ -2216,12 +2216,22 @@ export class GraphEngine {
         evidence: toolEvidence,
         reviewRequired: scope.review,
       });
+      // The memories this run started with, recorded when it first executed.
+      // A resumed run keeps the mandatory ones even after they expire; a
+      // first execution has none recorded, so expiry applies as usual.
+      const startedMemory = priorEvents.find(
+        (event) => event.type === "context.memories",
+      )?.data.memoryIds;
+      const retainExpired = Array.isArray(startedMemory)
+        ? startedMemory.filter((id): id is string => typeof id === "string")
+        : [];
       const originalPacket = await this.context.getContext({
         query: run.plan.objective,
         snapshotId: run.plan.snapshotId,
         budgetTokens,
         mandatory: run.plan.acceptance,
         retrieval: retrieval.scope,
+        retainExpired,
       });
       const selection = await selectContext({
         ...session,
@@ -2255,6 +2265,7 @@ export class GraphEngine {
             budgetTokens,
             mandatory: originalPacket.mandatory,
             retrieval: retrieval.scope,
+            retainExpired,
           });
           // Provenance and export authorization come from the main context
           // database each time the run executes. Text that only the run

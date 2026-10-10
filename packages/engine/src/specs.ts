@@ -48,6 +48,42 @@ export interface Spec {
  *       wrapped text and nested bullets, part of the criterion
  *       - Test: path/to/file.test.ts :: exact test name
  */
+/**
+ * Tracks Markdown code fences line by line, matched by delimiter as in
+ * CommonMark: a fence opens with three or more backticks or tildes, and only
+ * a line of the same character, at least as long and with no info string,
+ * closes it. A four-backtick block can therefore hold a three-backtick
+ * example. Fences indented under a list item count, as in a criterion.
+ */
+class Fences {
+  private opened: { char: string; length: number } | undefined;
+  /** Whether the lines read so far leave a fence open. */
+  get inside(): boolean {
+    return this.opened !== undefined;
+  }
+  /** Reads one line; true when it opens or closes a fence. */
+  read(line: string): boolean {
+    const delimiter = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!delimiter) return false;
+    const run = delimiter[1]!,
+      info = delimiter[2]!;
+    if (!this.opened) {
+      // A backtick fence's info string may not contain a backtick.
+      if (run[0] === "`" && info.includes("`")) return false;
+      this.opened = { char: run[0]!, length: run.length };
+      return true;
+    }
+    if (
+      run[0] !== this.opened.char ||
+      run.length < this.opened.length ||
+      info.trim()
+    )
+      return false;
+    this.opened = undefined;
+    return true;
+  }
+}
+
 export function parseSpec(relativePath: string, text: string): Spec {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const title =
@@ -58,11 +94,10 @@ export function parseSpec(relativePath: string, text: string): Spec {
   const meta: Record<string, string> = {};
   const sections: Record<string, string[]> = {};
   let section: string | undefined;
-  let fenced = false;
+  const fences = new Fences();
   for (const line of lines) {
     // Example Markdown inside a code fence is text, never structure.
-    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-    if (fenced || /^\s*(```|~~~)/.test(line)) {
+    if (fences.read(line) || fences.inside) {
       if (section) sections[section]!.push(line);
       continue;
     }
@@ -84,16 +119,16 @@ export function parseSpec(relativePath: string, text: string): Spec {
   // only a line back at the margin ends it. Blank lines do not, so a nested
   // list separated by an empty line stays with its criterion.
   let open: SpecCriterion | undefined;
-  let inFence = false;
+  const criterionFences = new Fences();
   for (const line of sections["Acceptance criteria"] ?? []) {
     // A fenced block indented under a criterion is part of what it asks for,
     // so its lines, delimiters included, are kept as text; nothing inside a
     // fence is ever read as a criterion or a test link. A fence opened at
     // the margin ends the criterion, like any other margin line.
-    const delimiter = /^\s*(```|~~~)/.test(line);
-    if (delimiter && !inFence && !/^\s/.test(line)) open = undefined;
-    if (delimiter) inFence = !inFence;
-    if (delimiter || inFence) {
+    const wasInside = criterionFences.inside;
+    const delimiter = criterionFences.read(line);
+    if (delimiter && !wasInside && !/^\s/.test(line)) open = undefined;
+    if (delimiter || criterionFences.inside) {
       if (open && line.trim()) open.text += ` ${line.trim()}`;
       continue;
     }
@@ -150,16 +185,10 @@ export interface SpecClarification {
 export function clarifications(spec: Spec): SpecClarification[] {
   const found: SpecClarification[] = [];
   for (const section of REQUIRED_SECTIONS) {
-    let fenced = false;
+    const fences = new Fences();
     const text = (spec.sections[section] ?? "")
       .split("\n")
-      .filter((line) => {
-        if (/^\s*(```|~~~)/.test(line)) {
-          fenced = !fenced;
-          return false;
-        }
-        return !fenced;
-      })
+      .filter((line) => !fences.read(line) && !fences.inside)
       .join("\n");
     // In any case, with or without a colon and a question.
     for (const match of text.matchAll(

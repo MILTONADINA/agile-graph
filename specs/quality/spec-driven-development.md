@@ -15,9 +15,10 @@ runs it, and plans can be created straight from a ready spec.
 
 ## Acceptance criteria
 
-- AC1: A spec is read into its title, ID, status, area, epic, sections, criteria and test links, ignoring anything inside code fences.
+- AC1: A spec is read into its title, ID, status, area, epic, sections, criteria and test links, ignoring anything inside code fences, where a fence closes only on a line of its own delimiter character, at least as long and with no info string.
   - Test: packages/engine/tests/specs.test.ts :: reads fields, sections, criteria and test links
   - Test: packages/engine/tests/specs.test.ts :: ignores headings and criteria inside code fences
+  - Test: packages/engine/tests/specs.test.ts :: passes a ready spec whose four-backtick example holds a three-backtick snippet and a marker
 - AC2: `spec-new` scaffolds a valid draft, and a draft cannot be planned.
   - Test: packages/engine/tests/specs.test.ts :: scaffolds a valid draft
   - Test: packages/engine/tests/specs.test.ts :: refuses to plan a draft

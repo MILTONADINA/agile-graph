@@ -1045,6 +1045,14 @@ export class ContextEngine {
     mandatory?: string[];
     retrieval?: "lexical" | "graph" | "hybrid";
     exportOnly?: boolean;
+    /**
+     * The mandatory memory IDs a run in progress started with. Such a memory
+     * stays mandatory after its validUntil passes, so a resumed run keeps the
+     * requirements that shaped its first attempt. It only keeps a memory the
+     * packet would otherwise drop for expiry; it never adds one, and the kept
+     * memory goes through the same export checks as any other.
+     */
+    retainExpired?: readonly string[];
   }): Promise<ContextPacket> {
     const retrieval = input.retrieval ?? "hybrid";
     const exportOnly = input.exportOnly === true;
@@ -1075,9 +1083,12 @@ export class ContextEngine {
           !containsSecret(chunk.text)));
     // An expired memory is dropped before anything else reads it: it never
     // enters the mandatory set, its export checks or the retrieved items.
-    // Expiry only removes memories; it never adds text to a packet.
+    // Expiry only removes memories; it never adds text to a packet. A run in
+    // progress keeps an expired requirement or constraint it started with.
     const now = this.now();
+    const retainExpired = new Set(input.retainExpired ?? []);
     const expiredMemoryIds: string[] = [];
+    const retainedMemoryIds: string[] = [];
     const memories = (await this.listMemories()).filter((memory) => {
       if (!(
         memory.status === "accepted" ||
@@ -1086,6 +1097,13 @@ export class ContextEngine {
       ))
         return false;
       if (!memoryExpired(memory, now)) return true;
+      if (
+        retainExpired.has(memory.id) &&
+        ["constraint", "requirement"].includes(memory.kind)
+      ) {
+        retainedMemoryIds.push(memory.id);
+        return true;
+      }
       expiredMemoryIds.push(memory.id);
       return false;
     });
@@ -1183,6 +1201,10 @@ export class ContextEngine {
       if (expiredMemoryIds.length)
         warnings.push(
           `Expired memory left out of context: ${expiredMemoryIds.join(", ")}. Review it with graph-engine memory-review, then propose a successor with memory-add --supersedes <id> if it still applies.`,
+        );
+      if (retainedMemoryIds.length)
+        warnings.push(
+          `Expired memory kept for the run in progress that started with it: ${retainedMemoryIds.join(", ")}.`,
         );
       for (const memory of mandatoryMemories)
         if (memory.status === "conflicted")
