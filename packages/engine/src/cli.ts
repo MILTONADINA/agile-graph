@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { Command } from "commander";
 import {
@@ -29,7 +29,12 @@ import { interruptedRunExitCode, runExitCode } from "./run-exit-code.js";
 import { repositoryProfile } from "./scale.js";
 import { summarizeOutcomes } from "./insights.js";
 import { summarizeContextInsights } from "./insights-context.js";
-import { buildRunProvenance, changedFileDigests } from "./run-provenance.js";
+import {
+  buildRunProvenance,
+  changedFileDigests,
+  runProvenanceFile,
+  runProvenanceSchema,
+} from "./run-provenance.js";
 import {
   buildFeedbackReport,
   classifyError,
@@ -1826,25 +1831,35 @@ cli
 cli
   .command("run-provenance <runId>")
   .description(
-    "An unsigned in-toto Statement v1 for a run a person accepted: its result commit and changed-file sha256 digests, plan and policy hashes, the approval used, workers, gates passed and timestamps. No prompts, file contents, secrets or user identity. Read-only; never signed",
+    "The unsigned in-toto Statement v1 written when a person accepted the run (rebuilt from the run record only when none was written): its result commit and changed-file sha256 digests, plan and policy hashes, the approval used, workers, gates passed and timestamps. No prompts, file contents, secrets or user identity. Read-only; never signed",
   )
   .option("--out <file>", "Write the statement to this file instead")
   .action(async (runId: string, options: { out?: string }) => {
     const project = await loadProject(root());
     const dataDir = projectDataDir(project.projectId);
     const { run, events } = readRunReceipt(dataDir, project.projectId, runId);
-    const statement = buildRunProvenance({
-      run,
-      events,
-      changed:
-        run.commit &&
-        run.status === "succeeded" &&
-        run.completion?.humanAcceptance === "accepted"
-          ? await changedFileDigests(root(), run.baseCommit, run.commit)
-          : { files: [], removed: [] },
-      providers: await loadProviders(dataDir),
-      policy: project.policy,
-    });
+    // The statement written at acceptance is the run's provenance; rebuild
+    // from the current policy and providers only when none was written.
+    const storedFile = runProvenanceFile(dataDir, run.id);
+    const stored = existsSync(storedFile)
+      ? runProvenanceSchema.parse(JSON.parse(readFileSync(storedFile, "utf8")))
+      : null;
+    if (stored && stored.predicate.runId !== run.id)
+      throw new Error("The stored provenance statement names another run");
+    const statement =
+      stored ??
+      buildRunProvenance({
+        run,
+        events,
+        changed:
+          run.commit &&
+          run.status === "succeeded" &&
+          run.completion?.humanAcceptance === "accepted"
+            ? await changedFileDigests(root(), run.baseCommit, run.commit)
+            : { files: [], removed: [] },
+        providers: await loadProviders(dataDir),
+        policy: project.policy,
+      });
     if (!options.out) return print(statement);
     await writeFile(options.out, `${JSON.stringify(statement, null, 2)}\n`, {
       mode: 0o600,
