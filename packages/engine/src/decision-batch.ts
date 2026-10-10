@@ -8,6 +8,7 @@ import {
   decisionProviderSchema,
   meetsPromotionMetrics,
   promotionEvidenceSchema,
+  providerHosting,
   type DecisionProvider,
   type PromotionEvidence,
 } from "./decisions.js";
@@ -71,12 +72,50 @@ export interface DecisionBatchOptions {
   promotionBinding?: PromotionDispatchBinding;
   signal?: AbortSignal;
   budget?: DecisionBudget;
+  /**
+   * The caller cut its state to fit (for example a sliced objective). Such a
+   * record's context is incomplete, so it can never be labelled `auto`.
+   */
+  stateTruncated?: boolean;
 }
 export interface DecisionBatchResult {
   records: DecisionRecord[];
   /** Always contains a permitted baseline, even after abstention or provider failure. */
   selections: Record<string, string>;
   usage: DecisionCallUsage[];
+}
+export type DecisionAction = NonNullable<DecisionRecord["action"]>;
+/**
+ * The confidence below which a record escalates when no promotion threshold
+ * applies. It is the lowest threshold `evaluateDecisions` can fit and the
+ * minimum a promotion report may carry, so no calibration could accept less.
+ */
+export const DECISION_ESCALATION_FLOOR = 0.5;
+/**
+ * The engine's action label for one record; nothing the model returns sets
+ * it directly. `auto` needs a promoted, applied answer at or above the
+ * threshold in use with complete context. A failure, refusal, malformed or
+ * withheld answer, or a missing or too-low confidence escalates. Anything
+ * else, including every usable shadow answer, is left for review.
+ */
+export function decisionAction(input: {
+  mode: DecisionRecord["mode"];
+  selected: string | null;
+  confidence: number | null;
+  failed: boolean;
+  /** The promotion threshold in use, or null to apply the floor. */
+  threshold: number | null;
+  contextComplete: boolean;
+}): DecisionAction {
+  const threshold = input.threshold ?? DECISION_ESCALATION_FLOOR;
+  if (
+    input.failed ||
+    input.selected === null ||
+    input.confidence === null ||
+    !(input.confidence >= threshold)
+  )
+    return "escalate";
+  return input.mode === "promoted" && input.contextComplete ? "auto" : "review";
 }
 const identifier = z.string().regex(/^[A-Za-z0-9_.:+/-]{1,100}$/);
 const questionSchema = z
@@ -267,8 +306,8 @@ export async function decideBatch(
           }),
         );
     const callId = id();
-    const stateObject =
-      provider.id === "jev" ? options.cloudState : options.state;
+    const hosted = providerHosting(provider) === "hosted";
+    const stateObject = hosted ? options.cloudState : options.state;
     const state = JSON.stringify(stateObject ?? {});
     const questionMap = Object.fromEntries(
       pending.map((question) => [
@@ -292,14 +331,13 @@ export async function decideBatch(
       assertNotCancelled();
       if (!policy.providers.includes(provider.id))
         throw new Error(`Decision provider ${provider.id} is not permitted`);
-      assertEndpoint(provider.endpoint, policy, provider.id === "laya");
+      assertEndpoint(provider.endpoint, policy, !hosted);
+      if (hosted && (policy.inference === "local" || policy.network === "deny"))
+        throw new Error(
+          `Hosted decision provider ${provider.id} is disabled by offline policy`,
+        );
       if (
-        provider.id === "jev" &&
-        (policy.inference === "local" || policy.network === "deny")
-      )
-        throw new Error("Jev is disabled by offline policy");
-      if (
-        provider.id === "jev" &&
+        hosted &&
         (!options.cloudState ||
           pending.some((question) => !question.exportable))
       )
@@ -339,27 +377,26 @@ export async function decideBatch(
         throw new Error(
           "Decision request exceeds the reviewed input-token reservation",
         );
-      const estimate =
-        provider.id === "laya"
-          ? 0
-          : price
-            ? price.unit === "input-token"
-              ? (price.usdPerMillionInputTokens * price.inputTokenReserve) /
-                1_000_000
-              : price.usdPerUnit *
-                (price.unit === "question" ? pending.length : 1)
-            : null;
-      if (policy.maxCostUsd !== null && provider.id === "jev") {
+      const estimate = !hosted
+        ? 0
+        : price
+          ? price.unit === "input-token"
+            ? (price.usdPerMillionInputTokens * price.inputTokenReserve) /
+              1_000_000
+            : price.usdPerUnit *
+              (price.unit === "question" ? pending.length : 1)
+          : null;
+      if (policy.maxCostUsd !== null && hosted) {
         if (estimate === null || !options.budget)
           throw new Error(
-            "Unknown Jev pricing or missing reservation ledger; cost-capped projects abstain",
+            "Unknown hosted pricing or missing reservation ledger; cost-capped projects abstain",
           );
-        // Jev is metered: a zero price is not proof of zero cost, so a
-        // capped project needs a positive reviewed price. A zero cap therefore
-        // admits no Jev call at all.
+        // A hosted provider is metered: a zero price is not proof of zero
+        // cost, so a capped project needs a positive reviewed price. A zero
+        // cap therefore admits no hosted call at all.
         if (!(estimate > 0))
           throw new Error(
-            "Jev pricing must be a positive reviewed price; cost-capped projects abstain",
+            "Hosted pricing must be a positive reviewed price; cost-capped projects abstain",
           );
         if (estimate > policy.maxCostUsd)
           throw new Error(
@@ -371,7 +408,7 @@ export async function decideBatch(
         : undefined;
       if (provider.apiKeyEnv && !key)
         throw new Error(`Missing ${provider.apiKeyEnv}`);
-      if (provider.id === "jev" && estimate !== null && options.budget) {
+      if (hosted && estimate !== null && options.budget) {
         await options.budget.reserve({
           callId,
           provider: provider.id,
@@ -421,25 +458,23 @@ export async function decideBatch(
       const reportedCostUsd = money(rawUsage.cost_usd ?? result?.cost_usd);
       const price = provider.pricing;
       const tokenPriced = price?.unit === "input-token";
-      const estimatedCostUsd =
-        provider.id === "laya"
-          ? 0
-          : price
-            ? tokenPriced
-              ? (price.usdPerMillionInputTokens *
-                  (inputTokens ?? price.inputTokenReserve)) /
-                1_000_000
-              : price.usdPerUnit *
-                (price.unit === "question" ? pending.length : 1)
-            : null;
-      const chargedUsd =
-        provider.id === "laya"
-          ? 0
-          : tokenPriced && estimatedCostUsd !== null
-            ? Math.max(reportedCostUsd ?? 0, estimatedCostUsd)
-            : reportedCostUsd === null
-              ? estimatedCostUsd
-              : Math.max(reportedCostUsd, reservedUsd ?? 0);
+      const estimatedCostUsd = !hosted
+        ? 0
+        : price
+          ? tokenPriced
+            ? (price.usdPerMillionInputTokens *
+                (inputTokens ?? price.inputTokenReserve)) /
+              1_000_000
+            : price.usdPerUnit *
+              (price.unit === "question" ? pending.length : 1)
+          : null;
+      const chargedUsd = !hosted
+        ? 0
+        : tokenPriced && estimatedCostUsd !== null
+          ? Math.max(reportedCostUsd ?? 0, estimatedCostUsd)
+          : reportedCostUsd === null
+            ? estimatedCostUsd
+            : Math.max(reportedCostUsd, reservedUsd ?? 0);
       callUsage = {
         callId,
         provider: provider.id,
@@ -562,6 +597,7 @@ export async function decideBatch(
         selections[question.id] = selected;
         resolved.add(question.id);
       }
+      const mode = promoted ? "promoted" : "shadow";
       records.push({
         version: "1.0.0",
         id: id(),
@@ -574,12 +610,21 @@ export async function decideBatch(
         modelVersion,
         policyVersion,
         confidence,
-        mode: promoted ? "promoted" : "shadow",
+        mode,
+        action: decisionAction({
+          mode,
+          selected,
+          confidence,
+          failed: !!questionFailure,
+          threshold: proof?.minimumConfidence ?? null,
+          contextComplete: options.stateTruncated !== true,
+        }),
         createdAt: now(),
         evidence: {
           questionId: question.id,
           callId,
           stateHash: hash(state),
+          contextComplete: options.stateTruncated !== true,
           promotionVersion: proof?.version ?? null,
           promotionAuthority: promoted ? "verified" : "unverified",
           ...(routeVerdict && !routeVerdict.admitted
@@ -602,6 +647,7 @@ export async function decideBatch(
       for (const record of records) {
         if (!cancelled && record.mode !== "promoted") continue;
         record.mode = "shadow";
+        record.action = "escalate";
         record.evidence.promotionAuthority = "unverified";
         record.evidence.failure = cancelled
           ? "Decision request cancelled; baseline retained"

@@ -19,8 +19,13 @@ export {
   evaluateDecisions,
   canPromote,
   meetsPromotionMetrics,
+  providerHosting,
 } from "./decisions.js";
-export { decideBatch } from "./decision-batch.js";
+export {
+  decideBatch,
+  decisionAction,
+  DECISION_ESCALATION_FLOOR,
+} from "./decision-batch.js";
 export {
   freezeCohortCalibration,
   evaluateFullCohort,

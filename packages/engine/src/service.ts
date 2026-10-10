@@ -1323,6 +1323,7 @@ export class GraphEngine {
           languages: snapshot.languages,
           fileCount: snapshot.fileCount,
         },
+        stateTruncated: input.objective.length > 800,
         candidates: Object.fromEntries(
           available.map((p) => [p.id, `${p.kind} ${p.model}`]),
         ),
@@ -2098,18 +2099,23 @@ export class GraphEngine {
       const budgetTokens =
         run.plan.routing?.contextBudgetTokens ??
         Math.floor(this.config.policy.maxContextTokens * 0.7);
-      const session = await this.decisionSession(
-        run.plan.id,
-        {
-          objective: run.plan.objective.slice(0, 700),
-          stepCount: run.plan.steps.length,
-        },
-        signal,
-      );
+      const session = {
+        ...(await this.decisionSession(
+          run.plan.id,
+          {
+            objective: run.plan.objective.slice(0, 700),
+            stepCount: run.plan.steps.length,
+          },
+          signal,
+        )),
+        // A cut objective is incomplete context: never an `auto` label.
+        stateTruncated: run.plan.objective.length > 700,
+      };
       const withState = (state: Record<string, unknown>) => ({
         ...session,
         state,
         cloudState: cloudSignals(state),
+        stateTruncated: false,
       });
       const retrieval = await routeRetrieval({
         ...session,

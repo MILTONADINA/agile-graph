@@ -499,6 +499,13 @@ export interface DecisionRecord {
   policyVersion: string;
   confidence: number | null;
   mode: "shadow" | "promoted";
+  /**
+   * The engine's label, never the model's: `auto` only for a promoted answer
+   * at or above its threshold with complete context, `escalate` for a failed,
+   * refused, malformed or low-confidence answer, otherwise `review`. Records
+   * stored before the label existed have none.
+   */
+  action?: "auto" | "review" | "escalate";
   createdAt: string;
   evidence: Record<string, unknown>;
 }
