@@ -13,7 +13,11 @@ import {
   VERIFY_FIX_INSTRUCTIONS,
   type WorkerReview,
 } from "../src/workers/review.js";
-import { inputTokenCeiling, tokensForBytes } from "../src/tokens.js";
+import {
+  REVIEW_OUTPUT_TOKENS,
+  inputTokenCeiling,
+  tokensForBytes,
+} from "../src/tokens.js";
 
 const approve: WorkerReview = {
   verdict: "approve",
@@ -289,6 +293,29 @@ describe("review worker", () => {
     ...overrides,
   });
 
+  it("reserves only a verdict-sized output for review, so an 8 KB diff fits the default policy and the request asks for at most that output", async () => {
+    const fetch = vi.fn(
+      async (_url: string | URL, init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            model: "reviewer-model",
+            choices: [{ message: { content: JSON.stringify(approve) } }],
+            usage: { prompt_tokens: 12, completion_tokens: 3 },
+            request: JSON.parse(String(init?.body ?? "{}")),
+          }),
+        ),
+    );
+    // Over the worker ceiling's half-window reservation, under the review's.
+    const diff = "+" + "a".repeat(8_000);
+    await expect(
+      invokeReviewWorker(input({ diff }), fetch),
+    ).resolves.toMatchObject({ review: approve });
+    const body = JSON.parse(String(fetch.mock.calls[0]![1]!.body));
+    expect(body.max_tokens ?? body.max_output_tokens).toBe(
+      REVIEW_OUTPUT_TOKENS,
+    );
+  });
+
   it("refuses a change too large for the reviewer under the strict one-token-per-byte count with the output reserved, never truncating it", async () => {
     const fetch = vi.fn(
       async () =>
@@ -300,9 +327,10 @@ describe("review worker", () => {
           }),
         ),
     );
-    // 12 KB of dense diff: within the default policy's input ceiling (16,000
-    // less a reserved 8,000) by the workers' two-bytes-per-token estimate,
-    // but over it at one token per byte, so the gate refuses it.
+    // 12 KB of dense diff: within the default policy's input ceiling by the
+    // workers' two-bytes-per-token estimate, but over the gate's ceiling
+    // (16,000 less the review's 4,096-token output reservation) at one token
+    // per byte, so the gate refuses it.
     const diff = "+0x" + "0123456789abcdef".repeat(750);
     expect(tokensForBytes(Buffer.byteLength(diff) + 256)).toBeLessThanOrEqual(
       inputTokenCeiling(DEFAULT_POLICY),
