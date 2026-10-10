@@ -14,6 +14,7 @@ Start with [working as an AI agile team](agile-team.md), then the
 | [Proposed decomposition](decomposition.md)            | Turning an objective into a plan a person approves                     |
 | [Code review](code-review.md)                         | The reviewer gate                                                      |
 | [Security scanning](security-scanning.md)             | Tool selection, offline scans, baselines and the run gate              |
+| [Threat model](threat-model.md)                       | Assets, untrusted inputs, trust boundaries and severity                |
 | [Verification images](verification-images.md)         | Building the offline check image for Maven, Gradle, Node.js and Python |
 | [Run outcomes](outcomes.md)                           | Recording acceptance and looking back at how runs ended                |
 | [Feedback reports](feedback.md)                       | Default-on metadata-only difficulty reports, notice and opt-out        |

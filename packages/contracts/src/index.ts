@@ -185,10 +185,13 @@ export interface ProjectConfig {
   /** A reviewer worker that must approve a run before it completes. */
   review?: { providerId: string };
   /**
-   * The provider graph-engine security-audit uses, apart from the reviewer so
-   * that auditing never turns on the review gate; without it, the reviewer.
+   * Settings for graph-engine security-audit. providerId is the auditor, apart
+   * from the reviewer so that auditing never turns on the review gate;
+   * without it, the reviewer. threatModel is a repository-relative path to
+   * the project's threat model; without it, the first that exists of
+   * threat_model.md, .oss-scanner/threat_model.md and docs/threat-model.md.
    */
-  audit?: { providerId: string };
+  audit?: { providerId?: string; threatModel?: string };
   /**
    * A tester worker that runs first, before the implementation, and writes
    * tests for each acceptance criterion as new test files only (default globs
@@ -818,8 +821,18 @@ export const projectSchema = {
     audit: {
       type: "object",
       additionalProperties: false,
-      required: ["providerId"],
-      properties: { providerId: nonempty },
+      minProperties: 1,
+      properties: {
+        providerId: nonempty,
+        // Repository-relative: not absolute and no .. segment.
+        threatModel: {
+          type: "string",
+          minLength: 1,
+          maxLength: 500,
+          pattern:
+            "^(?![/\\\\])(?![A-Za-z]:)(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$))",
+        },
+      },
     },
     tester: {
       type: "object",

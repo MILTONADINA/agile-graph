@@ -1892,6 +1892,44 @@ describe("command line", () => {
     expect(local.stderr).not.toContain(warning);
   }, 120_000);
 
+  it("sets the security auditor and its threat model without turning on the review gate", async () => {
+    const { root, graph } = await project();
+    await graph("init");
+    await graph(
+      "provider-add",
+      "qwen",
+      "local",
+      "fixture",
+      "--endpoint",
+      "http://127.0.0.1:1/v1",
+    );
+    const set = await graph("auditor", "qwen");
+    expect(set.code).toBe(0);
+    expect(JSON.parse(set.stdout)).toEqual({ audit: { providerId: "qwen" } });
+    const modelled = await graph(
+      "auditor",
+      "--threat-model",
+      "docs/threat-model.md",
+    );
+    expect(JSON.parse(modelled.stdout)).toEqual({
+      audit: { providerId: "qwen", threatModel: "docs/threat-model.md" },
+    });
+    const config = JSON.parse(
+      await readFile(path.join(root, ".graph/project.json"), "utf8"),
+    );
+    expect(config.audit).toEqual({
+      providerId: "qwen",
+      threatModel: "docs/threat-model.md",
+    });
+    expect(config.review).toBeUndefined();
+    // A threat model outside the repository is refused.
+    expect(
+      (await graph("auditor", "--threat-model", "../outside.md")).code,
+    ).not.toBe(0);
+    const cleared = await graph("auditor", "--clear");
+    expect(JSON.parse(cleared.stdout)).toEqual({ audit: null });
+  }, 120_000);
+
   it("shows everything plan-approve's approval covers, including a template step's inputs and each step's effort", async () => {
     const { graph } = await project();
     await graph("init");
