@@ -12,6 +12,8 @@ export default tseslint.config(
       // Catalog templates and their CommonJS tools use their own conventions.
       "graph-templates/",
       "create-graph-app/templates/",
+      // Third-party files vendored unmodified; their bytes are sha256-pinned.
+      "packages/engine/vendor/",
       // Preserved reference snapshot, not maintained source.
       "reference-app/",
       // Frozen historical runtimes whose bytes are pinned by retained receipts.

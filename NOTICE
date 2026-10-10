@@ -1,0 +1,13 @@
+Graph Engineering
+
+This product includes third-party material:
+
+Cloudflare security-audit-skill
+https://github.com/cloudflare/security-audit-skill
+Commit c1c8a8c1471069fb0e188eeaff69b8e8db6564a8
+Copyright (c) 2025-2026 Cloudflare, Inc.
+Licensed under the MIT License; see
+packages/engine/vendor/cloudflare-security-audit/LICENSE.
+Files: report-schema.json, validate-findings.cjs and
+validate-coverage-ledger.cjs in packages/engine/vendor/cloudflare-security-audit/,
+unmodified.

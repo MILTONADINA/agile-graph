@@ -1703,6 +1703,12 @@ cli
     }),
   );
 cli
+  .command("security-audit <runId>")
+  .description(
+    "Advisory AI security audit of a stopped run's change on Cloudflare's security-audit method: the configured reviewer hunts for candidate vulnerabilities in the run's diff, then a separate verifier call per candidate (at most 10, reserved first) confirms, rejects or asks for validation. Findings follow Cloudflare's report schema; the audit never gates, completes or fails a run",
+  )
+  .action((runId) => withEngine(async (engine) => engine.securityAudit(runId)));
+cli
   .command("resume <runId>")
   .option(
     "--reconciled",

@@ -1,14 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import {
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import os from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   ContextPacket,
@@ -99,6 +90,10 @@ import {
 } from "./execution/generator.js";
 import { publishRun } from "./execution/publish.js";
 import {
+  changeDiff,
+  runWrittenPaths as writtenPaths,
+} from "./execution/change-diff.js";
+import {
   findingId,
   invokeReviewWorker,
   invokeVerifyFix,
@@ -119,6 +114,20 @@ import {
   type PlanInput,
 } from "./workers/plan.js";
 import { LOCKFILES, type ProjectProfile } from "./security/catalog.js";
+import {
+  auditRecord,
+  candidateFingerprint,
+  invokeSecurityHunter,
+  invokeSecurityVerifier,
+  MAX_VERIFIED_CANDIDATES,
+  validateFindings,
+  type AuditCallInput,
+  type AuditCandidate,
+  type AuditHunt,
+  type AuditRecord,
+  type AuditVerification,
+  type VerifyCallInput,
+} from "./security/audit.js";
 import {
   BASELINE_FILE,
   newFindings,
@@ -146,7 +155,6 @@ import {
 import {
   checkedGit,
   describeHiddenEntries,
-  gitBlob,
   hiddenIndexEntries,
 } from "./execution/git.js";
 import {
@@ -219,6 +227,16 @@ export interface EngineDependencies {
     model: string;
     usage: Usage;
   }>;
+  /** The advisory security audit's hunter; defaults to the reviewer's API. */
+  securityHunter?: (
+    input: AuditCallInput,
+  ) => Promise<{ hunt: AuditHunt; model: string; usage: Usage }>;
+  /** One advisory audit verifier call; defaults to the reviewer's API. */
+  securityVerifier?: (input: VerifyCallInput) => Promise<{
+    verification: AuditVerification;
+    model: string;
+    usage: Usage;
+  }>;
   /** Scans a verified run result; defaults to the offline scanner image. */
   securityScan?: (options: {
     root: string;
@@ -247,6 +265,34 @@ function securityOverflow(
 // next scan to compare (about 650 KB of 64-character digests); a scan with
 // more records fingerprintsTruncated, and the comparison says truncated.
 export const SECURITY_FINGERPRINT_LIMIT = 10_000;
+/** What graph-engine security-audit reports; advisory, never a gate. */
+export interface SecurityAuditResult {
+  runId: string;
+  advisory: true;
+  providerId: string;
+  model: string;
+  schema: string;
+  /** Files of the run's change that were audited. */
+  files: number;
+  /** Distinct candidates the hunter proposed. */
+  candidates: number;
+  /** Candidates a verifier checked; at most MAX_VERIFIED_CANDIDATES. */
+  verified: number;
+  /** Candidates past the verification cap, never reported as findings. */
+  unverified: number;
+  counts: {
+    confirmed: number;
+    needs_validation: number;
+    rejected: number;
+    invalid: number;
+  };
+  /** Records valid under Cloudflare's report schema, sorted by fingerprint. */
+  findings: AuditRecord[];
+  /** Verified candidates whose record failed the schema, and why. */
+  invalid: { fingerprint: string; title: string; errors: string[] }[];
+  usage: Usage;
+  note: string;
+}
 // The scanner image graph-engine security-scan builds and uses by default.
 export const SECURITY_SCAN_IMAGE = "graph-security:local";
 // The worker step that repairs a multi-step plan whose combined checks failed.
@@ -2017,6 +2063,260 @@ export class GraphEngine {
       note: redact(reason),
     });
   }
+  /**
+   * An advisory AI security audit of a stopped run's change, on Cloudflare's
+   * security-audit method and report schema: the configured reviewer hunts
+   * for candidates in the run's diff, then a separate verifier call per
+   * candidate (at most MAX_VERIFIED_CANDIDATES, reserved before the hunt)
+   * tries to disprove it. Advisory only: it records security.audit_completed
+   * and never changes the run's status, outcome, gates or completion.
+   */
+  async securityAudit(
+    runId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SecurityAuditResult> {
+    const { signal } = options;
+    if (this.isActive(runId))
+      throw new Error("The run is still executing; audit it once it stops");
+    const run = this.store.run(runId);
+    if (["planned", "running", "verifying"].includes(run.status))
+      throw new Error(
+        "The run has not stopped; audit it once it has succeeded, failed or been cancelled",
+      );
+    if (!run.workspace || !run.baseCommit)
+      throw new Error("This run has no retained workspace to audit");
+    await this.refresh();
+    const policy = this.config.policy;
+    if (!this.config.review?.providerId)
+      throw new Error(
+        "Configure a reviewer (graph-engine reviewer <providerId>) to run a security audit",
+      );
+    const auditor = await this.reviewer();
+    // As for the run's own reviewer: a cloud-backed client's plan never has
+    // its change sent across the export boundary.
+    assertOnPlanSide(run.plan, auditor, reviewerRole(auditor.id));
+    let checkpoint: DagCheckpoint | undefined;
+    try {
+      checkpoint = parseDagCheckpoint(
+        await readJson(
+          path.join(this.dataDir, "checkpoints", `${run.id}.json`),
+        ),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    const written = (
+      await writtenPaths(this.store.events(run.id), run.workspace, checkpoint)
+    ).sort();
+    if (!written.length)
+      throw new Error("This run changed no files; there is nothing to audit");
+    if (
+      auditor.kind !== "local" &&
+      !written.every((file) => isAllowedPath(file, policy, true))
+    ) {
+      const reason = "the change touches paths a cloud auditor may not receive";
+      this.store.event(run.id, "security.audit_refused", {
+        providerId: auditor.id,
+        reason,
+        advisory: true,
+      });
+      throw new Error(`Security audit refused: ${reason}`);
+    }
+    const diff = await changeDiff({
+      workspace: run.workspace,
+      baseCommit: run.baseCommit,
+      files: written,
+      policy,
+      signal,
+    });
+    // A day's audits share one cost owner, so policy.maxTurns and
+    // policy.maxCostUsd bound them apart from any run's own budget.
+    const ownerId = `security-audit-${now().slice(0, 10)}`;
+    const slotId = `worker-audit-${id()}`;
+    const started = Date.now();
+    while (!(await this.store.tryAcquireWorker(slotId, policy.maxWorkers))) {
+      if (Date.now() - started > policy.timeoutSeconds * 1000)
+        throw new Error("Worker concurrency wait timed out");
+      await delay(50, undefined, { signal });
+    }
+    const estimate = estimateRequestCost(
+      auditor,
+      policy.maxContextTokens,
+      policy.maxOutputTokens,
+    );
+    const reserve = (callId: string) =>
+      this.store.reserveCall(
+        ownerId,
+        callId,
+        auditor.id,
+        estimate,
+        policy.maxCostUsd,
+        policy.maxTurns,
+      );
+    // Reservations not yet settled; released if never sent.
+    const pending = new Set<string>();
+    // The call sent and not yet settled: its cost is unknown, so if it fails
+    // it keeps its reservation, as a reviewer call does.
+    let inFlight: string | undefined;
+    const usage: Usage[] = [];
+    try {
+      if (signal?.aborted) throw new Error("Security audit cancelled");
+      // Verification is reserved before the hunt, as in Cloudflare's
+      // method, so a hunt never spends the budget its candidates need.
+      const verifierCalls: string[] = [];
+      let refusal: unknown;
+      for (let index = 0; index < MAX_VERIFIED_CANDIDATES; index++) {
+        const callId = `worker-audit-verify-${id()}`;
+        try {
+          reserve(callId);
+        } catch (error) {
+          refusal = error;
+          break;
+        }
+        pending.add(callId);
+        verifierCalls.push(callId);
+      }
+      const hunterCall = `worker-audit-hunt-${id()}`;
+      for (;;) {
+        try {
+          reserve(hunterCall);
+          pending.add(hunterCall);
+          break;
+        } catch (error) {
+          refusal = error;
+          const freed = verifierCalls.pop();
+          if (!freed) break;
+          this.store.releaseReservation(ownerId, freed);
+          pending.delete(freed);
+        }
+      }
+      if (!verifierCalls.length || !pending.has(hunterCall))
+        throw new Error(
+          `Today's security audits have reached the project's limits (policy.maxTurns calls, policy.maxCostUsd estimated cost), leaving no room for a hunt and one verification: ${errorMessage(refusal)}`,
+          { cause: refusal },
+        );
+      this.store.event(run.id, "security.audit_started", {
+        providerId: auditor.id,
+        files: written.length,
+        verifierCallsReserved: verifierCalls.length,
+        advisory: true,
+      });
+      inFlight = hunterCall;
+      const hunted = await (this.deps.securityHunter ?? invokeSecurityHunter)({
+        provider: auditor,
+        policy,
+        diff,
+        signal,
+      });
+      this.store.settleCall(ownerId, hunterCall, auditor.id, hunted.usage);
+      pending.delete(hunterCall);
+      inFlight = undefined;
+      usage.push(hunted.usage);
+      // One candidate per engine-made fingerprint, in the hunter's order.
+      const unique = new Map<string, AuditCandidate>();
+      for (const candidate of hunted.hunt.candidates)
+        if (!unique.has(candidateFingerprint(candidate)))
+          unique.set(candidateFingerprint(candidate), candidate);
+      const candidates = [...unique.values()];
+      const verified = candidates.slice(0, verifierCalls.length);
+      const findings: AuditRecord[] = [];
+      const invalid: {
+        fingerprint: string;
+        title: string;
+        errors: string[];
+      }[] = [];
+      const changed = new Set(written);
+      for (const [index, candidate] of verified.entries()) {
+        if (signal?.aborted) throw new Error("Security audit cancelled");
+        const callId = verifierCalls[index]!;
+        inFlight = callId;
+        const result = await (
+          this.deps.securityVerifier ?? invokeSecurityVerifier
+        )({ provider: auditor, policy, diff, candidate, signal });
+        this.store.settleCall(ownerId, callId, auditor.id, result.usage);
+        pending.delete(callId);
+        inFlight = undefined;
+        usage.push(result.usage);
+        const { record, errors } = auditRecord(
+          candidate,
+          result.verification,
+          changed,
+        );
+        if (errors.length)
+          invalid.push({
+            fingerprint: record.fingerprint,
+            title: redact(candidate.title),
+            errors: errors.slice(0, 10).map(redact),
+          });
+        else findings.push(record);
+      }
+      findings.sort((left, right) =>
+        left.fingerprint < right.fingerprint ? -1 : 1,
+      );
+      const documentErrors = validateFindings(findings);
+      if (documentErrors.length)
+        throw new Error(
+          `The audit's findings do not satisfy Cloudflare's report schema: ${documentErrors.slice(0, 5).join("; ")}`,
+        );
+      const redacted = JSON.parse(
+        JSON.stringify(findings, (_key, value: unknown) =>
+          typeof value === "string" ? redact(value) : value,
+        ),
+      ) as AuditRecord[];
+      const total = usage.reduce(
+        (sum, item) => ({
+          inputTokens: (sum.inputTokens ?? 0) + (item.inputTokens ?? 0),
+          outputTokens: (sum.outputTokens ?? 0) + (item.outputTokens ?? 0),
+          cachedTokens: (sum.cachedTokens ?? 0) + (item.cachedTokens ?? 0),
+          costUsd:
+            sum.costUsd === null || item.costUsd === null
+              ? null
+              : sum.costUsd + item.costUsd,
+          estimated: sum.estimated || item.estimated,
+        }),
+        {
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedTokens: 0,
+          costUsd: 0,
+          estimated: false,
+        } as Usage,
+      );
+      const result: SecurityAuditResult = {
+        runId: run.id,
+        advisory: true,
+        providerId: auditor.id,
+        model: hunted.model,
+        schema: "cloudflare/security-audit-skill report-schema.json",
+        files: written.length,
+        candidates: candidates.length,
+        verified: verified.length,
+        unverified: candidates.length - verified.length,
+        counts: {
+          confirmed: findings.filter((item) => item.verdict === "confirmed")
+            .length,
+          needs_validation: findings.filter(
+            (item) => item.verdict === "needs_validation",
+          ).length,
+          rejected: findings.filter((item) => item.verdict === "rejected")
+            .length,
+          invalid: invalid.length,
+        },
+        findings: redacted,
+        invalid,
+        usage: total,
+        note: "Advisory: the audit never gates, completes or fails a run; only an owner can make it blocking.",
+      };
+      this.store.event(run.id, "security.audit_completed", {
+        ...result,
+      });
+      return result;
+    } finally {
+      for (const callId of pending)
+        if (callId !== inFlight) this.store.releaseReservation(ownerId, callId);
+      this.store.releaseWorker(slotId);
+    }
+  }
   async resume(runId: string, reconciled = false): Promise<RunRecord> {
     if (this.active.has(runId)) throw new Error("Run is already active");
     const run = await this.recoverDeadOwner(runId);
@@ -2354,65 +2654,9 @@ export class GraphEngine {
       const recordDagEvent = (event: DagEvent) => {
         this.store.event(run.id, event.type, event.data, event.stepId);
       };
-      // Every file this run's workers wrote: patches, cached solutions and
-      // the DAG's steps and repairs, including one an acknowledged resume
-      // recorded as applied. A single-step or cached patch counts from the
-      // moment it is recorded as applying, before its first write, so one
-      // the process died during, or whose rollback failed, is still the
-      // run's: each of its files still in the workspace (one it never
-      // reached, or one the rollback removed, has nothing to review or
-      // publish). A patch whose rollback restored the workspace wrote
-      // nothing. The operator's own uncommitted files in the workspace are
-      // not the worker's change.
-      const runWrittenPaths = async () => {
-        const events = this.store.events(run.id);
-        const inventory = (event: RunEvent) => {
-          const paths = event.data.paths;
-          if (
-            !Array.isArray(paths) ||
-            paths.some((item) => typeof item !== "string")
-          )
-            throw new Error(
-              "Retained patch lacks its verification path inventory; explicit source review is required before reuse",
-            );
-          return paths as string[];
-        };
-        const rolledBack = new Set(
-          events
-            .filter((event) => event.type === "patch.rolled_back")
-            .map((event) => event.data.applying),
-        );
-        const inWorkspace = async (file: string) => {
-          try {
-            await stat(path.join(workspace, file));
-            return true;
-          } catch (error) {
-            const code = (error as NodeJS.ErrnoException).code ?? "";
-            if (["ENOENT", "ENOTDIR"].includes(code)) return false;
-            throw error;
-          }
-        };
-        const applying: string[] = [];
-        for (const event of events)
-          if (event.type === "patch.applying" && !rolledBack.has(event.id))
-            for (const file of inventory(event))
-              if (await inWorkspace(file)) applying.push(file);
-        return [
-          ...new Set([
-            ...events
-              .filter((event) =>
-                [
-                  "patch.applied",
-                  "dag.step.completed",
-                  "solution.cache_hit",
-                ].includes(event.type),
-              )
-              .flatMap(inventory),
-            ...applying,
-            ...(dagCheckpoint ? checkpointPaths(dagCheckpoint) : []),
-          ]),
-        ];
-      };
+      // Every file this run's workers wrote (see runWrittenPaths).
+      const runWrittenPaths = () =>
+        writtenPaths(this.store.events(run.id), workspace, dagCheckpoint);
       const recordPatch = (stepId: string): PatchRecorder => ({
         applying: (paths) =>
           this.store.event(run.id, "patch.applying", { paths }, stepId),
@@ -2480,82 +2724,13 @@ export class GraphEngine {
             );
             throw new Error(reason);
           }
-          // Diff raw bytes outside the repository: the original from the
-          // object store with no conversion, the new file from disk. Neither
-          // the change's .gitattributes (-diff, working-tree-encoding, ident,
-          // eol) nor any diff driver or configuration can alter what the
-          // reviewer sees.
-          const scratch = await mkdtemp(
-            path.join(os.tmpdir(), "graph-review-"),
-          );
-          const parts: string[] = [];
-          try {
-            // Empty stand-ins for Git configuration, attributes and absent
-            // files: null device names differ across platforms.
-            const empty = path.join(scratch, "empty");
-            await writeFile(empty, "");
-            await mkdir(path.join(scratch, "a"));
-            await mkdir(path.join(scratch, "b"));
-            for (const [index, file] of written.entries()) {
-              const before = `a/${index}`;
-              const after = `b/${index}`;
-              const original = await gitBlob(workspace, baseCommit, file, {
-                signal,
-              });
-              await writeFile(path.join(scratch, before), original ?? "");
-              const current = await safePath(workspace, file, policy);
-              const exists = await stat(current).then(
-                () => true,
-                () => false,
-              );
-              if (exists) await copyFile(current, path.join(scratch, after));
-              else await writeFile(path.join(scratch, after), "");
-              const result = await command(
-                "git",
-                [
-                  "-c",
-                  "core.attributesFile=empty",
-                  "diff",
-                  "--no-index",
-                  "--no-ext-diff",
-                  "--no-textconv",
-                  "--text",
-                  "--no-color",
-                  `--src-prefix=a/${file}#`,
-                  `--dst-prefix=b/${file}#`,
-                  "--",
-                  before,
-                  after,
-                ],
-                {
-                  cwd: scratch,
-                  signal,
-                  timeoutMs: 60000,
-                  maxBytes: 20_000_000,
-                  env: {
-                    ...process.env,
-                    GIT_CONFIG_NOSYSTEM: "1",
-                    GIT_CONFIG_GLOBAL: empty,
-                  },
-                },
-              );
-              // --no-index exits 0 for identical files and 1 when they differ.
-              if (result.code !== 0 && result.code !== 1)
-                throw new Error(
-                  `git could not show the change to ${file}: ${result.stderr.trim().slice(0, 500)}`,
-                );
-              const status =
-                original === undefined
-                  ? " (new file)"
-                  : exists
-                    ? ""
-                    : " (deleted)";
-              parts.push(`File ${file}${status}:\n${result.stdout}`);
-            }
-          } finally {
-            await rm(scratch, { recursive: true, force: true });
-          }
-          diff = parts.join("\n");
+          diff = await changeDiff({
+            workspace,
+            baseCommit,
+            files: written,
+            policy,
+            signal,
+          });
         } catch (error) {
           if (signal.aborted) throw error;
           throw new Error(
