@@ -27,7 +27,11 @@ import type { VerificationResult } from "../execution/docker.js";
 export const MAX_REPRODUCER_BYTES = 65_536;
 /** The most arguments a reproducer's argv may have. */
 export const MAX_REPRODUCER_ARGS = 32;
-export const MIN_EXPECTED_CHARS = 4;
+/**
+ * The shortest expected text. Test runners echo source lines, paths and code
+ * frames, so a short signal is too easy to print without the finding.
+ */
+export const MIN_EXPECTED_CHARS = 12;
 export const MAX_EXPECTED_CHARS = 500;
 /** Characters of the redacted output tail a record keeps. */
 export const REPRODUCER_EXCERPT_CHARS = 2_000;
@@ -183,6 +187,18 @@ export function validateReproducer(
   if (signal.length < MIN_EXPECTED_CHARS || signal.length > MAX_EXPECTED_CHARS)
     return refuse(
       `its expected failure text must be ${MIN_EXPECTED_CHARS} to ${MAX_EXPECTED_CHARS} characters`,
+    );
+  // A runner echoes the failing source lines, the test path and argv, so a
+  // signal that appears in any of them could be printed by a crash that has
+  // nothing to do with the finding.
+  const normalized = signal.replace(/\r\n?/g, "\n");
+  if (content.replace(/\r\n?/g, "\n").includes(normalized))
+    return refuse(
+      "its expected failure text appears in its content, so an echoed source line could show it",
+    );
+  if (file.includes(normalized) || argv.some((a) => a.includes(normalized)))
+    return refuse(
+      "its expected failure text is part of its path or argv, which the runner echoes",
     );
   if (didNotRunMarker(signal))
     return refuse(

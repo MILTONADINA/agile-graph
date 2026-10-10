@@ -227,7 +227,7 @@ describe("statically traced findings", () => {
 const reproducer: AuditReproducer = {
   path: "math.test.cjs",
   content:
-    "const test = require('node:test');\nconst assert = require('node:assert');\nconst { add } = require('./math.cjs');\ntest('add', () => assert.equal(add(2, 3), 5, 'injected command ran'));\n",
+    "const test = require('node:test');\nconst assert = require('node:assert');\nconst { add } = require('./math.cjs');\ntest('add', () => assert.equal(add(2, 3), 5, ['injected', 'command', 'ran'].join(' ')));\n",
   argv: ["node", "--test", "math.test.cjs"],
   image: null,
   expected: "injected command ran",
@@ -519,8 +519,49 @@ describe("audit reproducer validation", () => {
       { argv: ["node", "--test"] },
       "does not name the reproducer's path",
     );
-    refused({ expected: "ab" }, "4 to 500 characters");
-    refused({ expected: "x".repeat(501) }, "4 to 500 characters");
+    refused({ expected: "ab" }, "12 to 500 characters");
+    expect(
+      validateReproducer({ ...valid, expected: "twelve chars" }, context()).ok,
+    ).toBe(true);
+    refused({ expected: "eleven char" }, "12 to 500 characters");
+    refused({ expected: "x".repeat(501) }, "12 to 500 characters");
+    // A signal the runner could echo without the finding is refused.
+    refused(
+      {
+        content:
+          "const assert = require('node:assert');\nassert.fail('injected command ran');\n",
+      },
+      "appears in its content",
+    );
+    // A crash's code frame echoes a source line holding the signal.
+    refused(
+      {
+        content:
+          "const t = require('node:test');\nt('x', () => { undefined.f(); /* injected command ran */ });\n",
+      },
+      "appears in its content",
+    );
+    refused(
+      {
+        content:
+          "const assert = require('node:assert');\r\nassert.fail('injected\r\ncommand ran');\r\n",
+        expected: "injected\ncommand ran",
+      },
+      "appears in its content",
+    );
+    refused({ expected: "src/math.test.cjs" }, "part of its path or argv");
+    refused({ expected: "math.test.cjs" }, "part of its path or argv");
+    refused(
+      {
+        argv: [
+          "node",
+          "--test-name-pattern=injected-command-ran",
+          "src/math.test.cjs",
+        ],
+        expected: "injected-command-ran",
+      },
+      "part of its path or argv",
+    );
     refused({ expected: "SyntaxError: x" }, "load or syntax error");
     refused(
       { image: "attacker/image:latest" },

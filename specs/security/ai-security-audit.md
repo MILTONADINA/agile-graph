@@ -64,7 +64,7 @@ can ever make it blocking.
   - Test: packages/engine/tests/security-audit.test.ts :: fills a confirmed record's execution evidence from what ran
 - AC13: A confirmed finding is still advisory: it is recorded only in `security.audit_completed` and the printed result, and never changes the run's status, outcome, review gate, security gate or completion.
   - Test: packages/engine/tests/security-audit.test.ts :: keeps a confirmed finding advisory: the run's status, outcome and review gate are unchanged
-- AC14: A reproducer is refused, and not run, unless its path is a safe relative project path (no `..`, absolute path, backslash or excluded or protected path) that matches the project's test file globs (`tester.writes`, or the tester's defaults), lies in the changed area (its first path segment is the first segment of a file the run changed, or anywhere when the run changed a top-level file) and does not exist in the run's workspace; its content is non-empty, at most 64 KiB and free of NUL bytes; its argv is 1 to 32 plain arguments (letters, digits and `_ . / : = @ + , % -` only, so no shell metacharacters), does not start with a shell or `env`, and names the reproducer's path; its `expected` text is 4 to 500 characters; and its image, when given, is a registered verification image. A project with no registered verification image runs no reproducer.
+- AC14: A reproducer is refused, and not run, unless its path is a safe relative project path (no `..`, absolute path, backslash or excluded or protected path) that matches the project's test file globs (`tester.writes`, or the tester's defaults), lies in the changed area (its first path segment is the first segment of a file the run changed, or anywhere when the run changed a top-level file) and does not exist in the run's workspace; its content is non-empty, at most 64 KiB and free of NUL bytes; its argv is 1 to 32 plain arguments (letters, digits and `_ . / : = @ + , % -` only, so no shell metacharacters), does not start with a shell or `env`, and names the reproducer's path; its `expected` text is 12 to 500 characters, does not appear in its content (line endings normalized) and is not part of its path or any argv element, since a runner echoes source lines, code frames, the path and argv; and its image, when given, is a registered verification image. A project with no registered verification image runs no reproducer.
   - Test: packages/engine/tests/security-audit.test.ts :: refuses invalid reproducers before running them
 - AC15: A cloud auditor's reproducer must have an exportable path (`policy.exportPaths`), and no reproducer whose content holds a potential secret is run. When Docker is unavailable a reproducer cannot run and its finding stays `needs_validation` with a note. The reproducer's output is redacted before it is recorded, and only an excerpt of its tail is kept.
   - Test: packages/engine/tests/security-audit.test.ts :: refuses a cloud auditor's reproducer outside the export paths and any reproducer holding a potential secret
@@ -94,7 +94,9 @@ capabilities and no image pulls, in one of the operator's registered
 verification images, on a temporary copy of the run's snapshot that is
 removed afterwards. Its argv is a plain array with no shell. A model-chosen
 `expected` text cannot confirm a test that never ran, since the exit code
-and the did-not-run markers are checked too, but a reproducer written to
+and the did-not-run markers are checked too, nor be shown by a runner
+echoing the reproducer's own source, path or argv, since such text is
+refused before running, but a reproducer written to
 print that text and fail can still confirm a finding; this is why a
 confirmed finding stays advisory and gates nothing.
 

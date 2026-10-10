@@ -451,8 +451,12 @@ changed, or anywhere when it changed a top-level file) and new; whose
 content is empty, over 64 KiB, holds a NUL byte or a potential secret;
 whose argv is not 1 to 32 plain arguments (no shell metacharacters, quotes
 or spaces) naming the file and not starting with a shell; whose expected
-text is not 4 to 500 characters or is itself a load error; or whose image
-is not registered. A cloud auditor's reproducer must also have a path in
+text is not 12 to 500 characters, is itself a load error, appears in its
+content (line endings normalized) or is part of its path or any argv
+element; or whose image is not registered. Test runners echo failing
+source lines, code frames, the test path and argv, so a crash unrelated to
+the finding could otherwise print the expected text; the reproducer must
+produce that text at run time. A cloud auditor's reproducer must also have a path in
 `policy.exportPaths`.
 
 The finding is demonstrated exactly when the sandbox returned a result (a
