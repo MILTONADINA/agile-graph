@@ -29,6 +29,7 @@ import { interruptedRunExitCode, runExitCode } from "./run-exit-code.js";
 import { repositoryProfile } from "./scale.js";
 import { summarizeOutcomes } from "./insights.js";
 import { summarizeContextInsights } from "./insights-context.js";
+import { buildRunProvenance, changedFileDigests } from "./run-provenance.js";
 import {
   buildFeedbackReport,
   classifyError,
@@ -1821,6 +1822,34 @@ cli
         runId,
       ),
     );
+  });
+cli
+  .command("run-provenance <runId>")
+  .description(
+    "An unsigned in-toto Statement v1 for a run a person accepted: its result commit and changed-file sha256 digests, plan and policy hashes, the approval used, workers, gates passed and timestamps. No prompts, file contents, secrets or user identity. Read-only; never signed",
+  )
+  .option("--out <file>", "Write the statement to this file instead")
+  .action(async (runId: string, options: { out?: string }) => {
+    const project = await loadProject(root());
+    const dataDir = projectDataDir(project.projectId);
+    const { run, events } = readRunReceipt(dataDir, project.projectId, runId);
+    const statement = buildRunProvenance({
+      run,
+      events,
+      changed:
+        run.commit &&
+        run.status === "succeeded" &&
+        run.completion?.humanAcceptance === "accepted"
+          ? await changedFileDigests(root(), run.baseCommit, run.commit)
+          : { files: [], removed: [] },
+      providers: await loadProviders(dataDir),
+      policy: project.policy,
+    });
+    if (!options.out) return print(statement);
+    await writeFile(options.out, `${JSON.stringify(statement, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    print({ written: options.out });
   });
 cli
   .command("cancel <runId>")

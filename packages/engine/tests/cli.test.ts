@@ -2485,6 +2485,55 @@ describe("command line", () => {
           approvedVia: "non-interactive",
         },
       ]);
+      // No provenance statement until a person accepts the result.
+      const pending = await graph("run-provenance", run.id);
+      expect(pending.code).not.toBe(0);
+      expect(pending.stderr).toContain("only for a run a person accepted");
+      expect((await graph("accept", run.id)).code).toBe(0);
+      const statement = JSON.parse(
+        (await graph("run-provenance", run.id)).stdout,
+      );
+      expect(statement).toMatchObject({
+        _type: "https://in-toto.io/Statement/v1",
+        predicateType:
+          "https://github.com/MILTONADINA/graph-engineering/provenance/run/v1",
+        subject: [
+          {
+            name: "graph-engineering+workspace-snapshot",
+            digest: { sha256: expect.stringMatching(/^[a-f0-9]{64}$/) },
+          },
+        ],
+        predicate: {
+          runId: run.id,
+          planSha256: before.planSha256,
+          approval: {
+            planSha256: before.planSha256,
+            matchesPlan: true,
+            approvedVia: "non-interactive",
+          },
+          signed: false,
+        },
+      });
+      // The statement written at acceptance is the one the command builds.
+      expect(
+        JSON.parse(
+          await readFile(
+            path.join(
+              data,
+              "projects",
+              projectId,
+              "provenance",
+              `${run.id}.intoto.json`,
+            ),
+            "utf8",
+          ),
+        ),
+      ).toEqual(statement);
+      const out = path.join(root, "provenance-out.json");
+      expect((await graph("run-provenance", run.id, "--out", out)).code).toBe(
+        0,
+      );
+      expect(JSON.parse(await readFile(out, "utf8"))).toEqual(statement);
     },
     300_000,
   );
