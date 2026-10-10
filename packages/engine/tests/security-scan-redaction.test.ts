@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,7 +16,9 @@ import {
   parseSemgrepUnscanned,
   runSecurityScan,
   updateOsvDatabase,
+  withoutHostPaths,
 } from "../src/security/scan.js";
+import { scanSarif } from "../src/security/sarif.js";
 
 const IMAGE_ID = `sha256:${"a".repeat(64)}`;
 // Built by concatenation so the source itself holds no credential shape.
@@ -140,5 +142,48 @@ describe("Semgrep's error messages", () => {
     expect(unscanned).toHaveLength(1);
     expect(unscanned[0]!.reason).toContain(`pass${"word"}=[REDACTED]`);
     expect(unscanned[0]!.reason).not.toContain(VALUE.slice(0, 5));
+  });
+});
+
+describe("a scanner that writes no report", () => {
+  it("leaves no absolute host path in the scan errors or the SARIF", async () => {
+    const root = await directory();
+    const data = await directory();
+    const database = path.join(data, "security-db", "osv");
+    await writeFile(path.join(root, "package-lock.json"), "{}\n");
+    // Every tool exits 0 and OSV-Scanner writes no report, so reading it
+    // fails with an error that names the temporary output directory.
+    mocks.command.mockImplementation(async (_executable, argv: string[]) =>
+      argv[0] === "image"
+        ? { code: 0, stdout: `${IMAGE_ID}\n`, stderr: "" }
+        : {
+            code: 0,
+            stdout: "",
+            stderr: "",
+          },
+    );
+    const scan = await runSecurityScan({
+      root,
+      image: "graph-security:local",
+      profile: {
+        files: ["package-lock.json"],
+        authorizedTargets: [],
+        configuredTools: [],
+      },
+      osvDatabase: database,
+    });
+    const error = scan.errors.find((line) => line.startsWith("osv-scanner:"));
+    expect(error).toContain("<tmp>/out/osv.json");
+    const sarif = JSON.stringify(scanSarif(scan, [], "0.0.0-test"));
+    for (const host of [os.tmpdir(), await realpath(os.tmpdir()), root, data])
+      expect(sarif).not.toContain(host);
+    // Each directory is replaced by its own placeholder.
+    const hide = withoutHostPaths([
+      [root, "<repo>"],
+      [data, "<data>"],
+    ]);
+    expect(hide(`${root}/a ${data}/security-db ${os.tmpdir()}`)).toBe(
+      `<repo>/a <data>/security-db ${os.tmpdir()}`,
+    );
   });
 });

@@ -2637,7 +2637,10 @@ describe("security gate", () => {
   );
 
   it("warns when a run starts that a changed lockfile would stop it for want of a dependency database", async () => {
-    const start = async (options: { lockfile: boolean; database: boolean }) => {
+    const start = async (options: {
+      lockfile: boolean | string;
+      database: boolean;
+    }) => {
       const { root, data } = await fixture();
       await writeFile(
         path.join(root, ".graph/security-baseline.json"),
@@ -2645,7 +2648,12 @@ describe("security gate", () => {
       );
       if (options.lockfile)
         await writeFile(
-          path.join(root, "package-lock.json"),
+          path.join(
+            root,
+            typeof options.lockfile === "string"
+              ? options.lockfile
+              : "package-lock.json",
+          ),
           '{ "lockfileVersion": 3, "packages": {} }\n',
         );
       await checked("git", ["add", "."], { cwd: root });
@@ -2694,6 +2702,11 @@ describe("security gate", () => {
     expect(String(warning?.data.message)).toContain(
       "restore .graph/project.json exactly as it was",
     );
+    // Any lockfile OSV-Scanner reads counts, not only a fixed list of names.
+    for (const name of ["uv.lock", "requirements-dev.txt", "bun.lock"])
+      expect(
+        (await start({ lockfile: name, database: false }))?.data,
+      ).toMatchObject({ lockfiles: [name] });
     // No lockfile to scan, or a downloaded database: nothing to warn about.
     expect(await start({ lockfile: false, database: false })).toBeUndefined();
     expect(await start({ lockfile: true, database: true })).toBeUndefined();

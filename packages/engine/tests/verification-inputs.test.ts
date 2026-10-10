@@ -85,3 +85,54 @@ describe("verification inputs", () => {
     },
   );
 });
+
+describe("verification views", () => {
+  it.skipIf(process.platform === "win32")(
+    "gives each check a fresh view so an earlier check cannot plant a file a later check sees",
+    { timeout: 20_000 },
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "graph-verify-plant-"));
+      directories.push(directory);
+      const root = join(directory, "repo");
+      await mkdir(join(root, "src"), { recursive: true });
+      await checked("git", ["init", "-b", "dev"], { cwd: root });
+      await writeFile(join(root, "src/index.ts"), "export const a = 1;\n");
+      await checked("git", ["add", "src/index.ts"], { cwd: root });
+      const bin = join(directory, "bin");
+      await mkdir(bin);
+      // A stand-in for Docker: "plant" writes a new file into the mounted
+      // view; "probe" fails when that file, or the reproducer, is missing
+      // or present against expectation.
+      await writeFile(
+        join(bin, "docker"),
+        [
+          "#!/bin/sh",
+          'case "$1" in',
+          `  image) echo sha256:${"a".repeat(64)} ;;`,
+          '  run) for arg in "$@"; do case "$arg" in type=bind,source=*) source="${arg#type=bind,source=}"; source="${source%%,target=*}" ;; esac; last="$arg"; done',
+          '       case "$last" in',
+          '         plant) printf x > "$source/src/planted.ts" ;;',
+          '         probe) test -e "$source/src/planted.ts" && exit 7; test -f "$source/src/repro.test.ts" || exit 8 ;;',
+          "       esac ;;",
+          "esac",
+          "exit 0",
+          "",
+        ].join("\n"),
+      );
+      await chmod(join(bin, "docker"), 0o755);
+      vi.stubEnv("PATH", `${bin}:${process.env.PATH}`);
+      const results = await verifyInContainer(
+        root,
+        [
+          { image: "fixture", argv: ["plant"] },
+          { image: "fixture", argv: ["probe"] },
+        ],
+        structuredClone(DEFAULT_POLICY),
+        "snapshot",
+        undefined,
+        { added: [{ path: "src/repro.test.ts", content: "repro\n" }] },
+      );
+      expect(results.map(({ code }) => code)).toEqual([0, 0]);
+    },
+  );
+});

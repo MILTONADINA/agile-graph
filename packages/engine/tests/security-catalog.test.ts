@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SECURITY_TOOLS,
+  isLockfile,
   selectSecurityTools,
   semgrepRuleSets,
   type ProjectProfile,
@@ -163,6 +164,37 @@ describe("dependency vulnerabilities", () => {
       databases: ["osv-scanner"],
     }).selected.find(({ tool }) => tool.id === "osv-scanner");
     expect(withDatabase?.runnable).toBe(true);
+  });
+
+  it("recognises every lockfile OSV-Scanner extracts with one matcher", () => {
+    for (const file of [
+      "requirements.txt",
+      "api/requirements-dev.txt",
+      "uv.lock",
+      "bun.lock",
+      "bun.lockb",
+      "pdm.lock",
+      "pylock.toml",
+      "pylock.dev.toml",
+      "ios/Package.resolved",
+      "mix.lock",
+      "app/pubspec.lock",
+      "gradle.lockfile",
+      "buildscript-gradle.lockfile",
+      "Cargo.lock",
+      "Gemfile.lock",
+      "go.mod",
+    ]) {
+      expect(isLockfile(file), file).toBe(true);
+      expect(
+        selectSecurityTools(profile([file])).selected.some(
+          ({ tool }) => tool.id === "osv-scanner",
+        ),
+        file,
+      ).toBe(true);
+    }
+    for (const file of ["src/uv.lock.md", "requirements.md", "docs/lock.txt"])
+      expect(isLockfile(file), file).toBe(false);
   });
 
   it("reads OSV-Scanner JSON into one finding per package advisory at the lockfile entry", () => {
