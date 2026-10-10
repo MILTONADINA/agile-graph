@@ -90,7 +90,7 @@ describe("project archive lifecycle", () => {
     await writeFile(join(dataDir, ".env"), "excluded environment");
     store.reserveCall("plan-1", "unsettled-call", "local", null, null);
     const manifest = await backupProject(fixtureData);
-    expect(manifest.schema.runs).toBe(4);
+    expect(manifest.schema.runs).toBe(5);
     expect(manifest.files.map((file) => file.path)).toEqual(
       expect.arrayContaining([
         "context.sqlite",
@@ -216,7 +216,7 @@ describe("project archive lifecycle", () => {
     legacy.close();
     const migrated = new RunStore(data.dataDir, data.projectId);
     stores.push(migrated);
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(5);
     expect(migrated.planSnapshotIds()).toEqual([data.snapshot.id]);
     migrated.close();
     const future = new Database(databasePath);

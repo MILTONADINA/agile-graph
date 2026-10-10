@@ -93,6 +93,7 @@ import {
 } from "./security/live.js";
 import { createServer } from "./server.js";
 import { serveMcp } from "./mcp.js";
+import { MCP_OPTIONAL_TOOLS, parseAllowedTools } from "./mcp-tools.js";
 import { listTemplates, scaffold, validateArtifacts } from "./templates.js";
 import { evaluateDecisions, type EvaluationRow } from "./decisions.js";
 import { PROMOTION_IMPORT_BLOCKED } from "./promotion-authority.js";
@@ -115,6 +116,7 @@ import { backupProject, restoreProject } from "./operations.js";
 import {
   assertExpectedPlans,
   planSha256,
+  readMcpCalls,
   readPlanStatus,
   readRunReceipt,
 } from "./store.js";
@@ -1692,6 +1694,32 @@ cli.command("inspect <runId>").action((runId) =>
   })),
 );
 cli
+  .command("mcp-log")
+  .description(
+    "Show the MCP call log, newest first: each call's time, tool, client kind (local or cloud), the SHA-256 of its canonical JSON arguments (the arguments themselves are never stored), its outcome (ok, refused, error, or null while in progress or when its server stopped first) and the plan or run it concerned. Reads without opening the engine; no MCP tool can read it",
+  )
+  .option("--limit <n>", "Entries to show, from 1 to 10000", "50")
+  .option("--tool <name>", "Show only calls of this tool")
+  .action(async (options: { limit: string; tool?: string }) => {
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .safeParse(options.limit);
+    if (!limit.success)
+      throw new Error(
+        `--limit must be a whole number from 1 to 10000, not ${options.limit}`,
+      );
+    const project = await loadProject(root());
+    print(
+      readMcpCalls(projectDataDir(project.projectId), project.projectId, {
+        limit: limit.data,
+        ...(options.tool === undefined ? {} : { tool: options.tool }),
+      }),
+    );
+  });
+cli
   .command("run-receipt <runId>")
   .description("Read a retained run and its events without triggering recovery")
   .action(async (runId) => {
@@ -2128,21 +2156,32 @@ cli
     "Declare whether the consuming model is local or cloud-backed",
     "cloud",
   )
-  .option("--allow-run", "Expose managed run start capability")
+  .option(
+    "--allow-tool <name>",
+    `Expose one optional tool; repeat for more (${MCP_OPTIONAL_TOOLS.join(", ")})`,
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
+  .option(
+    "--allow-run",
+    "Alias for --allow-tool run_start, run_cancel, plan_create and plan_decompose",
+  )
   .option(
     "--allow-run-status",
-    "Expose run status, usage, commit and PR metadata to a cloud client",
+    "Alias for --allow-tool run_status, run_list and run_events (run status, usage, commit and PR metadata); a local client has them by default",
   )
   .action(async (options) => {
     const client = z.enum(["local", "cloud"]).safeParse(options.client);
     if (!client.success)
       throw new Error(`--client must be local or cloud, not ${options.client}`);
+    const allowTools = parseAllowedTools(options.allowTool);
     const engine = await GraphEngine.open(root());
     const server = await closeOnFailure(engine, () =>
       serveMcp(engine, {
         client: client.data,
         allowRun: options.allowRun,
         allowRunStatus: options.allowRunStatus,
+        allowTools,
       }),
     );
     // Output goes to stderr: stdout carries the MCP stream.

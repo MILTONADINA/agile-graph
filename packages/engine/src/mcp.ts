@@ -1,4 +1,7 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  McpServer,
+  type ToolCallback,
+} from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
@@ -7,19 +10,67 @@ import {
 } from "@graph-engineering/contracts";
 import type { GraphEngine } from "./service.js";
 import { estimateTokens } from "./context/index.js";
+import { canonicalJson } from "./context/intelligence.js";
 import {
   assertMandatoryExport,
   containsSecret,
   isAllowedPath,
 } from "./policy.js";
 import { listTemplates } from "./templates.js";
-import { LocalDetailError, localErrorMessage } from "./util.js";
+import {
+  MCP_RUN_CONTROL_TOOLS,
+  MCP_RUN_STATUS_TOOLS,
+  type McpOptionalTool,
+} from "./mcp-tools.js";
+import type { McpCallOutcome } from "./store.js";
+import {
+  errorMessage,
+  hash,
+  LocalDetailError,
+  localErrorMessage,
+  RefusalError,
+} from "./util.js";
+
+/**
+ * Tools that change project state or pay for a model call. A call to one is
+ * refused when the call log cannot record it first (fail closed); a read-only
+ * tool still answers (fail open), since it changes nothing a later audit
+ * would need to explain.
+ */
+const STATE_CHANGING_TOOLS: ReadonlySet<string> = new Set([
+  ...MCP_RUN_CONTROL_TOOLS,
+  "memory_propose",
+]);
 
 export interface McpServerOptions {
   client: "local" | "cloud";
+  /** Alias: enables every tool in MCP_RUN_CONTROL_TOOLS. */
   allowRun?: boolean;
-  /** Expose run IDs, status, usage, commit and PR metadata to a cloud client. */
+  /**
+   * Alias: enables every tool in MCP_RUN_STATUS_TOOLS, which expose run IDs,
+   * status, usage, commit and PR metadata to a cloud client.
+   */
   allowRunStatus?: boolean;
+  /** Individual optional tools to enable (`--allow-tool`). */
+  allowTools?: readonly McpOptionalTool[];
+}
+/**
+ * The optional tools a server exposes: those named with allowTools, the
+ * sets its aliases stand for, and the run-status tools for a local client.
+ */
+export function enabledMcpTools(
+  options: McpServerOptions,
+): Set<McpOptionalTool> {
+  const enabled = new Set<McpOptionalTool>(options.allowTools ?? []);
+  if (options.allowRun)
+    for (const tool of MCP_RUN_CONTROL_TOOLS) enabled.add(tool);
+  if (options.client === "local" || options.allowRunStatus)
+    for (const tool of MCP_RUN_STATUS_TOOLS) enabled.add(tool);
+  return enabled;
+}
+/** SHA-256 of a call's arguments as canonical JSON (keys sorted). */
+export function mcpArgsSha256(args: unknown): string {
+  return hash(canonicalJson(JSON.parse(JSON.stringify(args ?? {}))));
 }
 export function createMcpServer(
   engine: GraphEngine,
@@ -37,6 +88,7 @@ export function createMcpServer(
   const result = (value: unknown) => ({
     content: [{ type: "text" as const, text: JSON.stringify(value) }],
   });
+  const enabled = enabledMcpTools(options);
   const allowed = async () => {
     await engine.refresh();
     if (
@@ -44,11 +96,84 @@ export function createMcpServer(
       (engine.config.policy.inference === "local" ||
         engine.config.policy.network === "deny")
     )
-      throw new Error(
+      throw new RefusalError(
         "Offline project context cannot be exported to this cloud-backed client",
       );
   };
-  server.registerTool(
+  // The plan or run a call concerned, kept only when it names one of this
+  // project's: an ID a client sent is otherwise its raw input.
+  const known = (ids: { planId?: unknown; runId?: unknown }) => ({
+    ...(typeof ids.planId === "string" && engine.store.hasPlan(ids.planId)
+      ? { planId: ids.planId }
+      : {}),
+    ...(typeof ids.runId === "string" && engine.store.hasRun(ids.runId)
+      ? { runId: ids.runId }
+      : {}),
+  });
+  // A failure to write the call log is reported on this server's standard
+  // error (stdout carries the MCP stream) and never to the client.
+  const logFailure = (tool: string, error: unknown) => {
+    process.stderr.write(
+      `graph-engine mcp: the call log could not record a ${tool} call: ${errorMessage(error)}\n`,
+    );
+  };
+  /**
+   * Registers a tool whose every call is logged: the entry is written before
+   * the tool runs, holding the SHA-256 of the canonical JSON arguments only,
+   * and completed with the outcome (ok, refused or error) and the plan or run
+   * concerned. A state-changing tool is refused when the entry cannot be
+   * written; a read-only one still answers.
+   */
+  const register = <Shape extends z.ZodRawShape>(
+    tool: string,
+    config: { description: string; inputSchema: Shape },
+    handler: (
+      args: z.objectOutputType<Shape, z.ZodTypeAny>,
+    ) => Promise<unknown>,
+    ids?: (
+      args: z.objectOutputType<Shape, z.ZodTypeAny>,
+      value: unknown,
+    ) => { planId?: unknown; runId?: unknown },
+  ) =>
+    server.registerTool(tool, config, (async (
+      args: z.objectOutputType<Shape, z.ZodTypeAny>,
+    ) => {
+      let callId: string | undefined;
+      try {
+        callId = engine.store.beginMcpCall({
+          tool,
+          clientKind: options.client,
+          argsSha256: mcpArgsSha256(args),
+        });
+      } catch (error) {
+        logFailure(tool, error);
+        if (STATE_CHANGING_TOOLS.has(tool))
+          throw new RefusalError(
+            "This server refused the call because it could not record it in its call log; its operator can see why on the server's standard error",
+          );
+      }
+      let outcome: McpCallOutcome = "error";
+      let value: unknown;
+      try {
+        value = await handler(args);
+        outcome = "ok";
+        return result(value);
+      } catch (error) {
+        if (error instanceof RefusalError) outcome = "refused";
+        throw error;
+      } finally {
+        if (callId)
+          try {
+            engine.store.finishMcpCall(callId, {
+              outcome,
+              ...known(ids?.(args, value) ?? {}),
+            });
+          } catch (error) {
+            logFailure(tool, error);
+          }
+      }
+    }) as unknown as ToolCallback<Shape>);
+  register(
     "context_get",
     {
       description:
@@ -132,10 +257,10 @@ export function createMcpServer(
           ],
         };
       }
-      return result(packet);
+      return packet;
     },
   );
-  server.registerTool(
+  register(
     "symbol_search",
     {
       description:
@@ -151,18 +276,16 @@ export function createMcpServer(
     async ({ query }) => {
       await allowed();
       const symbols = await engine.context.searchSymbols(query);
-      return result(
-        options.client === "cloud"
-          ? symbols.filter(
-              (s) =>
-                isAllowedPath(s.source.path, engine.config.policy, true) &&
-                ![s.name, s.signature, s.source.path].some(containsSecret),
-            )
-          : symbols,
-      );
+      return options.client === "cloud"
+        ? symbols.filter(
+            (s) =>
+              isAllowedPath(s.source.path, engine.config.policy, true) &&
+              ![s.name, s.signature, s.source.path].some(containsSecret),
+          )
+        : symbols;
     },
   );
-  server.registerTool(
+  register(
     "graph_neighbors",
     {
       description:
@@ -187,27 +310,25 @@ export function createMcpServer(
       const edges = await engine.context.neighbors(symbolId, undefined, depth, {
         exportOnly: options.client === "cloud",
       });
-      return result(
-        options.client === "cloud"
-          ? edges.filter(
-              (e) =>
-                isAllowedPath(e.source.path, engine.config.policy, true) &&
-                ![e.target, e.source.path].some(containsSecret),
-            )
-          : edges,
-      );
+      return options.client === "cloud"
+        ? edges.filter(
+            (e) =>
+              isAllowedPath(e.source.path, engine.config.policy, true) &&
+              ![e.target, e.source.path].some(containsSecret),
+          )
+        : edges;
     },
   );
-  server.registerTool(
+  register(
     "template_list",
     {
       description:
         "Lists the templates shipped with this Graph Engineering installation; it takes no input and does not read or index the project. Returns a JSON array of entries with id (scaffold:<id> for project scaffolds, graph-node:<id> for catalog nodes), name, source, status, description and version; graph-node entries also report executable and, when not executable, runtimeReason. Entries marked executable can run as managed-plan template steps; the rest, including planned entries, are catalog descriptions. It runs no project policy check, so it also answers a cloud-backed client while the project policy is offline.",
       inputSchema: {},
     },
-    async () => result(await listTemplates()),
+    async () => listTemplates(),
   );
-  server.registerTool(
+  register(
     "memory_propose",
     {
       description:
@@ -243,15 +364,15 @@ export function createMcpServer(
     async (args) => {
       await allowed();
       const memory = await engine.context.createMemory(args);
-      return result({
+      return {
         id: memory.id,
         status: memory.status,
         ...(memory.validUntil ? { validUntil: memory.validUntil } : {}),
-      });
+      };
     },
   );
-  if (options.client === "local" || options.allowRunStatus)
-    server.registerTool(
+  if (enabled.has("run_status"))
+    register(
       "run_status",
       {
         description:
@@ -267,21 +388,22 @@ export function createMcpServer(
       async ({ runId }) => {
         await allowed();
         const run = engine.store.run(runId);
-        return result({
+        return {
           id: run.id,
           status: run.status,
           usage: run.usage,
           commit: run.commit,
           pullRequest: run.pullRequest,
-        });
+        };
       },
+      ({ runId }) => ({ runId }),
     );
-  if (options.allowRun)
-    server.registerTool(
+  if (enabled.has("run_start"))
+    register(
       "run_start",
       {
         description:
-          "Starts a managed run of an existing plan in this project and returns JSON with the run's id and initial status; the run continues in the background and run_status, when exposed, reports its progress. The run works in an isolated git worktree, executes worker, template and operator-registered generator steps, runs the configured verification commands in a container, and publishes a commit or draft pull request only when the project's publication policy allows it and, for a plan that publishes, only after a person approved that plan with graph-engine plan-approve. When the project policy sets requirePlanApproval, every plan, including one that does not publish, needs that approval of its exact content before it can start, and this tool cannot give it. It fails if the plan is unknown, not approved when approval is required, the project policy or source changed since planning, a referenced generator was removed or changed, the concurrency limit is reached, the plan has no verification commands (a plan keeps the commands configured when it was created, so one made before any check was added needs a new plan), Docker is not running, or, for a cloud-backed client, the project policy is offline. Active runs are cancelled when this server's connection closes.",
+          "Starts a managed run of an existing plan in this project and returns JSON with the run's id and initial status; the run continues in the background and run_status, when exposed, reports its progress. Every plan, including one that does not publish and whatever the project policy says, needs a person's stored approval of its exact content (graph-engine plan-approve <planId> --yes) before this tool can start it, and this tool cannot give it; the refusal names the command with the plan's current planSha256. The run works in an isolated git worktree, executes worker, template and operator-registered generator steps, runs the configured verification commands in a container, and publishes a commit or draft pull request only when the project's publication policy allows it. It fails if the plan is unknown or not approved in its current content, the project policy or source changed since planning, a referenced generator was removed or changed, the concurrency limit is reached, the plan has no verification commands (a plan keeps the commands configured when it was created, so one made before any check was added needs a new plan), Docker is not running, or, for a cloud-backed client, the project policy is offline. Active runs are cancelled when this server's connection closes.",
         inputSchema: {
           planId: z
             .string()
@@ -292,21 +414,27 @@ export function createMcpServer(
       },
       async ({ planId }) => {
         await allowed();
-        // A plan that publishes, or any plan under requirePlanApproval,
-        // needs a person's approval; start enforces it.
-        const run = await engine.start(planId).catch((error: unknown) => {
-          // Detail such as local file names reaches only a client whose
-          // model runs on this machine.
-          if (options.client === "local" && error instanceof LocalDetailError)
-            throw new Error(localErrorMessage(error), { cause: error });
-          throw error;
-        });
-        return result({ id: run.id, status: run.status });
+        // Every run a client starts needs a person's stored approval of the
+        // plan's exact content (graph-engine plan-approve --yes), whatever
+        // the project policy says; start enforces it.
+        const run = await engine
+          .start(planId, { requireStoredApproval: true })
+          .catch((error: unknown) => {
+            // Detail such as local file names reaches only a client whose
+            // model runs on this machine.
+            if (options.client === "local" && error instanceof LocalDetailError)
+              throw new Error(localErrorMessage(error), { cause: error });
+            throw error;
+          });
+        return { id: run.id, status: run.status };
       },
+      ({ planId }, value) => ({
+        planId,
+        runId: (value as { id?: unknown } | undefined)?.id,
+      }),
     );
-  const readsRuns = options.client === "local" || options.allowRunStatus;
-  if (readsRuns) {
-    server.registerTool(
+  if (enabled.has("run_list"))
+    register(
       "run_list",
       {
         description:
@@ -323,23 +451,22 @@ export function createMcpServer(
       },
       async ({ limit }) => {
         await allowed();
-        return result(
-          engine.store
-            .runs()
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-            .slice(0, limit)
-            .map((run) => ({
-              id: run.id,
-              planId: run.plan.id,
-              status: run.status,
-              ...(options.client === "local"
-                ? { objective: run.plan.objective }
-                : {}),
-            })),
-        );
+        return engine.store
+          .runs()
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, limit)
+          .map((run) => ({
+            id: run.id,
+            planId: run.plan.id,
+            status: run.status,
+            ...(options.client === "local"
+              ? { objective: run.plan.objective }
+              : {}),
+          }));
       },
     );
-    server.registerTool(
+  if (enabled.has("run_events"))
+    register(
       "run_events",
       {
         description:
@@ -384,7 +511,7 @@ export function createMcpServer(
         const stopped = !unfinished(run.status) && !engine.isActive(run.id);
         const all = engine.store.events(run.id);
         const events = all.slice(after, after + limit);
-        return result({
+        return {
           status: engine.store.run(run.id).status,
           next: after + events.length,
           complete: stopped && after + events.length >= all.length,
@@ -393,12 +520,12 @@ export function createMcpServer(
               ? event
               : { type: event.type, at: event.at, stepId: event.stepId },
           ),
-        });
+        };
       },
+      ({ runId }) => ({ runId }),
     );
-  }
-  if (options.allowRun) {
-    server.registerTool(
+  if (enabled.has("plan_create"))
+    register(
       "plan_create",
       {
         description:
@@ -473,7 +600,7 @@ export function createMcpServer(
           options.client !== "local" &&
           engine.config.policy.publication !== "none"
         )
-          throw new Error(
+          throw new RefusalError(
             "A cloud-backed client can create plans only while project publication is none: a plan it wrote could otherwise publish private source",
           );
         const plan = await engine.createPlan({
@@ -481,7 +608,7 @@ export function createMcpServer(
           cloudAuthored: options.client !== "local",
         });
         const warnings = engine.planWarnings(plan);
-        return result({
+        return {
           ...(warnings.length ? { warnings } : {}),
           id: plan.id,
           objective: plan.objective,
@@ -494,10 +621,14 @@ export function createMcpServer(
             generatorId: step.generatorId,
           })),
           routing: plan.routing,
-        });
+        };
       },
+      (_args, value) => ({
+        planId: (value as { id?: unknown } | undefined)?.id,
+      }),
     );
-    server.registerTool(
+  if (enabled.has("plan_decompose"))
+    register(
       "plan_decompose",
       {
         description:
@@ -530,17 +661,17 @@ export function createMcpServer(
           options.client !== "local" &&
           engine.config.policy.publication !== "none"
         )
-          throw new Error(
+          throw new RefusalError(
             "A cloud-backed client can decompose plans only while project publication is none",
           );
-        const proposal = await engine.proposeSteps({
+        return engine.proposeSteps({
           ...args,
           exportOnly: options.client !== "local",
         });
-        return result(proposal);
       },
     );
-    server.registerTool(
+  if (enabled.has("run_cancel"))
+    register(
       "run_cancel",
       {
         description:
@@ -552,10 +683,10 @@ export function createMcpServer(
       async ({ runId }) => {
         await allowed();
         const run = await engine.cancel(runId);
-        return result({ id: run.id, status: run.status });
+        return { id: run.id, status: run.status };
       },
+      ({ runId }) => ({ runId }),
     );
-  }
   return server;
 }
 export async function serveMcp(

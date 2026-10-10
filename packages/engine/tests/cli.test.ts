@@ -1215,6 +1215,63 @@ describe("command line", () => {
     }
   }, 120_000);
 
+  it("prints the MCP call log with mcp-log, newest first, filtered by --tool and bounded by --limit", async () => {
+    const { root, data, graph } = await project();
+    await graph("init");
+    const { projectId } = JSON.parse(
+      await readFile(path.join(root, ".graph/project.json"), "utf8"),
+    );
+    expect(JSON.parse((await graph("mcp-log")).stdout)).toEqual([]);
+    const { RunStore } = await import("../src/store.js");
+    const store = new RunStore(
+      path.join(data, "projects", projectId),
+      projectId,
+    );
+    try {
+      for (const tool of ["context_get", "run_list", "context_get"]) {
+        const callId = store.beginMcpCall({
+          tool,
+          clientKind: "cloud",
+          argsSha256: "a".repeat(64),
+        });
+        store.finishMcpCall(callId, { outcome: "ok" });
+      }
+    } finally {
+      store.close();
+    }
+    const all = JSON.parse((await graph("mcp-log")).stdout) as {
+      tool: string;
+      clientKind: string;
+      argsSha256: string;
+      outcome: string;
+    }[];
+    expect(all.map((entry) => entry.tool)).toEqual([
+      "context_get",
+      "run_list",
+      "context_get",
+    ]);
+    expect(all[0]).toMatchObject({
+      clientKind: "cloud",
+      argsSha256: "a".repeat(64),
+      outcome: "ok",
+    });
+    const filtered = JSON.parse(
+      (await graph("mcp-log", "--tool", "context_get", "--limit", "1")).stdout,
+    );
+    expect(filtered).toEqual([all[0]]);
+    const bad = await graph("mcp-log", "--limit", "0");
+    expect(bad.code).not.toBe(0);
+    expect(bad.stderr).toContain("--limit must be a whole number");
+  }, 120_000);
+
+  it("refuses an unknown --allow-tool name before starting the MCP server", async () => {
+    const { graph } = await project();
+    await graph("init");
+    const refused = await graph("mcp", "--allow-tool", "run_delete");
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toContain("--allow-tool does not know run_delete");
+  }, 120_000);
+
   // A run database this engine refuses to open must end the command, not
   // leave it running on the context engine's database worker.
   it("exits with the error when the engine cannot open its run database, instead of keeping the process alive", async () => {
@@ -1230,7 +1287,7 @@ describe("command line", () => {
     };
     // Left by a newer engine: this one refuses a downgrade.
     const db = new Database(await runDatabase(newer.root, newer.data));
-    db.pragma("user_version = 5");
+    db.pragma("user_version = 6");
     db.close();
     const corrupt = await project();
     await corrupt.graph("init");
@@ -1588,6 +1645,8 @@ describe("command line", () => {
         "none",
         { slowRemove: true },
       );
+      // A run an MCP client starts needs a person's stored approval.
+      expect((await graph("plan-approve", planId, "--yes")).code).toBe(0);
       const child = start("mcp", "--client", "local", "--allow-run");
       let stdout = "";
       let stderr = "";

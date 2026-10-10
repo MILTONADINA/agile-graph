@@ -24,7 +24,7 @@ import {
 } from "./decisions.js";
 import { containsSecret } from "./policy.js";
 import { loadProviders } from "./project.js";
-import type { RunStore } from "./store.js";
+import { RUN_SCHEMA_VERSION, type RunStore } from "./store.js";
 
 const JSON_FILES = [
   "providers.json",
@@ -47,7 +47,7 @@ const manifestSchema = z
     schema: z
       .object({
         context: z.number().int().min(1).max(CONTEXT_SCHEMA_VERSION),
-        runs: z.number().int().min(1).max(4),
+        runs: z.number().int().min(1).max(RUN_SCHEMA_VERSION),
       })
       .strict(),
     files: z
