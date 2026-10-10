@@ -13,6 +13,7 @@ import { ContextEngine } from "../src/context/index.js";
 import {
   memoryExpired,
   memoryExpiresAt,
+  parseMemoryExpiry,
 } from "../src/context/memory-assertions.js";
 import { checked } from "../src/util.js";
 
@@ -90,21 +91,23 @@ function record(
   } as MemoryRecord;
 }
 
-it("expires a memory at its own validUntil or once every reviewed assertion has lapsed", () => {
+it("expires a memory only at its own validUntil, never because its reviewed claims' windows have ended", () => {
   const soon = iso(START + DAY),
     later = iso(START + 3 * DAY);
   expect(memoryExpiresAt(record(undefined))).toBeUndefined();
   expect(memoryExpiresAt(record(soon))).toBe(START + DAY);
-  // The latest assertion end counts, and only when every claim has one.
-  expect(
-    memoryExpiresAt(
-      record(undefined, [{ validUntil: soon }, { validUntil: later }]),
-    ),
-  ).toBe(START + 3 * DAY);
-  expect(
-    memoryExpiresAt(record(undefined, [{ validUntil: soon }, {}])),
-  ).toBeUndefined();
-  // The earlier of the two ends applies.
+  // A claim's validUntil says when that fact held. Claims whose windows have
+  // all ended leave a memory without its own expiry open-ended...
+  const lapsedClaims = record(undefined, [
+    { validUntil: soon },
+    { validUntil: later },
+  ]);
+  expect(memoryExpiresAt(lapsedClaims)).toBeUndefined();
+  expect(memoryExpired(lapsedClaims, START + 100 * DAY)).toBe(false);
+  // ...and neither shorten nor extend a memory's own expiry.
+  expect(memoryExpiresAt(record(later, [{ validUntil: soon }]))).toBe(
+    START + 3 * DAY,
+  );
   expect(memoryExpiresAt(record(soon, [{ validUntil: later }]))).toBe(
     START + DAY,
   );
@@ -193,6 +196,23 @@ it("refuses a malformed or past expiry and an expiry change after acceptance, wh
       validUntil: "2029-12-31T00:00:00Z",
     }),
   ).rejects.toThrow("has already passed");
+  // A date that does not exist on the calendar is refused, not rolled over
+  // to 2 or 3 March.
+  for (const impossible of [
+    "2030-02-31T00:00:00Z",
+    "2031-02-29T12:00:00Z",
+    "2030-04-31T00:00:00+02:00",
+  ])
+    await expect(
+      engine.proposeMemory({
+        kind: "constraint",
+        text: "Toy",
+        validUntil: impossible,
+      }),
+    ).rejects.toThrow("ISO 8601 date-time with a time zone");
+  expect(parseMemoryExpiry("2032-02-29T23:59:59+05:00")).toBe(
+    "2032-02-29T18:59:59.000Z",
+  );
 
   const replaced = await engine.proposeMemory({
     kind: "decision",
@@ -300,6 +320,35 @@ it("marks a shared memory conflicted when its shared file changes the expiry, in
   await engine.importSharedMemories();
   expect((await engine.listMemories())[0]).toMatchObject({
     status: "conflicted",
+    validUntil: iso(START + DAY),
+  });
+});
+
+it("refuses a shared memory whose expiry is at or before its own creation", async () => {
+  const { engine, root } = await fixture();
+  const memory = await engine.proposeMemory({
+    kind: "constraint",
+    text: "Toy backdated constraint",
+    validUntil: iso(START + DAY),
+  });
+  // createdAt comes from the engine's clock, the same one expiry is read by.
+  expect(memory.createdAt).toBe(iso(START));
+  await engine.acceptMemory(memory.id);
+  const { path: shared } = await engine.promoteMemory(memory.id);
+  const file = join(root, shared);
+  const original = JSON.parse(await readFile(file, "utf8"));
+  for (const validUntil of [iso(START), iso(START - DAY)]) {
+    await writeFile(
+      file,
+      JSON.stringify({ ...original, validUntil }, null, 2) + "\n",
+    );
+    await expect(engine.importSharedMemories()).rejects.toThrow(
+      "cannot expire before it was created",
+    );
+  }
+  // The stored record is untouched.
+  expect((await engine.listMemories())[0]).toMatchObject({
+    status: "accepted",
     validUntil: iso(START + DAY),
   });
 });

@@ -127,25 +127,28 @@ graph-engine memory-review --within-days 30
 ```
 
 The expiry is stored in UTC as the memory's `validUntil`. A memory is expired
-from the instant its own `validUntil` passes or, when every reviewed claim has a
-`validUntil`, the latest of those passes, whichever comes first; a claim without
-one keeps the memory open-ended. An expired memory stays on record with its
-status, but `context` and `context_get` leave it out of the mandatory section and
-the retrieved items, and a local packet's warnings name it by ID only. Cloud
-packets keep their fixed warnings, so expiry removes a memory from them and adds
-nothing; export authorization still binds the exact text of every memory that
-remains. An expired requirement or constraint that was never authorized stops
-refusing cloud packets. A run already in progress keeps the mandatory memory it
-started with.
+from the instant its own `validUntil` passes, and only then. A reviewed claim's
+`validUntil` records when that claim held; it never expires the memory, so
+memories with lapsed claim windows stay in context until a person retires them.
+An expired memory stays on record with its status, but `context` and
+`context_get` leave it out of the mandatory section and the retrieved items, and
+a local packet's warnings name it by ID only. Cloud packets keep their fixed
+warnings, so expiry removes a memory from them and adds nothing; export
+authorization still binds the exact text of every memory that remains. An
+expired requirement or constraint that was never authorized stops refusing cloud
+packets. A run already in progress keeps the mandatory memory it started with,
+including after it resumes; expiry applies to packets built after it passes.
 
-An expiry already in the past is refused, and so is accepting a proposal whose
-expiry has passed unless `--valid-until` gives a later one. The MCP
-`memory_propose` tool takes an optional `validUntil`, but only a person accepts
-the proposal. Once a memory is accepted its expiry is fixed: to renew or shorten
-it, propose a successor with `memory-add --supersedes <id> --valid-until <iso>`.
-A shared file under `.graph/knowledge/` that changes a memory's expiry marks the
-memory conflicted, as any other edit does. `memory-review` flags each accepted
-or conflicted memory that has `expired`, or is `expiring` within the window
-(14 days unless `--within-days` says otherwise), with its ID and the date only.
+An expiry already in the past is refused, as is a date that does not exist on
+the calendar (such as `2030-02-31`) and, in a stored or shared memory, an expiry
+at or before the memory's `createdAt`. So is accepting a proposal whose expiry
+has passed unless `--valid-until` gives a later one. The MCP `memory_propose`
+tool takes an optional `validUntil`, but only a person accepts the proposal.
+Once a memory is accepted its expiry is fixed: to renew or shorten it, propose a
+successor with `memory-add --supersedes <id> --valid-until <iso>`. A shared file
+under `.graph/knowledge/` that changes a memory's expiry marks the memory
+conflicted, as any other edit does. `memory-review` flags each accepted or
+conflicted memory that has `expired`, or is `expiring` within the window (14
+days unless `--within-days` says otherwise), with its ID and the date only.
 Memories recorded before expiry existed have no `validUntil` and never expire;
 the field lives in the stored memory record, so no database migration is needed.

@@ -18,7 +18,7 @@ afterEach(async () => {
   for (const root of roots.splice(0))
     await rm(root, { recursive: true, force: true });
 });
-async function fixture(now?: () => number) {
+async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "graph-reviewed-memory-"));
   roots.push(root);
   const repo = path.join(root, "repo");
@@ -32,7 +32,6 @@ async function fixture(now?: () => number) {
     root: repo,
     dataDir: path.join(root, "data"),
     policy: { ...DEFAULT_POLICY, exportPaths: ["architecture.ts"] },
-    ...(now ? { now } : {}),
   });
   engines.push(engine);
   await engine.index({ semantic: false });
@@ -253,11 +252,7 @@ it("rejects explicit acceptance with backwards chronology and leaves both requir
 });
 
 it("preserves both imported mandatory records when successor validity runs backwards", async () => {
-  // Read context before the successor's only claim ends (2026-06-01), so the
-  // memory is not expired and the test isolates the supersession conflict.
-  const { engine, repo, source } = await fixture(() =>
-    Date.parse("2026-05-01T00:00:00Z"),
-  );
+  const { engine, repo, source } = await fixture();
   const previous = await engine.createMemory({
     kind: "constraint",
     text: "Keep the current production database.",
