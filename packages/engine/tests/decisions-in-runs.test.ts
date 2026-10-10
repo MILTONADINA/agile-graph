@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -23,13 +23,22 @@ import {
   summarizeContextInsights,
 } from "../src/insights-context.js";
 import { RunStore } from "../src/store.js";
-import { hash } from "../src/util.js";
+import { checked, hash, writeJson } from "../src/util.js";
+import { GraphEngine } from "../src/service.js";
+import {
+  configureProvider,
+  initializeProject,
+  projectDataDir,
+  PROJECT_FILE,
+} from "../src/project.js";
 
 // Synthetic toy data only: no real project, provider or key is involved.
 const model = "unit-hosted-model";
 const directories: string[] = [];
 const stores: RunStore[] = [];
+const engines: GraphEngine[] = [];
 afterEach(async () => {
+  for (const engine of engines.splice(0)) await engine.close();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   for (const store of stores.splice(0)) store.close();
@@ -397,6 +406,27 @@ describe("insights-context", () => {
     });
     expect(JSON.stringify(result)).not.toContain("src/");
   });
+  it("counts a workspace symlink to a file outside the workspace as unreadable", async () => {
+    const outside = await tempDir("graph-packet-outside-");
+    await writeFile(path.join(outside, "big.ts"), "z".repeat(40000));
+    const root = await tempDir("graph-packet-");
+    await mkdir(path.join(root, "src"));
+    await symlink(path.join(outside, "big.ts"), path.join(root, "src/link.ts"));
+    const result = await packetSavings(root, {
+      estimatedTokens: 10,
+      items: [
+        {
+          id: "1",
+          kind: "code",
+          text: "z",
+          score: 1,
+          source: { path: "src/link.ts", startLine: 1, endLine: 1 },
+        },
+      ] as ContextItem[],
+    });
+    expect(result.wholeFileTokens).toBe(0);
+    expect(result.unreadableFiles).toBe(1);
+  });
   it("reports context savings per run and in total, and decision quality per provider and category", () => {
     const event = (runId: string, data: object): RunEvent => ({
       version: "1.0.0",
@@ -523,4 +553,141 @@ describe("insights-context", () => {
       },
     ]);
   });
+});
+
+describe("hosted decisions in a GraphEngine run", () => {
+  const JEV = "https://api.example.test/decide";
+  /**
+   * A toy git project whose policy lets Jev decide under decisionMaxCostUsd
+   * while a priced hosted worker stays under maxCostUsd 0.
+   */
+  async function engineFixture() {
+    const root = await tempDir("graph-decisions-run-");
+    await checked("git", ["init", "-b", "dev"], { cwd: root });
+    await checked("git", ["config", "user.name", "Graph Test"], { cwd: root });
+    await checked("git", ["config", "user.email", "test@example.invalid"], {
+      cwd: root,
+    });
+    await mkdir(path.join(root, "src"));
+    await mkdir(path.join(root, "private"));
+    await writeFile(
+      path.join(root, "src/math.cjs"),
+      "exports.add = (a, b) => a - b;\n",
+    );
+    await writeFile(
+      path.join(root, "private/math-notes.cjs"),
+      "// add helper notes\nexports.addNotes = (a, b) => a - b;\n",
+    );
+    const config = await initializeProject(root);
+    Object.assign(config.policy, {
+      inference: "allowlisted",
+      network: "allowlisted",
+      allowedHosts: ["api.example.test"],
+      providers: ["cloud-unit", "jev"],
+      exportPaths: ["src/**"],
+      maxCostUsd: 0,
+      decisionMaxCostUsd: 1,
+    });
+    config.verification = [{ image: "fixture", argv: ["test"] }];
+    await writeJson(path.join(root, PROJECT_FILE), config);
+    await checked("git", ["add", "."], { cwd: root });
+    await checked("git", ["commit", "-m", "test: initial fixture"], {
+      cwd: root,
+    });
+    const data = projectDataDir(config.projectId);
+    directories.push(data);
+    await configureProvider(data, {
+      id: "cloud-unit",
+      kind: "openai",
+      model: "unit-worker",
+      endpoint: "https://api.example.test/v1",
+      inputCostPerMillion: 1,
+      outputCostPerMillion: 1,
+    });
+    await writeJson(path.join(data, "decisions.json"), [
+      { ...jev, endpoint: JEV },
+    ]);
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        if (String(url) !== JEV)
+          throw new Error(`Unexpected network call to ${String(url)}`);
+        bodies.push(String(init?.body));
+        const questions = JSON.parse(String(init?.body)).questions as Record<
+          string,
+          { criteria: Record<string, string> }
+        >;
+        const answers = Object.fromEntries(
+          Object.entries(questions).map(([id, question]) => [
+            id,
+            { choice: Object.keys(question.criteria)[0], confidence: 0.9 },
+          ]),
+        );
+        return new Response(JSON.stringify({ model, answers }));
+      }),
+    );
+    const worker = vi.fn(async () => {
+      throw new Error("The worker must not be reached under maxCostUsd 0");
+    });
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker,
+      verify: async () => {
+        throw new Error("This test's run does not reach its checks");
+      },
+    });
+    engines.push(engine);
+    return { engine, bodies, worker };
+  }
+  it("settles a run's hosted decisions on the daily decision ledger and refuses its worker under maxCostUsd 0", async () => {
+    const { engine, bodies, worker } = await engineFixture();
+    const plan = await engine.createPlan({
+      objective: "Fix add in src/math.cjs",
+      acceptance: ["add returns the sum"],
+      providerId: "cloud-unit",
+    });
+    const run = await engine.wait((await engine.start(plan.id)).id);
+    expect(bodies.length).toBeGreaterThan(0);
+    const day = new Date().toISOString().slice(0, 10);
+    expect(engine.store.usage(`decisions-${day}`).costUsd).toBeGreaterThan(0);
+    expect(engine.store.usage(plan.id).costUsd ?? 0).toBe(0);
+    expect(
+      engine.store
+        .decisions()
+        .some(
+          (record) => record.provider === "jev" && record.selected !== null,
+        ),
+    ).toBe(true);
+    expect(worker).not.toHaveBeenCalled();
+    expect(run.status).toBe("failed");
+    expect(String(run.error)).toMatch(/cost|ceiling|budget/i);
+  }, 60000);
+  it("sends a run's hosted context selection only exportable path labels", async () => {
+    const { engine, bodies } = await engineFixture();
+    const plan = await engine.createPlan({
+      objective: "Fix add in src/math.cjs and read the add notes",
+      acceptance: ["add returns the sum"],
+      providerId: "cloud-unit",
+    });
+    await engine.wait((await engine.start(plan.id)).id);
+    const selection = engine.store
+      .decisions()
+      .filter((record) => record.category === "file-selection");
+    // The exportable excerpt reached Jev and was answered there; the
+    // non-exportable one stayed local-only.
+    expect(
+      selection.some(
+        (record) => record.provider === "jev" && record.selected === "include",
+      ),
+    ).toBe(true);
+    expect(
+      selection.some((record) =>
+        String(record.evidence.failure).includes("explicitly exportable"),
+      ),
+    ).toBe(true);
+    expect(bodies.join("\n")).toContain("src/math.cjs:");
+    expect(bodies.join("\n")).not.toContain("private/");
+    expect(bodies.join("\n")).not.toContain("addNotes");
+  }, 60000);
 });
