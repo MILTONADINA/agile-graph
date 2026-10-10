@@ -180,6 +180,57 @@ it("keeps an expired memory out of the mandatory set and retrieved items, naming
   ]);
 });
 
+it("keeps an expired mandatory memory only for a run that started with it, under the same export checks", async () => {
+  const { engine, clock } = await fixture();
+  const constraintText = "RETAINED_CONSTRAINT_CANARY freeze the toy release";
+  const observationText = "RETAINED_OBSERVATION_CANARY toy release notes";
+  const constraint = await engine.proposeMemory({
+    kind: "constraint",
+    text: constraintText,
+    validUntil: iso(START + DAY),
+  });
+  const observation = await engine.proposeMemory({
+    kind: "observation",
+    text: observationText,
+    validUntil: iso(START + DAY),
+  });
+  await engine.acceptMemory(constraint.id);
+  await engine.acceptMemory(observation.id);
+  const query = { query: "toy release", retrieval: "lexical" as const };
+  clock.now = START + 2 * DAY;
+  const retained = await engine.getContext({
+    ...query,
+    retainExpired: [constraint.id, observation.id, "memory-unknown"],
+  });
+  // Only the mandatory kind is kept; nothing is added.
+  expect(retained.mandatory).toEqual([constraintText]);
+  expect(retained.mandatorySources).toEqual([
+    expect.objectContaining({
+      memoryId: constraint.id,
+      text: constraintText,
+      exportAuthorized: false,
+    }),
+  ]);
+  expect(JSON.stringify(retained)).not.toContain(observationText);
+  const warnings = retained.coverage.warnings.join("\n");
+  expect(warnings).toContain(
+    `Expired memory kept for the run in progress that started with it: ${constraint.id}.`,
+  );
+  expect(warnings).toContain(
+    `Expired memory left out of context: ${observation.id}.`,
+  );
+  // A private, unauthorized memory kept for a run is still refused for export.
+  await expect(
+    engine.getContext({
+      ...query,
+      exportOnly: true,
+      retainExpired: [constraint.id],
+    }),
+  ).rejects.toThrow(constraint.id);
+  // Without the run's starting set, expiry applies as usual.
+  expect((await engine.getContext(query)).mandatory).toEqual([]);
+});
+
 it("refuses a malformed or past expiry and an expiry change after acceptance, while acceptance may set or replace it", async () => {
   const { engine, clock } = await fixture();
   await expect(

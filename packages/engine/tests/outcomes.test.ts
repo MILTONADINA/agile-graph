@@ -300,6 +300,85 @@ describe("run outcomes", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps a run's starting mandatory memory after it expires and the run resumes", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.maxAttempts = 1;
+    });
+    const DAY = 86_400_000;
+    const clock = { now: Date.parse("2030-01-01T00:00:00.000Z") };
+    const text = "Arithmetic helpers must stay pure functions";
+    const setup = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      now: () => clock.now,
+    });
+    const memory = await setup.context.createMemory({
+      kind: "constraint",
+      text,
+      validUntil: new Date(clock.now + DAY).toISOString(),
+    });
+    await setup.context.acceptMemory(memory.id);
+    await setup.close();
+    const contexts: WorkerInput["context"][] = [];
+    // The first worker call fails, so the resumed run asks a worker again.
+    let unavailable = true;
+    const capturing = vi.fn(async (input: WorkerInput) => {
+      contexts.push(structuredClone(input.context));
+      if (unavailable) throw new Error("fixture worker unavailable");
+      return worker(input);
+    });
+    const { engine, result } = await run(root, {
+      now: () => clock.now,
+      worker: capturing,
+    });
+    expect(result.status).toBe("failed");
+    expect(contexts.at(-1)!.mandatory).toContain(text);
+    // The memory expires while the run is stopped; the run then resumes.
+    clock.now += 2 * DAY;
+    unavailable = false;
+    const before = contexts.length;
+    await engine.resume(result.id, true);
+    const resumed = await engine.wait(result.id);
+    expect(resumed.status).toBe("succeeded");
+    expect(contexts.length).toBeGreaterThan(before);
+    for (const context of contexts.slice(before)) {
+      expect(context.mandatory).toContain(text);
+      expect(context.coverage.warnings.join("\n")).not.toContain(
+        "Expired memory left out of context",
+      );
+      expect(context.mandatorySources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            memoryId: memory.id,
+            text,
+            exportAuthorized: false,
+          }),
+        ]),
+      );
+    }
+    expect(
+      engine.store
+        .events(result.id)
+        .filter((event) => event.type === "context.memories")
+        .map((event) => event.data.memoryIds),
+    ).toEqual([[memory.id], [memory.id]]);
+    // A run that starts after the expiry never gets it.
+    const fresh = contexts.length;
+    const plan = await engine.createPlan({
+      objective: "Fix addition in math.cjs",
+      acceptance: ["2 + 3 is 5"],
+    });
+    const later = await engine.wait((await engine.start(plan.id)).id);
+    expect(contexts.length).toBeGreaterThan(fresh);
+    for (const context of contexts.slice(fresh)) {
+      expect(context.mandatory).not.toContain(text);
+      expect(JSON.stringify(context)).not.toContain(text);
+      expect(context.coverage.warnings.join("\n")).toContain(
+        `Expired memory left out of context: ${memory.id}.`,
+      );
+    }
+    expect(engine.store.outcomes(later.id)[0]!.memoryIds).toEqual([]);
+  });
+
   it("records a person's acceptance once, only for a succeeded result", async () => {
     const { root } = await fixture();
     const { engine, result } = await run(root);

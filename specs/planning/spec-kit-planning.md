@@ -10,9 +10,11 @@ Planning from a spec loses or guesses information. A criterion written over seve
 
 ## Acceptance criteria
 
-- AC1: A spec's acceptance criterion keeps its indented continuation lines, nested bullets and indented fenced code blocks, joined into one string, while its `- Test:` link lines stay out of the text and keep linking tests, and nothing inside a fence is read as a criterion, a test link or a clarification marker.
+- AC1: A spec's acceptance criterion keeps its indented continuation lines, nested bullets and indented fenced code blocks, joined into one string, while its `- Test:` link lines stay out of the text and keep linking tests, and nothing inside a fence is read as a criterion, a test link or a clarification marker. A fence closes only on a line of the same delimiter character, at least as long as the opening one and with no info string, as in CommonMark, so a four-backtick block can hold a three-backtick example.
   - Test: packages/engine/tests/specs.test.ts :: keeps a criterion's wrapped lines and nested bullets in its text
   - Test: packages/engine/tests/specs.test.ts :: keeps a fenced block under a criterion in its text but reads no marker in it
+  - Test: packages/engine/tests/specs.test.ts :: closes a fence only with the same delimiter, at least as long, with no info string
+  - Test: packages/engine/tests/specs.test.ts :: passes a ready spec whose four-backtick example holds a three-backtick snippet and a marker
 - AC2: An inline NEEDS CLARIFICATION marker, in any case and with or without a colon and a question, in the Problem, Acceptance criteria, Security considerations or Non-goals section is a `spec-check` error naming its question, or saying none was written, for a ready or implemented spec, a draft may hold markers, `plan --spec` refuses a spec while any remain and names them, and the spec template explains the marker in a comment line.
   - Test: packages/engine/tests/specs.test.ts :: fails a ready spec with open clarification markers but lets a draft hold them
   - Test: packages/engine/tests/specs.test.ts :: refuses to plan a spec with open clarification markers, naming them

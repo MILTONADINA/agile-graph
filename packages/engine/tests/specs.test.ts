@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DEFAULT_POLICY } from "@graph-engineering/contracts";
@@ -204,6 +211,47 @@ describe("spec parsing", () => {
     expect(planFromSpec(parsed).acceptance[0]).toContain('"total": 1250');
   });
 
+  it("closes a fence only with the same delimiter, at least as long, with no info string", () => {
+    const parsed = parseSpec(
+      "specs/billing/invoice-list.md",
+      spec({
+        status: "ready",
+        criteria: [
+          "- AC1: GET /invoices documents its example",
+          "  ````markdown",
+          "  ```json",
+          '  { "note": "[NEEDS CLARIFICATION]" }',
+          "  ```",
+          "- AC8: not a criterion",
+          "  ````",
+          "  for each invoice",
+          "  - Test: tests/invoices.test.ts :: lists invoices",
+          "- AC2: Refused with",
+          "  ~~~",
+          "  ```",
+          "  ~~~~ text",
+          "- AC9: not a criterion either [NEEDS CLARIFICATION: inside]",
+          "  ~~~~",
+          "  in the body",
+        ].join("\n"),
+      }),
+    );
+    expect(parsed.criteria).toEqual([
+      {
+        id: "AC1",
+        text: 'GET /invoices documents its example ````markdown ```json { "note": "[NEEDS CLARIFICATION]" } ``` - AC8: not a criterion ```` for each invoice',
+        tests: [{ path: "tests/invoices.test.ts", name: "lists invoices" }],
+      },
+      {
+        id: "AC2",
+        text: "Refused with ~~~ ``` ~~~~ text - AC9: not a criterion either [NEEDS CLARIFICATION: inside] ~~~~ in the body",
+        tests: [],
+      },
+    ]);
+    expect(clarifications(parsed)).toEqual([]);
+    expect(planFromSpec(parsed).acceptance).toHaveLength(2);
+  });
+
   it("finds clarification markers in any case, with or without a question", () => {
     const parsed = parseSpec(
       "specs/billing/invoice-list.md",
@@ -333,6 +381,34 @@ describe("spec check", () => {
       "tests/invoices.test.ts": tests,
     });
     expect((await checkSpecs(draft, DEFAULT_POLICY)).errors).toEqual([]);
+  });
+
+  it("passes a ready spec whose four-backtick example holds a three-backtick snippet and a marker", async () => {
+    const root = await repo({
+      "specs/billing/invoice-list.md": spec({ status: "ready" }).replace(
+        "Accountants need to see every invoice.",
+        [
+          "Accountants need to see every invoice. A spec may show:",
+          "",
+          "````markdown",
+          "```",
+          "- AC1: Paged [NEEDS CLARIFICATION: an example, not a question]",
+          "```",
+          "## Non-goals",
+          "[NEEDS CLARIFICATION]",
+          "````",
+        ].join("\n"),
+      ),
+      "tests/invoices.test.ts": tests,
+    });
+    expect((await checkSpecs(root, DEFAULT_POLICY)).errors).toEqual([]);
+    const parsed = parseSpec(
+      "specs/billing/invoice-list.md",
+      await readFile(path.join(root, "specs/billing/invoice-list.md"), "utf8"),
+    );
+    expect(parsed.sections.Problem).toContain("## Non-goals");
+    expect(parsed.sections["Non-goals"]).toBe("Editing invoices.");
+    expect(clarifications(parsed)).toEqual([]);
   });
 
   it("lets a ready spec have untested criteria but not an empty one", async () => {
