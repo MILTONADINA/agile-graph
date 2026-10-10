@@ -310,7 +310,7 @@ graph-engine security-audit <run-id>
 ```
 
 audits the change a stopped run made (succeeded, failed or cancelled, with
-its workspace retained) with the project's configured reviewer, following
+its workspace retained) with the project's security auditor, following
 the method of Cloudflare's
 [security-audit skill](https://github.com/cloudflare/security-audit-skill)
 (MIT). It is advisory: it records `security.audit_completed` on the run and
@@ -318,22 +318,34 @@ prints the result, and it never gates, completes or fails a run, nor changes
 its status, outcome or review. Only the owner can decide to make it
 blocking; nothing in the engine does.
 
+```sh
+graph-engine auditor <provider-id>   # or --clear; no argument shows it
+```
+
+sets the auditor (`audit.providerId` in `.graph/project.json`). It is
+separate from the reviewer because configuring a reviewer turns on the
+review gate for every managed run; without an auditor the audit uses the
+reviewer, and with neither it refuses. The audit first checks the vendored
+Cloudflare files against their pinned digests, before any provider is
+looked up or paid. Ctrl-C cancels it.
+
 1. Budget first. Up to 10 verifier calls are reserved before the hunt, as
    Cloudflare's method does, and then one hunter call, through the same
    reservation path as reviewer calls. A day's audits share one cost owner,
    so `policy.maxTurns` and `policy.maxCostUsd` bound them apart from any
    run's own budget. When the budget leaves room for fewer verifications,
    fewer are reserved; with no room for one, the audit refuses before
-   hunting. Unused reservations are given back after the hunt.
+   hunting, and says whether the turn limit or the cost cap stopped it.
+   Unused reservations are given back after the hunt, and so is the
+   reservation of a call the auditor refused before sending it.
 2. Hunt. One call receives the run's diff (built as for code review) and a
    compact attack-class checklist, and returns candidate findings only. Its
    output contract has no verdict.
 3. Verify. Each candidate, up to the number reserved, goes to a separate
    verifier call that sees only that candidate and the diff and tries to
-   disprove it: `confirmed` (with a trace from entrypoint through
-   propagation to sink, evidence, a reproduction and severity),
-   `needs_validation` (with the missing facts and a safe local check) or
-   `rejected` (with the reason). Candidates past the cap are counted as
+   disprove it: a complete trace from entrypoint through propagation to
+   sink (with evidence and a reproduction), `needs_validation` (with the
+   missing facts and a safe local check) or `rejected` (with the reason). Candidates past the cap are counted as
    unverified and never reported as findings.
 4. Validate. Each record is built in Cloudflare's `report-schema.json`
    format with an engine-made fingerprint and checked by Cloudflare's own
@@ -342,12 +354,16 @@ blocking; nothing in the engine does.
    or cites a file the change did not touch, is listed under `invalid` with
    the validator's errors instead of as a finding.
 
-Nothing is executed. A `confirmed` record's `execution.observed_result`
-says so and gives the result the verifier expects; Cloudflare's skill
-demonstrates findings, so treat these as statically confirmed.
+Nothing is executed, so no record is ever `confirmed`: Cloudflare's method
+reserves that verdict for a demonstrated finding. A finding the verifier
+traced completely is reported as `needs_validation`, keeping the full
+trace, with a blocker saying it was not executed and a `validation_plan`
+holding the verifier's reproduction and the result it expects. The
+result's `counts.traced` says how many of the `needs_validation` records
+are such static traces.
 
-The auditor has the reviewer's restrictions: it must be an API or local
-provider the policy allows; a cloud provider never receives a potential
+The auditor has the reviewer's restrictions: it must be an API (`openai`,
+`anthropic` or `chat`) or local provider the policy allows; a cloud provider never receives a potential
 secret, and an audit is refused (recording `security.audit_refused`) when
 the run touched a path outside `policy.exportPaths` and the auditor is not
 local; the hunter's and each verifier's request must fit the context

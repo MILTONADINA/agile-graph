@@ -925,7 +925,7 @@ cli
 async function warnIfUnusable(
   project: Awaited<ReturnType<typeof loadProject>>,
   providerId: string,
-  role?: "reviewer",
+  role?: "reviewer" | "auditor",
 ): Promise<void> {
   const provider = (
     await loadProviders(projectDataDir(project.projectId))
@@ -937,6 +937,10 @@ async function warnIfUnusable(
   else if (role === "reviewer" && isInstalledKind(provider.kind))
     console.error(
       `Runs cannot use ${providerId} as their reviewer: it is an installed ${provider.kind} agent, and installed agents cannot review yet. Set an openai, anthropic, chat or local provider with graph-engine reviewer <providerId>.`,
+    );
+  else if (role === "auditor" && isInstalledKind(provider.kind))
+    console.error(
+      `Security audits cannot use ${providerId}: it is an installed ${provider.kind} agent, and installed agents cannot audit. Set an openai, anthropic, chat or local provider with graph-engine auditor <providerId>.`,
     );
   else if (!project.policy.providers.includes(providerId))
     console.error(
@@ -970,6 +974,23 @@ cli
     }
     if (providerId) await warnIfUnusable(project, providerId, "reviewer");
     print({ review: project.review ?? null });
+  });
+cli
+  .command("auditor [providerId]")
+  .description(
+    "Set the API or local provider graph-engine security-audit uses, without turning on the review gate, or show the current auditor; without one, audits use the reviewer",
+  )
+  .option("--clear", "Stop using a separate auditor; audits use the reviewer")
+  .action(async (providerId, options) => {
+    const project = await loadProject(root());
+    if (options.clear) delete project.audit;
+    else if (providerId) project.audit = { providerId };
+    if (options.clear || providerId) {
+      assertProjectConfig(project);
+      await writeJson(path.join(root(), PROJECT_FILE), project);
+    }
+    if (providerId) await warnIfUnusable(project, providerId, "auditor");
+    print({ audit: project.audit ?? null });
   });
 cli
   .command("tester [providerId]")
@@ -1705,9 +1726,21 @@ cli
 cli
   .command("security-audit <runId>")
   .description(
-    "Advisory AI security audit of a stopped run's change on Cloudflare's security-audit method: the configured reviewer hunts for candidate vulnerabilities in the run's diff, then a separate verifier call per candidate (at most 10, reserved first) confirms, rejects or asks for validation. Findings follow Cloudflare's report schema; the audit never gates, completes or fails a run",
+    "Advisory AI security audit of a stopped run's change on Cloudflare's security-audit method: the configured auditor (graph-engine auditor), or else the reviewer, hunts for candidate vulnerabilities in the run's diff, then a separate verifier call per candidate (at most 10, reserved first) rejects it or reports it as needing validation; nothing is executed, so no finding is confirmed. Findings follow Cloudflare's report schema; the audit never gates, completes or fails a run",
   )
-  .action((runId) => withEngine(async (engine) => engine.securityAudit(runId)));
+  .action(async (runId) => {
+    const engine = await GraphEngine.open(root());
+    try {
+      // Ctrl-C, SIGTERM or SIGHUP cancels the audit's model calls.
+      const audited = await cancellableScan(
+        "Cancelling the security audit...\n",
+        (signal) => engine.securityAudit(runId, { signal }),
+      );
+      if (audited) print(audited.result);
+    } finally {
+      await engine.close();
+    }
+  });
 cli
   .command("resume <runId>")
   .option(
