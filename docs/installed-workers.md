@@ -4,6 +4,40 @@ Installed clients return structured patch proposals. Graph Engineering applies a
 
 `discoverInstalledWorkers()` reports installed versions, availability, authentication, execution mode, and limitations. It runs version/help probes and generates temporary protocol schemas; it never logs in, installs a client, or requests model inference. Availability does not mean authentication or live inference was tested.
 
+## Which AI can do what
+
+Graph Engineering uses an AI in five roles: a **worker** implements plan
+steps, the **tester** writes acceptance tests before them, the **reviewer**
+gates the finished change ([code review](code-review.md)), the **planner**
+breaks an objective into steps ([decomposition](decomposition.md)), and an
+**MCP client** retrieves project context while you work in it
+([connecting an AI client](mcp-clients.md)). The current, honest position:
+
+| AI                                                              | Worker and tester                                                                                                              | Reviewer and planner                  | MCP client                                                        |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------------- |
+| Claude Code (installed)                                         | Yes. One bounded live proposal passed; a full Claude-managed repair is not claimed. Subscription mode fails closed on Windows. | No: installed agents cannot yet do it | Yes, with live retrieval recorded                                 |
+| Codex (installed)                                               | Not currently: installed `0.156.0` lacks the restricted read-root schema, so managed proposals are unavailable                 | No                                    | Yes, with live retrieval recorded                                 |
+| Cursor (installed SDK)                                          | Adapter available behind an explicit `apiKeyEnv`; mocked fail-closed tests only, not live-tested                               | No                                    | Yes; a direct stdio call passed, no in-app trace retained         |
+| Local OpenAI-compatible model (such as Qwen via oMLX or Ollama) | Yes; the worker path is live-tested with oMLX Qwen                                                                             | Yes                                   | No: it is called by the engine, not itself an MCP client          |
+| OpenAI and Anthropic APIs                                       | Yes, as cloud providers                                                                                                        | Yes, as cloud providers               | Not applicable                                                    |
+| Any other MCP client                                            | No                                                                                                                             | No                                    | Yes, for retrieval; run tools only when the operator enables them |
+
+Limits that apply across the table:
+
+- Installed agents report no cost the engine can enforce, so they run only
+  under `policy.maxCostUsd: null` and are refused under any numeric cap,
+  including the checked-in `0`. They also reject local-only policies.
+- A local provider in a local-only policy must use a loopback endpoint. Under
+  a numeric cap it also needs recorded prices, such as
+  `--input-cost 0 --output-cost 0`.
+- OpenAI and Anthropic workers are metered cloud providers: they receive only
+  exportable context, Graph-managed dispatch refuses mandatory memory not
+  authorized for export, and a plan written by a cloud MCP client keeps all
+  its roles on one side of the local/cloud boundary
+  ([platform guide](platform.md#mcp-clients)).
+- The default checked-in policy permits only the local `qwen` and `laya`
+  providers. Using any other worker is an operator's policy change.
+
 ## Reviewed executable identity (opt-in)
 
 Released in [PR #122](https://github.com/MILTONADINA/graph-engineering/pull/122)

@@ -4,12 +4,36 @@ These rules apply to every coding agent working in this repository: Codex,
 Claude Code (which loads this file through `CLAUDE.md`) and any other. Edit
 the rules here, not in `CLAUDE.md`.
 
-Before working, read the **Start here** section at the top of the
-[agent handover](docs/claude-code-handover.md), then the rest of it as needed.
-It records the owner's requirements, the current fork and evidence state, the
-safety boundaries, the work in flight and the next engineering work. Follow
-its linked primary documents and inspect the current Git state, the live fork
-`dev` tip, open PRs and checks before acting.
+## Where to look
+
+Read what the task needs, not everything up front:
+
+- Picking up in-flight work, or needing the owner's requirements, the fork
+  and evidence state or the detailed limits behind the rules below: the
+  **Start here** section of the [agent handover](docs/claude-code-handover.md).
+  Check the current Git state, the live fork `dev` tip, open PRs and checks
+  before acting on what it records, since it can be out of date.
+- Commands, configuration and policy: [docs/platform.md](docs/platform.md).
+- Connecting an AI client to the project MCP server:
+  [docs/mcp-clients.md](docs/mcp-clients.md).
+- Scan tools, baselines and the security gate:
+  [docs/security-scanning.md](docs/security-scanning.md).
+- A feature's acceptance criteria: [`specs/`](specs/README.md).
+- Before changing anything under `evaluation/` or the root
+  `package-lock.json`: the hash-pin tests listed under **Build and test**.
+
+## Autonomy and completion
+
+- For an implementation task, carry on through the implementation, the
+  relevant tests and fixing failures your change caused. Stop when the
+  requested behaviour works and the checks pass, or when the next step is an
+  owner-gated decision (see **Owner preferences**).
+- The repository's local test suites use disposable fixtures and have no
+  production access, so run and re-run them without asking. Opt-in tests
+  that download model weights, call metered Jev or test a live target are
+  not covered; the rules below still govern them.
+
+## Privacy and safety
 
 Privacy priority: cloud MCP `context_get` and Graph-managed cloud worker
 dispatch refuse mandatory memory an operator has not authorized for export by
@@ -25,7 +49,7 @@ PRs into fork `dev`; never push to either `main` or Kevin's parent repository.
 Preserve `.serena/` and private local files. Do not download another Qwen, run
 metered Jev without an operator-selected numeric session cap and reviewed
 price, or treat synthetic/self-signed evidence as independent promotion
-authority. The handover has the detailed requirements and limits.
+authority.
 
 ## Owner preferences
 
@@ -73,14 +97,14 @@ authority. The handover has the detailed requirements and limits.
 - `npm run check` is not CI. CI also runs `npm run format:check` and
   `npm run lint` first, the `node --test` suites in `scripts/` and
   `evaluation/`, the `graph-templates/tools/*` packages (`npm ci --prefix`
-  first) and `python -m unittest discover -s sidecars/laya -p 'test_*.py'`.
-  See `.github/workflows/ci.yml`. `format:check` covers only the paths listed
+  first) and `python -m unittest discover -s sidecars/laya -p 'test_*.py'`;
+  see `.github/workflows/ci.yml`. `format:check` covers only the paths listed
   in `package.json`, not `graph-templates/`, `create-graph-app/`, `AGENTS.md`
   or `CLAUDE.md`; don't run Prettier over excluded paths.
-- GitHub CI is the authority for Docker and native checks; an environment
-  without Docker can't run them locally.
-- ESLint (`eslint.config.mjs`) must stay error-free; existing warnings mark
-  known cleanup, some in hash-pinned files. Never run `eslint --fix` broadly.
+- GitHub CI is the authority for Docker and native checks, which an
+  environment without Docker can't run.
+- ESLint (`eslint.config.mjs`) must stay error-free. Existing warnings are
+  known cleanup, some in hash-pinned files; never run `eslint --fix` broadly.
 - Byte changes to hash-pinned files fail CI, including root
   `package-lock.json` and the evaluation harness (see
   `evaluation/historical-receipt-pins.test.mjs` and

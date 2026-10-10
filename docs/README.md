@@ -20,7 +20,8 @@ Start with [working as an AI agile team](agile-team.md), then the
 | [Feedback reports](feedback.md)                       | Default-on metadata-only difficulty reports, notice and opt-out        |
 | [Knowledge packs](knowledge-packs.md)                 | Offline, cited documentation for workers                               |
 | [Memory assertions](memory-assertions.md)             | Typed memory claims and contradiction checks                           |
-| [Installed workers](installed-workers.md)             | Native AI clients as workers and their limits                          |
+| [Installed workers](installed-workers.md)             | Native AI clients as workers, and which AI can do what                 |
+| [Connecting an AI client](mcp-clients.md)             | Using the graph over MCP from Claude Code, Codex, Cursor or any client |
 | [Worker context excerpts](worker-context-excerpts.md) | How workers read large files within a budget                           |
 | [Scaling](scaling.md)                                 | Working sets and limits for large repositories                         |
 | [Context lifecycle](context-lifecycle.md)             | Indexing, summaries, cache, backup and restore                         |
