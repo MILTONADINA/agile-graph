@@ -5,3 +5,5 @@
 **/coverage/
 **/__pycache__/
 **/package-lock.json
+# Vendored third-party files keep their published bytes (sha256-pinned).
+packages/engine/vendor/

@@ -303,6 +303,56 @@ end to end and checks that no container with the scan's ID label is left,
 and probes a loopback-only namespace to show that the Docker bridge gateway
 and 1.1.1.1 are unreachable from it; CI runs these in the scanner job.
 
+## AI security audit (advisory)
+
+```sh
+graph-engine security-audit <run-id>
+```
+
+audits the change a stopped run made (succeeded, failed or cancelled, with
+its workspace retained) with the project's configured reviewer, following
+the method of Cloudflare's
+[security-audit skill](https://github.com/cloudflare/security-audit-skill)
+(MIT). It is advisory: it records `security.audit_completed` on the run and
+prints the result, and it never gates, completes or fails a run, nor changes
+its status, outcome or review. Only the owner can decide to make it
+blocking; nothing in the engine does.
+
+1. Budget first. Up to 10 verifier calls are reserved before the hunt, as
+   Cloudflare's method does, and then one hunter call, through the same
+   reservation path as reviewer calls. A day's audits share one cost owner,
+   so `policy.maxTurns` and `policy.maxCostUsd` bound them apart from any
+   run's own budget. When the budget leaves room for fewer verifications,
+   fewer are reserved; with no room for one, the audit refuses before
+   hunting. Unused reservations are given back after the hunt.
+2. Hunt. One call receives the run's diff (built as for code review) and a
+   compact attack-class checklist, and returns candidate findings only. Its
+   output contract has no verdict.
+3. Verify. Each candidate, up to the number reserved, goes to a separate
+   verifier call that sees only that candidate and the diff and tries to
+   disprove it: `confirmed` (with a trace from entrypoint through
+   propagation to sink, evidence, a reproduction and severity),
+   `needs_validation` (with the missing facts and a safe local check) or
+   `rejected` (with the reason). Candidates past the cap are counted as
+   unverified and never reported as findings.
+4. Validate. Each record is built in Cloudflare's `report-schema.json`
+   format with an engine-made fingerprint and checked by Cloudflare's own
+   `validate-findings.cjs`, vendored unmodified and pinned by SHA-256 in
+   `packages/engine/vendor/cloudflare-security-audit/`. A record that fails,
+   or cites a file the change did not touch, is listed under `invalid` with
+   the validator's errors instead of as a finding.
+
+Nothing is executed. A `confirmed` record's `execution.observed_result`
+says so and gives the result the verifier expects; Cloudflare's skill
+demonstrates findings, so treat these as statically confirmed.
+
+The auditor has the reviewer's restrictions: it must be an API or local
+provider the policy allows; a cloud provider never receives a potential
+secret, and an audit is refused (recording `security.audit_refused`) when
+the run touched a path outside `policy.exportPaths` and the auditor is not
+local; the hunter's and each verifier's request must fit the context
+budget. Findings are redacted in the event and the printed result.
+
 ## What needs someone else
 
 - **Dependency advisories.** OSV-Scanner (pinned in the scanner image)

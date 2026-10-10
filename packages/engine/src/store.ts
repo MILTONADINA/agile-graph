@@ -465,6 +465,18 @@ export class RunStore {
       })
       .immediate();
   }
+  /**
+   * Gives back a reservation whose call was never sent, such as a verifier
+   * call reserved ahead of a hunt that found fewer candidates. A settled call
+   * keeps its usage: it was sent.
+   */
+  releaseReservation(ownerId: string, callId: string): void {
+    this.db
+      .prepare(
+        "DELETE FROM inference_calls WHERE id=? AND project_id=? AND owner_id=? AND usage_json IS NULL",
+      )
+      .run(callId, this.projectId, ownerId);
+  }
   settleCall(
     ownerId: string,
     callId: string,
