@@ -159,7 +159,15 @@ export interface RunEvidence {
   verification: EvidenceStage | null;
   review: (EvidenceStage & { by: "reviewer" | "person" }) | null;
   security: EvidenceStage | null;
-  /** True only when every gate that ran has a result about the final snapshot. */
+  /**
+   * Gates whose latest attempt started but recorded no result, so their
+   * earlier result may describe a snapshot the run has since left.
+   */
+  unfinished: ("verification" | "review" | "security")[];
+  /**
+   * True only when every gate that ran has a result about the final
+   * snapshot and no gate's latest attempt is unfinished.
+   */
   complete: boolean;
 }
 
@@ -216,12 +224,44 @@ export function runEvidence(events: readonly RunEvent[]): RunEvidence {
   const ran = [stage(verification, checks), review, security].filter(
     (item): item is EvidenceStage => item !== null,
   );
+  // A start after a gate's last result is an attempt that crashed or was
+  // interrupted: the older result cannot vouch for the run's latest state.
+  const startedSince = (started: string, ...completed: string[]) => {
+    const start = events.findLastIndex((event) => event.type === started);
+    const done = events.findLastIndex((event) =>
+      completed.includes(event.type),
+    );
+    return start > done;
+  };
+  const unfinished = (
+    [
+      [
+        "verification",
+        startedSince("verification.started", "verification.completed"),
+      ],
+      ["review", startedSince("review.started", "review.completed")],
+      [
+        "security",
+        startedSince(
+          "security.scan_started",
+          "security.scan_completed",
+          "security.gate_passed",
+        ),
+      ],
+    ] as const
+  )
+    .filter(([, open]) => open)
+    .map(([gate]) => gate);
   return {
     finalSnapshotHash,
     verification: stage(verification, checks),
     review,
     security,
-    complete: finalSnapshotHash !== null && ran.every((item) => item.current),
+    unfinished,
+    complete:
+      finalSnapshotHash !== null &&
+      !unfinished.length &&
+      ran.every((item) => item.current),
   };
 }
 

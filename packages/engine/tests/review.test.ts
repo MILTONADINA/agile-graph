@@ -7,6 +7,8 @@ import {
   priorBlockingFindings,
   REVIEW_INSTRUCTIONS,
   reusableFixVerdicts,
+  ADVISORY_FEEDBACK_LIMIT,
+  ADVISORY_MESSAGE_LIMIT,
   reviewOutcome,
   VERIFY_FIX_INSTRUCTIONS,
   type WorkerReview,
@@ -116,6 +118,41 @@ describe("review findings", () => {
     );
     // A passing review sends nothing back, advisory findings included.
     expect(reviewOutcome(approve, ["sum works"]).feedback).toBe("");
+  });
+
+  it("bounds the optional advisory feedback so it cannot crowd out the required repair", () => {
+    const advisory = Array.from({ length: 12 }, (_, index) => ({
+      severity: "advisory" as const,
+      path: "a.ts",
+      line: index + 1,
+      message: `suggestion ${index} ${"x".repeat(4000)}`,
+    }));
+    const failed = reviewOutcome(
+      {
+        ...approve,
+        verdict: "request-changes",
+        findings: [
+          ...advisory,
+          { severity: "blocking", path: null, line: null, message: "breaks" },
+        ],
+      },
+      ["sum works"],
+    );
+    const lines = failed.feedback.split("\n");
+    expect(lines.filter((line) => line.startsWith("- Advisory"))).toHaveLength(
+      ADVISORY_FEEDBACK_LIMIT,
+    );
+    expect(lines).toContain(
+      `- and ${12 - ADVISORY_FEEDBACK_LIMIT} more advisory finding(s), omitted`,
+    );
+    expect(
+      Math.max(
+        ...lines
+          .filter((line) => line.startsWith("- Advisory"))
+          .map((line) => line.length),
+      ),
+    ).toBeLessThan(ADVISORY_MESSAGE_LIMIT + 120);
+    expect(failed.feedback).toContain("Blocking: breaks");
   });
 
   it("reuses only fixed verdicts recorded for the same snapshot", () => {

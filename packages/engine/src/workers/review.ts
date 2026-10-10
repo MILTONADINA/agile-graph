@@ -328,19 +328,37 @@ export function reviewOutcome(
             `Blocking${location(finding)}: ${finding.message} (finding ${findingId(finding)})`,
         ),
         // Kept so a worker fixing the blocking findings can take cheap,
-        // in-scope suggestions in the same attempt; they never block.
+        // in-scope suggestions in the same attempt; they never block. Bounded
+        // because feedback is mandatory worker context: optional suggestions
+        // must never push the required repair past its context budget.
         ...(advisory.length
           ? [
               "Optional advisory findings (not required to pass review):",
-              ...advisory.map(
-                (finding) =>
-                  `- Advisory${location(finding)}: ${finding.message} (finding ${findingId(finding)})`,
-              ),
+              ...advisory
+                .slice(0, ADVISORY_FEEDBACK_LIMIT)
+                .map(
+                  (finding) =>
+                    `- Advisory${location(finding)}: ${clip(finding.message)} (finding ${findingId(finding)})`,
+                ),
+              ...(advisory.length > ADVISORY_FEEDBACK_LIMIT
+                ? [
+                    `- and ${advisory.length - ADVISORY_FEEDBACK_LIMIT} more advisory finding(s), omitted`,
+                  ]
+                : []),
             ]
           : []),
       ].join("\n");
   return { passed, feedback };
 }
+
+/** Advisory findings carried into retry feedback, and their message length. */
+export const ADVISORY_FEEDBACK_LIMIT = 5;
+export const ADVISORY_MESSAGE_LIMIT = 300;
+
+const clip = (text: string) =>
+  text.length > ADVISORY_MESSAGE_LIMIT
+    ? `${Array.from(text).slice(0, ADVISORY_MESSAGE_LIMIT).join("")}…`
+    : text;
 
 /** An earlier blocking finding, as the engine recorded it. */
 export interface PriorFinding {

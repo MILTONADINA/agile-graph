@@ -10,6 +10,7 @@ import {
   type RunRecord,
 } from "@graph-engineering/contracts";
 import { readRunReceipt, RunStore } from "../src/store.js";
+import { runEvidence } from "../src/overview.js";
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -64,6 +65,7 @@ it("reads a project-scoped run and ordered events without recovering an active r
       verification: null,
       review: null,
       security: null,
+      unfinished: [],
       complete: false,
     },
   });
@@ -192,4 +194,43 @@ it("projects an evidence ledger of the snapshot each gate last ran against", asy
     complete: false,
   });
   store.close();
+});
+
+it("leaves the evidence incomplete when a gate's latest attempt never recorded a result", () => {
+  let n = 0;
+  const event = (type: string, data: Record<string, unknown> = {}) => ({
+    id: `e${++n}`,
+    runId: "r",
+    type,
+    at: new Date(n * 1000).toISOString(),
+    data,
+  });
+  const passedChecks = { snapshotHash: "H", checks: [{ code: 0 }] };
+  const settled = [
+    event("verification.started", { snapshotHash: "H" }),
+    event("verification.completed", passedChecks),
+    event("review.started", { snapshotHash: "H" }),
+    event("review.completed", { snapshotHash: "H", passed: true }),
+    event("security.scan_started", { snapshotHash: "H" }),
+    event("security.gate_passed", { snapshotHash: "H" }),
+  ];
+  expect(runEvidence(settled as never)).toMatchObject({
+    unfinished: [],
+    complete: true,
+  });
+  // A repair moved the run on and its verification crashed before a result.
+  const crashed = [
+    ...settled,
+    event("verification.started", { snapshotHash: "X" }),
+  ];
+  expect(runEvidence(crashed as never)).toMatchObject({
+    finalSnapshotHash: "H",
+    unfinished: ["verification"],
+    complete: false,
+  });
+  const reviewCrashed = [
+    ...settled,
+    event("review.started", { snapshotHash: "H" }),
+  ];
+  expect(runEvidence(reviewCrashed as never).unfinished).toEqual(["review"]);
 });
