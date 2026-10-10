@@ -556,6 +556,30 @@ describe("directory and missing-file requests", () => {
     expect(listing.source!.path).toBe("src/app.ts");
   });
 
+  it("lists a directory requested with a trailing slash instead of ending the run", async () => {
+    const root = await gitWorkspace();
+    const cloud = input(
+      { ...packet([]), mandatorySources: [] },
+      {
+        id: "cloud",
+        kind: "openai",
+        model: "fixture",
+        inputCostPerMillion: 0,
+        outputCostPerMillion: 0,
+      },
+    );
+    cloud.policy = {
+      ...cloud.policy,
+      exportPaths: ["src/**"],
+      allowedHosts: ["api.openai.com"],
+    };
+    for (const worker of [undefined, cloud]) {
+      const result = await request(root, ["src/"], new SuppliedLines(), worker);
+      const listing = result.items.find((item) => item.kind === "outline")!;
+      expect(listing.text).toContain("- src/app.ts");
+    }
+  });
+
   it("gives a cloud worker no file whose name looks like a credential, requested or listed", async () => {
     const root = await gitWorkspace();
     // Built at run time, so this source holds no token-shaped literal.
