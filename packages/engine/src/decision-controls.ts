@@ -4,6 +4,8 @@ import {
   type DecisionBatchResult,
   type DecisionQuestion,
 } from "./decision-batch.js";
+import type { ContextItem, ProjectPolicy } from "@graph-engineering/contracts";
+import { containsSecret, isAllowedPath } from "./policy.js";
 import { hash } from "./util.js";
 
 export type DecisionSession = Omit<DecisionBatchOptions, "questions">;
@@ -16,7 +18,34 @@ export interface SelectionCandidate {
   labelTruncated?: boolean;
   required?: boolean;
   baselineInclude?: boolean;
+  /**
+   * The caller checked that the label may leave the machine under policy
+   * (an exportable path); absent or false keeps the question local-only.
+   */
   exportable?: boolean;
+}
+/**
+ * A run's context items as selection candidates. Only a source label on a
+ * path policy lets leave the machine is exportable to a hosted decision
+ * provider; memory and other text labels stay local-only.
+ */
+export function contextSelectionCandidates(
+  items: readonly ContextItem[],
+  policy: ProjectPolicy,
+): SelectionCandidate[] {
+  return items.map((item) => ({
+    id: item.id,
+    kind: item.kind === "memory" ? "memory" : "file",
+    label: item.source
+      ? `${item.source.path}:${item.source.startLine}-${item.source.endLine}`
+      : item.text.slice(0, 160),
+    labelTruncated: !item.source && item.text.length > 160,
+    baselineInclude: true,
+    exportable:
+      item.kind !== "memory" &&
+      !!item.source &&
+      isAllowedPath(item.source.path, policy, true),
+  }));
 }
 const promoted = (result: DecisionBatchResult, id: string, baseline: string) =>
   result.selections[id] ?? baseline;
@@ -35,8 +64,19 @@ export async function selectContext(
     records: DecisionBatchResult["records"] = [],
     usage: DecisionBatchResult["usage"] = [],
     selections: Record<string, string> = {};
-  for (let offset = 0; offset < options.candidates.length; offset += 12) {
-    const group = options.candidates.slice(offset, offset + 12);
+  // A hosted provider may only see a call whose every question is
+  // exportable, so exportable and local-only candidates go in separate
+  // groups: one local-only label never keeps the others from Jev.
+  const exportable = (candidate: SelectionCandidate) =>
+    candidate.exportable === true && !containsSecret(candidate.label);
+  const groups: SelectionCandidate[][] = [];
+  for (const part of [
+    options.candidates.filter(exportable),
+    options.candidates.filter((candidate) => !exportable(candidate)),
+  ])
+    for (let offset = 0; offset < part.length; offset += 12)
+      groups.push(part.slice(offset, offset + 12));
+  for (const group of groups) {
     const questions = group.map<DecisionQuestion>((candidate) => ({
       id: `item-${hash(candidate.id).slice(0, 16)}`,
       category: `${candidate.kind}-selection`,
@@ -53,7 +93,7 @@ export async function selectContext(
         candidate.required || candidate.baselineInclude !== false
           ? "include"
           : "exclude",
-      exportable: candidate.exportable === true,
+      exportable: exportable(candidate),
     }));
     // A label cut here or by the caller is incomplete context: never `auto`.
     const result = await decideBatch({

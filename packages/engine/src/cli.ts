@@ -20,6 +20,7 @@ import { GraphEngine } from "./service.js";
 import { interruptedRunExitCode, runExitCode } from "./run-exit-code.js";
 import { repositoryProfile } from "./scale.js";
 import { summarizeOutcomes } from "./insights.js";
+import { summarizeContextInsights } from "./insights-context.js";
 import {
   buildFeedbackReport,
   classifyError,
@@ -1691,6 +1692,22 @@ cli
         ? summarizeOutcomes(outcomes, engine.store.decisions())
         : outcomes;
     }),
+  );
+cli
+  .command("insights-context")
+  .description(
+    "Context savings (tokens in worker context packets against the whole files their excerpts came from, per run and in total) and decision quality (per provider and category: answered and abstained with reasons, agreement between providers, latency and spend). Read-only local analysis of recorded data: counts only, no file contents or paths; no MCP tool returns it",
+  )
+  .action(() =>
+    withEngine(async (engine) =>
+      summarizeContextInsights(
+        engine.store.runs().map((run) => ({
+          runId: run.id,
+          events: engine.store.events(run.id),
+        })),
+        engine.store.decisions(),
+      ),
+    ),
   );
 cli.command("run <planId>").action((planId) =>
   withRunEngine(async (engine) => {

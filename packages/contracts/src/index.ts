@@ -135,6 +135,15 @@ export interface ProjectPolicy {
    */
   decisionTimeoutSeconds?: number | null;
   maxCostUsd: number | null;
+  /**
+   * Hosted typed-decision spend only (Jev and other metered decision
+   * providers): a USD cap per UTC day shared by every decision in the
+   * project, charged to a daily decision ledger instead of the run's.
+   * Absent keeps decisions under maxCostUsd; null sets no decision cap.
+   * Worker, planner, review and audit spend stay under maxCostUsd. It is not
+   * in DEFAULT_POLICY, so policies without it keep their hash.
+   */
+  decisionMaxCostUsd?: number | null;
   decisionMode: "shadow" | "promoted";
   promotedCategories: string[];
 }
@@ -785,6 +794,9 @@ export const policySchema = {
       ],
     },
     maxCostUsd: {
+      anyOf: [{ type: "null" }, { type: "number", minimum: 0 }],
+    },
+    decisionMaxCostUsd: {
       anyOf: [{ type: "null" }, { type: "number", minimum: 0 }],
     },
     decisionMode: { enum: ["shadow", "promoted"] },

@@ -26,6 +26,8 @@ import {
 } from "@graph-engineering/contracts";
 import { ContextEngine } from "./context/index.js";
 import { inputTokenCeiling } from "./tokens.js";
+import { packetSavings } from "./insights-context.js";
+import { decisionLedgerBudget } from "./accounting.js";
 import { loadProject, loadProviders, projectDataDir } from "./project.js";
 import { planSha256, RunStore, type PlanApproval } from "./store.js";
 import {
@@ -215,6 +217,7 @@ import type { DecisionBudget, DecisionBatchResult } from "./decision-batch.js";
 import {
   routeRetrieval,
   selectContext,
+  contextSelectionCandidates,
   routeScopes,
   controlRecovery,
   controlCompletion,
@@ -517,28 +520,12 @@ export class GraphEngine {
     return binding;
   }
   private decisionBudget(ownerId: string): DecisionBudget {
-    return {
-      reserve: async ({ callId, provider, amountUsd }) =>
-        this.store.reserveCall(
-          ownerId,
-          callId,
-          provider,
-          amountUsd,
-          this.config.policy.maxCostUsd,
-        ),
-      settle: async (usage) =>
-        this.store.settleCall(ownerId, usage.callId, usage.provider, {
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          cachedTokens: 0,
-          costUsd: usage.chargedUsd,
-          // The debit is conservative: a reviewed price or a reservation
-          // above the reported charge is an estimate, not a measured cost.
-          estimated:
-            usage.reportedCostUsd === null ||
-            usage.chargedUsd !== usage.reportedCostUsd,
-        }),
-    };
+    return decisionLedgerBudget({
+      store: this.store,
+      policy: () => this.config.policy,
+      ownerId,
+      nowMs: () => this.deps.now?.() ?? Date.now(),
+    });
   }
   private async decisionSession(
     ownerId: string,
@@ -2871,16 +2858,10 @@ export class GraphEngine {
       });
       const selection = await selectContext({
         ...session,
-        candidates: originalPacket.items.map((item) => ({
-          id: item.id,
-          kind:
-            item.kind === "memory" ? ("memory" as const) : ("file" as const),
-          label: item.source
-            ? `${item.source.path}:${item.source.startLine}-${item.source.endLine}`
-            : item.text.slice(0, 160),
-          labelTruncated: !item.source && item.text.length > 160,
-          baselineInclude: true,
-        })),
+        candidates: contextSelectionCandidates(
+          originalPacket.items,
+          this.config.policy,
+        ),
       });
       this.captureDecision(run, "context_selection", selection);
       originalPacket.items = originalPacket.items.filter((item) =>
@@ -2888,7 +2869,18 @@ export class GraphEngine {
       );
       // A tester's first packet leads with the existing tests near the code
       // the plan names and the code they import (tester-read-budget spec).
-      const currentContext = async (tester?: {
+      // Each packet built for workers is measured against sending the whole
+      // files its excerpts came from (insights-context); counts only.
+      const recordPacket = async (delivered: ContextPacket) => {
+        try {
+          this.store.event(run.id, "context.packet", {
+            ...(await packetSavings(workspace, delivered)),
+          });
+        } catch {
+          // A local measurement never stops a run.
+        }
+      };
+      const buildContext = async (tester?: {
         writes: readonly string[];
         exportOnly: boolean;
       }) => {
@@ -2946,7 +2938,16 @@ export class GraphEngine {
           await latest.close();
         }
       };
+      const currentContext = async (tester?: {
+        writes: readonly string[];
+        exportOnly: boolean;
+      }) => {
+        const built = await buildContext(tester);
+        await recordPacket(built);
+        return built;
+      };
       const packet = resuming ? await currentContext() : originalPacket;
+      if (!resuming) await recordPacket(packet);
       // Which memories shaped this run's work, for its recorded outcome.
       this.store.event(run.id, "context.memories", {
         memoryIds: [

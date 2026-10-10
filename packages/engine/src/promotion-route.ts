@@ -166,7 +166,7 @@ export interface GrantedRouteCheck {
   live: unknown;
   /** The model the provider's response reported, checked after the response. */
   reportedModel?: string | null;
-  policy: Pick<ProjectPolicy, "maxCostUsd">;
+  policy: Pick<ProjectPolicy, "maxCostUsd" | "decisionMaxCostUsd">;
   lease: { notBeforeMs: number; notAfterMs: number };
   clocks: {
     wallMs: number;
@@ -227,7 +227,10 @@ export function checkGrantedRoute(
     return "candidate-configuration-unavailable";
   if (l.candidateConfigurationSha256 !== g.candidateConfigurationSha256)
     return "candidate-configuration-drift";
-  const cap = check.policy.maxCostUsd;
+  const cap =
+    check.policy.decisionMaxCostUsd !== undefined
+      ? check.policy.decisionMaxCostUsd
+      : check.policy.maxCostUsd;
   if (
     g.providerKind === "jev" &&
     (typeof cap !== "number" || !Number.isFinite(cap) || cap < 0)

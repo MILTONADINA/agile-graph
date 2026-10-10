@@ -8,6 +8,19 @@ All APIs below are methods on `ContextEngine`, except static `restoreBackup`. Co
 
 `putSolution({key, inputs, value, sources, snapshotId?})` stores a private reusable result, and `getSolution({key, inputs, snapshotId?})` returns a match or `null`. Matching requires the same project, snapshot, entire policy, canonical JSON inputs, key, and parser version. Source references must match indexed contents. Inputs and result text are credential-screened; results are at most 100,000 characters with 1–100 source references. This is an evidence cache, **not authorization to apply a patch or execute a command**. An explicitly requested old snapshot can intentionally retrieve its old result; omit the snapshot to validate against the current working tree. Caller-owned tool/model/config versions belong in `inputs`.
 
+## Context savings report
+
+Each context packet a run builds for its workers records a `context.packet`
+run event with counts only: the packet's token estimate, the tokens of its
+source excerpts, and the tokens of the whole files those excerpts came from,
+each file counted once from its size with the same conservative estimator.
+Memory items are left out of both sides, and a file that cannot be read now
+is counted as unreadable rather than guessed. `graph-engine insights-context`
+sums these per run and in total, with the tokens saved and the ratio of
+delivered excerpts to the whole-file baseline. A packet reused by several
+steps is counted once. The report is local only: it prints no paths or file
+contents and is not available over MCP.
+
 ## Memory review and graph limits
 
 `reviewMemories(snapshotId?, { withinDays? })` records and returns review flags for changed/missing/excluded source evidence, missing provenance, [expired or soon-expiring memory](memory-assertions.md#memory-expiry) (IDs and dates only; 14 days by default), invalid supersession, exact inconsistencies in explicitly reviewed typed assertions, and opposing free-text wording. Lexical flags are heuristics; structured flags compare declared subject/predicate/scope, types, exclusivity, and temporal overlap—not general semantic truth. See [explicit memory assertions](memory-assertions.md) for the separate review/accept/share workflow and limits. At most 2,000 memory records are reviewed per call; larger projects fail explicitly rather than silently omitting records. Review flags never accept, delete, or supersede a memory. Invalid imported supersession does not choose a winner. Stale or conflicting required constraints remain mandatory context until a human resolves them.
