@@ -4,15 +4,18 @@ These rules apply to every coding agent working in this repository: Codex,
 Claude Code (which loads this file through `CLAUDE.md`) and any other. Edit
 the rules here, not in `CLAUDE.md`.
 
+Before working, read the **Start here** section at the top of the
+[agent handover](docs/claude-code-handover.md), and inspect the current Git
+state, the live fork `dev` tip, open PRs and checks before acting. The
+handover has the detailed requirements and limits.
+
 ## Where to look
 
-Read what the task needs, not everything up front:
+Beyond that, read what the task needs:
 
-- Picking up in-flight work, or needing the owner's requirements, the fork
-  and evidence state or the detailed limits behind the rules below: the
-  **Start here** section of the [agent handover](docs/claude-code-handover.md).
-  Check the current Git state, the live fork `dev` tip, open PRs and checks
-  before acting on what it records, since it can be out of date.
+- In-flight work, the owner's requirements, or the fork and evidence state:
+  the rest of the [agent handover](docs/claude-code-handover.md), which can be
+  out of date where the live state differs.
 - Commands, configuration and policy: [docs/platform.md](docs/platform.md).
 - Connecting an AI client to the project MCP server:
   [docs/mcp-clients.md](docs/mcp-clients.md).
@@ -26,12 +29,18 @@ Read what the task needs, not everything up front:
 
 - For an implementation task, carry on through the implementation, the
   relevant tests and fixing failures your change caused. Stop when the
-  requested behaviour works and the checks pass, or when the next step is an
-  owner-gated decision (see **Owner preferences**).
-- The repository's local test suites use disposable fixtures and have no
-  production access, so run and re-run them without asking. Opt-in tests
-  that download model weights, call metered Jev or test a live target are
-  not covered; the rules below still govern them.
+  requested behaviour works and the checks pass, or when the next step is
+  owner-gated (see **Owner preferences**) or limited by **Privacy and
+  safety** or **Gotchas**. Nothing here permits authorizing memory export,
+  enabling cloud run status, choosing or changing a Jev session cap,
+  creating or reading keys or asking for passphrases, downloading models,
+  pushing to `main` or the parent repository, or changing the
+  `decisionMode`, `promotedCategories` or `maxCostUsd` settings in
+  `.graph/project.json`.
+- Run and re-run the repository's local test suites and builds without
+  asking. That covers only work that stays on this machine: not anything
+  that sends data off it, publishes, files issues, calls metered or cloud
+  services, downloads model weights or tests a live target.
 
 ## Privacy and safety
 

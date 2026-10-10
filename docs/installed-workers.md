@@ -13,22 +13,22 @@ breaks an objective into steps ([decomposition](decomposition.md)), and an
 **MCP client** retrieves project context while you work in it
 ([connecting an AI client](mcp-clients.md)). The current, honest position:
 
-| AI                                                              | Worker and tester                                                                                                              | Reviewer and planner                  | MCP client                                                        |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------------- |
-| Claude Code (installed)                                         | Yes. One bounded live proposal passed; a full Claude-managed repair is not claimed. Subscription mode fails closed on Windows. | No: installed agents cannot yet do it | Yes, with live retrieval recorded                                 |
-| Codex (installed)                                               | Not currently: installed `0.156.0` lacks the restricted read-root schema, so managed proposals are unavailable                 | No                                    | Yes, with live retrieval recorded                                 |
-| Cursor (installed SDK)                                          | Adapter available behind an explicit `apiKeyEnv`; mocked fail-closed tests only, not live-tested                               | No                                    | Yes; a direct stdio call passed, no in-app trace retained         |
-| Local OpenAI-compatible model (such as Qwen via oMLX or Ollama) | Yes; the worker path is live-tested with oMLX Qwen                                                                             | Yes                                   | No: it is called by the engine, not itself an MCP client          |
-| OpenAI and Anthropic APIs                                       | Yes, as cloud providers                                                                                                        | Yes, as cloud providers               | Not applicable                                                    |
-| Any other MCP client                                            | No                                                                                                                             | No                                    | Yes, for retrieval; run tools only when the operator enables them |
+| AI                                                              | Worker and tester                                                                                                              | Reviewer and planner                                           | MCP client                                                        |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Claude Code (installed)                                         | Yes. One bounded live proposal passed; a full Claude-managed repair is not claimed. Subscription mode fails closed on Windows. | No: installed agents cannot yet do it                          | Yes, with live retrieval recorded                                 |
+| Codex (installed)                                               | Not currently: installed `0.156.0` lacks the restricted read-root schema, so managed proposals are unavailable                 | No                                                             | Yes, with live retrieval recorded                                 |
+| Cursor (installed SDK)                                          | Adapter available behind an explicit `apiKeyEnv`; mocked fail-closed tests only, not live-tested                               | No                                                             | Yes; a direct stdio call passed, no in-app trace retained         |
+| Local OpenAI-compatible model (such as Qwen via oMLX or Ollama) | Yes; the worker path is live-tested with oMLX Qwen                                                                             | Yes                                                            | No: it is called by the engine, not itself an MCP client          |
+| OpenAI and Anthropic APIs                                       | Supported by the code as cloud providers; not live-tested here                                                                 | Supported by the code as cloud providers; not live-tested here | Not applicable                                                    |
+| Any other MCP client                                            | No                                                                                                                             | No                                                             | Yes, for retrieval; run tools only when the operator enables them |
 
 Limits that apply across the table:
 
 - Installed agents report no cost the engine can enforce, so they run only
   under `policy.maxCostUsd: null` and are refused under any numeric cap,
   including the checked-in `0`. They also reject local-only policies.
-- A local provider in a local-only policy must use a loopback endpoint. Under
-  a numeric cap it also needs recorded prices, such as
+- A local provider must always use a loopback endpoint, whatever the policy.
+  Under a numeric cap it also needs recorded prices, such as
   `--input-cost 0 --output-cost 0`.
 - OpenAI and Anthropic workers are metered cloud providers: they receive only
   exportable context, Graph-managed dispatch refuses mandatory memory not

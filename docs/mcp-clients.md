@@ -44,7 +44,9 @@ is accepted outside the server. Two server options add more, and both are the
 operator's choice, never an agent's:
 
 - `--allow-run-status` gives a cloud client `run_status`, `run_list` and
-  `run_events` (a local client always has them).
+  `run_events` (a local client always has them). They still refuse a cloud
+  client while the project policy is offline (`inference: "local"` or
+  `network: "deny"`).
 - `--allow-run` adds `plan_decompose`, `plan_create`, `run_start` and
   `run_cancel`. Plans that publish, or any plan under `requirePlanApproval`,
   still need a person's approval on the command line before they start.
