@@ -16,9 +16,10 @@ const AGENT_SETTINGS = /(^|\/)\.claude\/settings(\.[a-z0-9_-]+)*\.json$/i;
 const MCP_CONFIG =
   /(^|\/)(\.mcp\.json|\.cursor\/mcp\.json|\.vscode\/mcp\.json|\.vscode\/settings\.json|\.gemini\/settings\.json|\.codex\/config\.toml|\.roo\/mcp\.json|opencode\.jsonc?|\.zed\/settings\.json)$/i;
 // Instruction files and directories: Claude Code subagents and commands,
-// Copilot instructions and prompts, Windsurf, Cline and Roo rules.
+// Copilot instructions and prompts, Windsurf, Cline and Roo rules (only
+// .roo/rules*/, so .roo/mcp.json is read as MCP configuration, not prose).
 const INSTRUCTION_FILE =
-  /(^|\/)(agents(\.override)?\.md|claude(\.local)?\.md|gemini\.md|skill\.md|\.cursorrules|\.windsurfrules|\.github\/copilot-instructions\.md|\.cursor\/rules\/.+|\.claude\/(agents|commands)\/.+|\.github\/instructions\/(.+\/)?[^/]+\.instructions\.md|\.github\/prompts\/(.+\/)?[^/]+\.prompt\.md|\.windsurf\/rules\/.+|\.clinerules(\/.+)?|\.roo\/.+)$/i;
+  /(^|\/)(agents(\.override)?\.md|claude(\.local)?\.md|gemini\.md|skill\.md|\.cursorrules|\.windsurfrules|\.github\/copilot-instructions\.md|\.cursor\/rules\/.+|\.claude\/(agents|commands)\/.+|\.github\/instructions\/(.+\/)?[^/]+\.instructions\.md|\.github\/prompts\/(.+\/)?[^/]+\.prompt\.md|\.windsurf\/rules\/.+|\.clinerules(\/.+)?|\.roo\/rules(-[^/]+)?\/.+)$/i;
 // VS Code tasks and launch configurations, which can run a command when the
 // folder opens or before a debug session starts.
 const AUTO_RUN_CONFIG = /(^|\/)\.vscode\/(tasks|launch)\.json$/i;

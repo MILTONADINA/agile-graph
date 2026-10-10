@@ -635,10 +635,46 @@ function autoRunFindings(
   if (/tasks\.json$/i.test(file)) {
     if (!Array.isArray(value.tasks)) return;
     let cursor = Math.max(0, at.key("tasks") - 1);
-    for (const task of value.tasks) {
-      if (!isObject(task)) continue;
-      const runOptions = isObject(task.runOptions) ? task.runOptions : {};
-      if (runOptions.runOn !== "folderOpen") continue;
+    const tasks = value.tasks.filter(isObject);
+    const byLabel = new Map<unknown, Record<string, unknown>>();
+    for (const task of tasks)
+      if (typeof task.label === "string") byLabel.set(task.label, task);
+    // A task's identity includes its platform overrides, which can replace
+    // its command or runOptions, and every task it depends on, which runs
+    // first when it does.
+    const identity = (
+      task: Record<string, unknown>,
+      seen: Set<unknown>,
+    ): unknown => {
+      const depends = Array.isArray(task.dependsOn)
+        ? task.dependsOn
+        : task.dependsOn === undefined
+          ? []
+          : [task.dependsOn];
+      return {
+        label: task.label ?? null,
+        type: task.type ?? null,
+        command: task.command ?? null,
+        args: task.args ?? null,
+        dependsOn: task.dependsOn ?? null,
+        windows: task.windows ?? null,
+        linux: task.linux ?? null,
+        osx: task.osx ?? null,
+        dependencies: depends.map((name) => {
+          const dependency = byLabel.get(name);
+          if (!dependency || seen.has(name)) return null;
+          return identity(dependency, new Set([...seen, name]));
+        }),
+      };
+    };
+    for (const task of tasks) {
+      const runsOnOpen = [task, task.windows, task.linux, task.osx].some(
+        (part) =>
+          isObject(part) &&
+          isObject(part.runOptions) &&
+          part.runOptions.runOn === "folderOpen",
+      );
+      if (!runsOnOpen) continue;
       const line = at.key("runOn", "folderOpen", cursor) || at.key("tasks");
       cursor = line;
       const name = typeof task.label === "string" ? task.label : "unnamed";
@@ -652,13 +688,7 @@ function autoRunFindings(
           line,
           `Task ${label(name)} runs ${command ? describeCommand(command) : "a command (not shown)"} when the folder opens`,
           `tasks.${label(name)}`,
-          hash({
-            label: task.label ?? null,
-            type: task.type ?? null,
-            command: task.command ?? null,
-            args: task.args ?? null,
-            dependsOn: task.dependsOn ?? null,
-          }),
+          hash(identity(task, new Set([task.label]))),
         ),
       );
     }
