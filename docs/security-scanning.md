@@ -21,16 +21,17 @@ prints every catalog tool as `selected` (with the reason it applies) or
 `skipped` (with the reason it does not). The catalog is in
 [`security/catalog.ts`](../packages/engine/src/security/catalog.ts):
 
-| Tool                                    | Checks                                          | Runs                                                            | Chosen when                                       |
-| --------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------- |
-| Gitleaks                                | Credentials in tracked files                    | Offline                                                         | Always                                            |
-| Semgrep with the Semgrep Rules registry | Security rules for the languages present        | Offline                                                         | Source in a supported language exists (not C++)   |
-| Hadolint                                | Dockerfile practices (warnings and errors)      | Offline                                                         | A Dockerfile or Containerfile exists              |
-| Checkov                                 | Terraform, Kubernetes, CloudFormation and Bicep | Offline                                                         | Such files exist                                  |
-| OSV-Scanner, Trivy                      | Known-vulnerable dependencies                   | Needs a local vulnerability database                            | Dependency lock files exist                       |
-| OWASP ZAP (baseline scan)               | Running web targets, spider and passive checks  | Only `security-live-scan`, started by a person                  | A live target is authorized                       |
-| Nuclei                                  | Running web targets, active checks              | Not run: active attack scans are out of scope                   | A live target is authorized                       |
-| Burp Suite Professional                 | Running web targets                             | Needs the user's licensed installation and an authorized target | The user configured it and a target is authorized |
+| Tool                                    | Checks                                                     | Runs                                                            | Chosen when                                       |
+| --------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------- |
+| Gitleaks                                | Credentials in tracked files                               | Offline                                                         | Always                                            |
+| Semgrep with the Semgrep Rules registry | Security rules for the languages present                   | Offline                                                         | Source in a supported language exists (not C++)   |
+| Hadolint                                | Dockerfile practices (warnings and errors)                 | Offline                                                         | A Dockerfile or Containerfile exists              |
+| Checkov                                 | Terraform, Kubernetes, CloudFormation and Bicep            | Offline                                                         | Such files exist                                  |
+| Agent configuration review (built in)   | AI-agent hooks, permissions, MCP servers, instruction text | Offline, in-process (no container)                              | An agent settings, MCP or instruction file exists |
+| OSV-Scanner, Trivy                      | Known-vulnerable dependencies                              | Needs a local vulnerability database                            | Dependency lock files exist                       |
+| OWASP ZAP (baseline scan)               | Running web targets, spider and passive checks             | Only `security-live-scan`, started by a person                  | A live target is authorized                       |
+| Nuclei                                  | Running web targets, active checks                         | Not run: active attack scans are out of scope                   | A live target is authorized                       |
+| Burp Suite Professional                 | Running web targets                                        | Needs the user's licensed installation and an authorized target | The user configured it and a target is authorized |
 
 ## Scanning
 
@@ -87,6 +88,43 @@ ignored until that cleanup finishes.
   stay distinct.
 - Helm charts are not covered: their templates must be rendered first, and
   the image has no Helm renderer.
+
+## Agent configuration
+
+AI-agent configuration is an attack surface: a hook runs a shell command on
+every developer machine that opens the repository with that agent, a broad
+permission lets the agent act without asking, an MCP server gives it new
+tools and network reach, and an instruction file can carry text that steers
+it. The built-in `agent-config` tool reads these files in-process, over the
+same tracked files as the other scanners, and reports ordinary findings with
+the tool name `agent-config`:
+
+| Rule                  | Files                                                                                                                                                             | Reports                                                                                                                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook-command`        | `.claude/settings*.json` at any depth                                                                                                                             | Each `type: "command"` hook, the `statusLine` command and the `apiKeyHelper`, `awsAuthRefresh`, `awsCredentialExport` and `otelHeadersHelper` commands, one finding each                                      |
+| `permission-widening` | `.claude/settings*.json`                                                                                                                                          | `permissions.allow` entries such as `Bash`, `Bash(*)`, `Write(*)`, `Edit(**)`, `WebFetch(domain:*)`, `mcp__*` or `*`; `defaultMode: "bypassPermissions"`; `dangerouslySkipPermissions: true`                  |
+| `mcp-server`          | `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json` (comments and trailing commas allowed) and `.codex/config.toml` (`[mcp_servers.*]` tables)                    | One finding per declared server                                                                                                                                                                               |
+| `prompt-injection`    | `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`, `CLAUDE.local.md`, `GEMINI.md`, `SKILL.md`, `.cursorrules`, `.cursor/rules/**`, `.github/copilot-instructions.md` | Lines telling the agent to ignore previous instructions or disregard the system prompt, `curl`/`wget` piped to a shell, "send … to http(s)://…", encoded blobs over 200 characters, invisible or bidi Unicode |
+
+Files are matched by exact name, so an example such as
+`.cursor/mcp.example.json` is not read as configuration. A narrow
+permission such as `Bash(npm test:*)` is not reported, and the injection
+phrases are a short, conservative list chosen to keep false positives low;
+the rule is a tripwire for review, not a classifier.
+
+Findings never hold a command, its arguments, an environment value or a full
+URL. A hook is named by its event (`hooks.PostToolUse`), a server by its
+name, a program only when the command starts with a bare program name
+(`node`, never a path) and a remote server only by its host. An
+injection finding names the pattern that matched, not the text. The
+fingerprint still covers the declaring lines, so editing an accepted hook's
+command makes it a new finding. A configuration file that does not parse is
+listed under `unscanned` instead of being passed unchecked.
+
+Because the findings go through the same baseline, a worker in a managed
+run that adds a hook, widens a permission, declares an MCP server or plants
+an injection phrase produces a new finding that blocks the run until it is
+fixed or a person accepts it into the baseline.
 
 ## The baseline
 

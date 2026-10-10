@@ -9,3 +9,30 @@ const NOT_DOCKERFILE =
 export function isDockerfile(file: string): boolean {
   return DOCKERFILE.test(file) && !NOT_DOCKERFILE.test(file);
 }
+
+// AI-agent configuration the agent-config tool reads. Matched by exact name,
+// so an example such as .cursor/mcp.example.json is not configuration.
+const AGENT_SETTINGS = /(^|\/)\.claude\/settings(\.[a-z0-9_-]+)*\.json$/i;
+const MCP_CONFIG =
+  /(^|\/)(\.mcp\.json|\.cursor\/mcp\.json|\.vscode\/mcp\.json|\.codex\/config\.toml)$/i;
+const INSTRUCTION_FILE =
+  /(^|\/)(agents(\.override)?\.md|claude(\.local)?\.md|gemini\.md|skill\.md|\.cursorrules|\.github\/copilot-instructions\.md|\.cursor\/rules\/.+)$/i;
+
+/** A Claude Code settings file: hooks, helpers and permissions. */
+export function isAgentSettings(file: string): boolean {
+  return AGENT_SETTINGS.test(file);
+}
+
+/** A file that declares MCP servers for an agent. */
+export function isMcpConfig(file: string): boolean {
+  return MCP_CONFIG.test(file);
+}
+
+/** A file an agent reads as instructions. */
+export function isInstructionFile(file: string): boolean {
+  return INSTRUCTION_FILE.test(file);
+}
+
+export function isAgentConfig(file: string): boolean {
+  return isAgentSettings(file) || isMcpConfig(file) || isInstructionFile(file);
+}
