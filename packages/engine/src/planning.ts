@@ -13,6 +13,7 @@ import {
   type PromotionEvidence,
 } from "./decisions.js";
 import type { PromotionDispatchBinding } from "./promotion-authority.js";
+import { VERIFY_FIX_LIMIT } from "./workers/review.js";
 
 export const WORKFLOWS = {
   "bug-fix":
@@ -157,9 +158,20 @@ export async function routePlan(options: {
 }
 
 /**
+ * The fix checks a plan's turn estimate reserves for each repair attempt
+ * with a reviewer. A retried review first checks each earlier blocking
+ * finding in its own call, up to VERIFY_FIX_LIMIT; a review that holds a
+ * change back usually names a handful, so the estimate expects three rather
+ * than the cap. It only sizes the warning; the run's budget counts every
+ * call actually made.
+ */
+export const LIKELY_FIX_CHECKS_PER_REPAIR = Math.min(VERIFY_FIX_LIMIT, 3);
+
+/**
  * A rough count of the model calls a plan needs: a few turns per worker
- * step (read, request, propose), one per review, and a few per repair
- * attempt. Used only to warn when policy.maxTurns looks too small.
+ * step (read, request, propose), one per review, a few per repair attempt
+ * and, with a reviewer, the fix checks of earlier findings before each
+ * repeated review. Used only to warn when policy.maxTurns looks too small.
  */
 export function likelyWorkerTurns(
   plan: Pick<ExecutionPlan, "steps">,
@@ -168,5 +180,9 @@ export function likelyWorkerTurns(
   const workers = plan.steps.filter((step) => step.kind === "worker").length;
   // A plan with no implementer cannot dispatch a repair worker after checks.
   const repairs = workers ? Math.max(0, options.maxAttempts - 1) : 0;
-  return workers * 3 + (options.reviewer ? 1 + repairs : 0) + repairs * 3;
+  return (
+    workers * 3 +
+    (options.reviewer ? 1 + repairs * (1 + LIKELY_FIX_CHECKS_PER_REPAIR) : 0) +
+    repairs * 3
+  );
 }

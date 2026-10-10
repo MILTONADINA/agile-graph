@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_POLICY } from "@graph-engineering/contracts";
 import {
+  LIKELY_FIX_CHECKS_PER_REPAIR,
   likelyWorkerTurns,
   requiresSecurityReview,
   routePlan,
 } from "../src/planning.js";
+import { VERIFY_FIX_LIMIT } from "../src/workers/review.js";
 
 describe("security review floor", () => {
   it("recognizes source identifiers and rejects unrelated word fragments", () => {
@@ -85,6 +87,28 @@ describe("turn estimates", () => {
         { steps: [...plan.steps, { kind: "worker" }] as never },
         { reviewer: true, maxAttempts: 3 },
       ),
-    ).toBe(3 + 1 + 2 + 2 * 3);
+    ).toBe(3 + 1 + 2 * (1 + LIKELY_FIX_CHECKS_PER_REPAIR) + 2 * 3);
+  });
+
+  it("reserves expected fix checks of earlier review findings per repair attempt", () => {
+    const plan = { steps: [{ kind: "worker" }] as never };
+    // Three per repair, never more than a review may check.
+    expect(LIKELY_FIX_CHECKS_PER_REPAIR).toBe(3);
+    expect(LIKELY_FIX_CHECKS_PER_REPAIR).toBeLessThanOrEqual(VERIFY_FIX_LIMIT);
+    const reviewed = likelyWorkerTurns(plan, {
+      reviewer: true,
+      maxAttempts: 3,
+    });
+    const unreviewed = likelyWorkerTurns(plan, {
+      reviewer: false,
+      maxAttempts: 3,
+    });
+    // The first review, then per repair a review and three fix checks.
+    expect(reviewed - unreviewed).toBe(1 + 2 * 4);
+    // A single attempt has no retried review, so no fix checks.
+    expect(
+      likelyWorkerTurns(plan, { reviewer: true, maxAttempts: 1 }) -
+        likelyWorkerTurns(plan, { reviewer: false, maxAttempts: 1 }),
+    ).toBe(1);
   });
 });

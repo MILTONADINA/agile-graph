@@ -101,6 +101,7 @@ import {
   invokeReviewWorker,
   invokeVerifyFix,
   priorBlockingFindings,
+  reusableFixVerdicts,
   reviewOutcome,
   VERIFY_FIX_LIMIT,
   verifyFixFeedback,
@@ -236,6 +237,10 @@ function securityOverflow(
       .join(", ")}`,
   ];
 }
+// At most this many new-finding fingerprints are recorded per scan for the
+// next scan to compare (about 650 KB of 64-character digests); a scan with
+// more records fingerprintsTruncated, and the comparison says truncated.
+export const SECURITY_FINGERPRINT_LIMIT = 10_000;
 // The scanner image graph-engine security-scan builds and uses by default.
 export const SECURITY_SCAN_IMAGE = "graph-security:local";
 // The worker step that repairs a multi-step plan whose combined checks failed.
@@ -538,7 +543,7 @@ export class GraphEngine {
       maxAttempts: this.config.policy.maxAttempts,
     });
     return needed > this.config.policy.maxTurns
-      ? `This plan may need about ${needed} model calls (its steps, reviews and repair attempts), but policy.maxTurns allows ${this.config.policy.maxTurns} for the whole run. To allow more, raise policy.maxTurns and plan again before starting: a policy change refuses this plan, and once a run starts it voids resume and review-approve for that run.`
+      ? `This plan may need about ${needed} model calls (its steps, reviews, checks of earlier review findings and repair attempts), but policy.maxTurns allows ${this.config.policy.maxTurns} for the whole run. To allow more, raise policy.maxTurns and plan again before starting: a policy change refuses this plan, and once a run starts it voids resume and review-approve for that run.`
       : undefined;
   }
   /**
@@ -2517,33 +2522,49 @@ export class GraphEngine {
         if (prior.length) {
           const unfixed: { finding: PriorFinding; check: VerifyFixResult }[] =
             [];
+          // A resume at the same snapshot (after a fix check or the review
+          // failed to complete) keeps the findings already shown fixed there.
+          const reusable = reusableFixVerdicts(
+            this.store.events(run.id),
+            snapshotHash,
+          );
           try {
             for (const [index, finding] of prior.entries()) {
+              const reused =
+                index < VERIFY_FIX_LIMIT ? reusable.get(finding.id) : undefined;
               const check: VerifyFixResult =
-                index < VERIFY_FIX_LIMIT
-                  ? (
-                      await this.invokeFixCheck(
-                        {
-                          provider: reviewer,
-                          policy,
-                          objective: run.plan.objective,
-                          finding,
-                          diff,
-                          signal,
-                        },
-                        run.plan,
-                      )
-                    ).result
-                  : {
-                      verdict: "inconclusive",
-                      evidence: `Not checked: a review checks at most ${VERIFY_FIX_LIMIT} earlier findings`,
-                    };
+                reused !== undefined
+                  ? { verdict: "fixed", evidence: reused }
+                  : index < VERIFY_FIX_LIMIT
+                    ? (
+                        await this.invokeFixCheck(
+                          {
+                            provider: reviewer,
+                            policy,
+                            objective: run.plan.objective,
+                            finding,
+                            diff,
+                            signal,
+                          },
+                          run.plan,
+                        )
+                      ).result
+                    : {
+                        verdict: "inconclusive",
+                        evidence: `Not checked: a review checks at most ${VERIFY_FIX_LIMIT} earlier findings`,
+                      };
               run.usage = this.store.usage(run.plan.id);
               const evidence = redact(check.evidence);
               this.store.event(
                 run.id,
                 "review.verify_fix",
-                { findingId: finding.id, verdict: check.verdict, evidence },
+                {
+                  findingId: finding.id,
+                  verdict: check.verdict,
+                  evidence,
+                  snapshotHash,
+                  ...(reused !== undefined ? { reused: true } : {}),
+                },
                 stepId,
               );
               if (check.verdict !== "fixed")
@@ -2736,6 +2757,15 @@ export class GraphEngine {
               message: redact(message),
               fingerprint,
             })),
+          // Every new finding's fingerprint, past the 200 listed in full,
+          // so the next scan can tell which were fixed. Fingerprints are
+          // digests of a finding's tool, rule, path and line, never its text.
+          newFingerprints: fresh
+            .slice(0, SECURITY_FINGERPRINT_LIMIT)
+            .map((finding) => finding.fingerprint),
+          ...(fresh.length > SECURITY_FINGERPRINT_LIMIT
+            ? { fingerprintsTruncated: true }
+            : {}),
           errors: scan.errors.map(redact),
           unscanned: scan.unscanned,
           ...(advisory.length
@@ -2754,17 +2784,31 @@ export class GraphEngine {
         // Informational: whether the earlier scan's new findings are gone.
         // The gate itself blocks on whatever is still new, by fingerprint.
         if (previousScan) {
+          // A scan recorded before newFingerprints existed has only the
+          // fingerprints of the findings it listed.
           const before = (
-            Array.isArray(previousScan.data.new) ? previousScan.data.new : []
-          )
-            .map(
-              (finding) => (finding as { fingerprint?: unknown }).fingerprint,
-            )
-            .filter((value): value is string => typeof value === "string");
+            Array.isArray(previousScan.data.newFingerprints)
+              ? previousScan.data.newFingerprints
+              : (Array.isArray(previousScan.data.new)
+                  ? previousScan.data.new
+                  : []
+                ).map(
+                  (finding) =>
+                    (finding as { fingerprint?: unknown }).fingerprint,
+                )
+          ).filter((value): value is string => typeof value === "string");
           const present = new Set(fresh.map((finding) => finding.fingerprint));
           this.store.event(run.id, "security.verify_fix", {
             fixed: before.filter((value) => !present.has(value)),
             stillPresent: before.filter((value) => present.has(value)),
+            // The earlier scan kept only some fingerprints, so findings past
+            // them are in neither list.
+            ...(previousScan.data.fingerprintsTruncated === true ||
+            (!Array.isArray(previousScan.data.newFingerprints) &&
+              Array.isArray(previousScan.data.new) &&
+              previousScan.data.new.length >= 200)
+              ? { truncated: true }
+              : {}),
           });
         }
         if (scan.errors.length)

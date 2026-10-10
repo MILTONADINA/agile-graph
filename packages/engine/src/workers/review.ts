@@ -385,6 +385,31 @@ export function priorBlockingFindings(
   });
 }
 
+/**
+ * Earlier `fixed` verdicts this run recorded against this exact snapshot,
+ * by finding ID with their stored evidence, so a resumed review does not
+ * pay to check the same finding at the same snapshot again. A verdict from
+ * any other snapshot, or any other verdict, is never reused: the code it
+ * judged may have changed.
+ */
+export function reusableFixVerdicts(
+  events: readonly { type: string; data: Record<string, unknown> }[],
+  snapshotHash: string,
+): Map<string, string> {
+  const verdicts = new Map<string, string>();
+  for (const event of events) {
+    if (event.type !== "review.verify_fix") continue;
+    const { findingId, verdict, evidence } = event.data;
+    if (
+      event.data.snapshotHash === snapshotHash &&
+      verdict === "fixed" &&
+      typeof findingId === "string"
+    )
+      verdicts.set(findingId, typeof evidence === "string" ? evidence : "");
+  }
+  return verdicts;
+}
+
 /** Feedback naming each earlier finding not shown to be fixed. */
 export function verifyFixFeedback(
   unfixed: { finding: PriorFinding; check: VerifyFixResult }[],

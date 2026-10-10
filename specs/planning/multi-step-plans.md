@@ -53,9 +53,10 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: returns a DAG patch that cannot apply to the worker instead of failing the plan
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: tells a tester whose new test file already exists to use another name
 
-- AC10: Planning from the command line, MCP or the dashboard warns when a plan's steps, reviews and repair attempts are likely to need more model calls than policy.maxTurns allows for the whole run, and says a raised limit needs a fresh plan and voids resume and review-approve for a run already started.
+- AC10: Planning from the command line, MCP or the dashboard warns when a plan's steps, reviews, checks of earlier review findings (three expected per repair attempt with a reviewer) and repair attempts are likely to need more model calls than policy.maxTurns allows for the whole run, and says a raised limit needs a fresh plan and voids resume and review-approve for a run already started.
   - Test: packages/engine/tests/execution.test.ts :: warns when a plan may need more model calls than the run-wide turn budget
   - Test: packages/engine/tests/cli.test.ts :: estimates the model calls a plan's roles need
+  - Test: packages/engine/tests/planning.test.ts :: reserves expected fix checks of earlier review findings per repair attempt
 
 - AC11: A repair patch is applied like a step: a write that fails partway, or a patch that leaves a file the plan or repair wrote outside the verification inventory, is rolled back so the run stays resumable, and an acknowledged resume after a crash records the repair as applied when the workspace matches its post-patch fingerprint, or runs it again when it matches its pre-patch fingerprint.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: rolls back a repair patch that fails while its files are written, so the run resumes into repair

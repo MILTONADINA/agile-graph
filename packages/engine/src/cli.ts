@@ -739,7 +739,7 @@ cli
   )
   .option(
     "--sarif <file>",
-    "Also write every finding, redacted and marked new or unchanged against the baseline, as SARIF 2.1.0",
+    "Also write every finding, redacted and marked new or unchanged against the baseline, as SARIF 2.1.0; an incomplete scan is marked unsuccessful",
   )
   .action(async (options) => {
     try {
@@ -780,11 +780,7 @@ cli
     if (options.sarif)
       await writeFile(
         path.resolve(options.sarif),
-        `${JSON.stringify(
-          scanSarif(scan.findings, fresh, ENGINE_VERSION),
-          null,
-          2,
-        )}\n`,
+        `${JSON.stringify(scanSarif(scan, fresh, ENGINE_VERSION), null, 2)}\n`,
       );
     print({
       tools: scan.tools,

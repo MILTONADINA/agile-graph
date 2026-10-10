@@ -2299,6 +2299,55 @@ describe("security gate", () => {
     });
   });
 
+  it("compares every earlier new fingerprint, not only the 200 listed in full", async () => {
+    const print = (index: number) => index.toString(16).padStart(32, "b");
+    const many = Array.from({ length: 205 }, (_, index) =>
+      finding(print(index)),
+    );
+    let scans = 0;
+    let attempts = 0;
+    const { result, events } = await run(
+      ["accepted"],
+      async () => ({
+        tools: ["semgrep"],
+        findings: ++scans === 1 ? many : [],
+        errors: [],
+        unscanned: [],
+      }),
+      2,
+      async () => ({
+        ...(await fixingWorker()),
+        proposal: {
+          summary: "Fix addition",
+          requests: [],
+          changes: [
+            ++attempts === 1
+              ? { path: "math.cjs", before: "a - b", after: "a + b" }
+              : {
+                  path: "math.cjs",
+                  before: "a + b;",
+                  after: "a + b; // no eval",
+                },
+          ],
+        },
+      }),
+    );
+    expect(result.status).toBe("succeeded");
+    const first = events.find(
+      (event) => event.type === "security.scan_completed",
+    )!.data;
+    expect(first.new).toHaveLength(200);
+    expect(first.newFingerprints).toEqual(many.map((item) => item.fingerprint));
+    expect(first).not.toHaveProperty("fingerprintsTruncated");
+    const verified = events.find(
+      (event) => event.type === "security.verify_fix",
+    )!.data;
+    expect(verified).toEqual({
+      fixed: many.map((item) => item.fingerprint),
+      stillPresent: [],
+    });
+  });
+
   it("gates dependency advisories only on lockfiles the run changed", async () => {
     const advisory = (lockfile: string) => async () => ({
       tools: ["osv-scanner"],
@@ -2611,7 +2660,7 @@ describe("code review gate", () => {
   const setup = async (options: {
     reviews: (Review | Error)[];
     /** Answers for checks of earlier findings; each defaults to fixed. */
-    fixChecks?: FixCheck[];
+    fixChecks?: (FixCheck | Error)[];
     reviewer?: { kind: "local" | "openai" };
     attempts?: number;
     extraChanges?: { path: string; before: null; after: string }[];
@@ -2687,11 +2736,12 @@ describe("code review gate", () => {
       },
       verifyFix: async (input) => {
         fixChecked.push({ id: input.finding.id, diff: input.diff });
-        return {
-          result: fixChecks.shift() ?? { verdict: "fixed", evidence: "gone" },
-          model: "reviewer-fixture",
-          usage,
+        const next = fixChecks.shift() ?? {
+          verdict: "fixed" as const,
+          evidence: "gone",
         };
+        if (next instanceof Error) throw next;
+        return { result: next, model: "reviewer-fixture", usage };
       },
     });
     engines.push(engine);
@@ -2942,11 +2992,10 @@ describe("code review gate", () => {
     // Attempt 2's unfixed finding failed the review with no full review;
     // attempt 3's fixed one let the full review run.
     expect(reviewed).toHaveLength(2);
-    expect(
-      events
-        .filter((event) => event.type === "review.verify_fix")
-        .map((event) => event.data),
-    ).toEqual([
+    const checks = events
+      .filter((event) => event.type === "review.verify_fix")
+      .map(({ data: { snapshotHash, ...data } }) => ({ snapshotHash, data }));
+    expect(checks.map((check) => check.data)).toEqual([
       {
         findingId: id,
         verdict: "still_present",
@@ -2954,6 +3003,9 @@ describe("code review gate", () => {
       },
       { findingId: id, verdict: "fixed", evidence: "A second sum is tested" },
     ]);
+    // Each check names the snapshot it judged; the attempts' differ.
+    expect(typeof checks[0]!.snapshotHash).toBe("string");
+    expect(checks[1]!.snapshotHash).not.toBe(checks[0]!.snapshotHash);
     expect(completed.map((event) => event.data.stage ?? "review")).toEqual([
       "review",
       "verify-fix",
@@ -2969,6 +3021,137 @@ describe("code review gate", () => {
     expect(feedback[2]).toContain(
       `- Blocking in math.test.cjs:1: Add a test for another sum (finding ${id}; still present: Only one sum is tested)`,
     );
+  });
+
+  const blockingFinding = (message: string) => ({
+    severity: "blocking" as const,
+    path: "math.test.cjs",
+    line: 1,
+    message,
+  });
+  const requestChanges = (
+    findings: ReturnType<typeof blockingFinding>[],
+  ): Review => ({
+    verdict: "request-changes",
+    summary: "Needs more tests",
+    criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "ok" }],
+    findings,
+  });
+
+  it("checks at most 20 earlier findings and records the rest inconclusive, which blocks", async () => {
+    const findings = Array.from({ length: 21 }, (_, index) =>
+      blockingFinding(`Add test ${index + 1}`),
+    );
+    const { result, reviewed, fixChecked, events } = await setup({
+      attempts: 2,
+      reviews: [requestChanges(findings)],
+      // Room for 20 fix checks in the run's shared turn budget.
+      configure: async (config) => {
+        config.policy.maxTurns = 40;
+      },
+    });
+    expect(result.status).toBe("failed");
+    expect(result.error).toMatch(/^Code review/);
+    // Every check answered fixed, but the 21st was never checked.
+    expect(fixChecked).toHaveLength(20);
+    expect(reviewed).toHaveLength(1);
+    const checks = events.filter((event) => event.type === "review.verify_fix");
+    expect(checks).toHaveLength(21);
+    expect(checks.at(-1)!.data).toMatchObject({
+      findingId: findingId(findings[20]!),
+      verdict: "inconclusive",
+      evidence: "Not checked: a review checks at most 20 earlier findings",
+    });
+    expect(
+      events.filter((event) => event.type === "review.completed").at(-1)?.data,
+    ).toMatchObject({
+      passed: false,
+      stage: "verify-fix",
+      findings: [expect.objectContaining({ id: findingId(findings[20]!) })],
+    });
+  });
+
+  it("stops the run without passing review when a fix check fails, and reuses that snapshot's fixed verdicts on resume", async () => {
+    const first = blockingFinding("Add a test for another sum");
+    const second = blockingFinding("Add a test for zero");
+    const { engine, result, reviewed, fixChecked, events } = await setup({
+      attempts: 2,
+      reviews: [requestChanges([first, second])],
+      fixChecks: [
+        { verdict: "fixed", evidence: "Another sum is tested" },
+        new Error("reviewer unavailable"),
+      ],
+    });
+    expect(result.status).toBe("failed");
+    expect(result.error).toBe(
+      "Code review did not complete: reviewer unavailable",
+    );
+    // No full review ran and nothing recorded the review as passed.
+    expect(reviewed).toHaveLength(1);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "review.completed" && event.data.passed !== false,
+      ),
+    ).toEqual([]);
+    expect(fixChecked.map((check) => check.id)).toEqual([
+      findingId(first),
+      findingId(second),
+    ]);
+    // Resumed at the same snapshot: the first finding's fixed verdict is
+    // reused, so only the second is checked again before the full review.
+    await engine.resume(result.id, true);
+    const resumed = await engine.wait(result.id);
+    expect(resumed.error ?? "").toBe("");
+    expect(resumed.status).toBe("succeeded");
+    expect(fixChecked.map((check) => check.id)).toEqual([
+      findingId(first),
+      findingId(second),
+      findingId(second),
+    ]);
+    expect(reviewed).toHaveLength(2);
+    const checks = engine.store
+      .events(result.id)
+      .filter((event) => event.type === "review.verify_fix")
+      .map((event) => event.data);
+    expect(checks).toHaveLength(3);
+    expect(checks[1]).toEqual({
+      findingId: findingId(first),
+      verdict: "fixed",
+      evidence: "Another sum is tested",
+      snapshotHash: checks[0]!.snapshotHash,
+      reused: true,
+    });
+    expect(checks[2]).toMatchObject({
+      findingId: findingId(second),
+      verdict: "fixed",
+      snapshotHash: checks[0]!.snapshotHash,
+    });
+    expect(checks[2]).not.toHaveProperty("reused");
+  });
+
+  it("runs each fix check in the reviewer's worker slot under a reserved, turn-counted call", async () => {
+    const reserve = vi.spyOn(RunStore.prototype, "reserveCall");
+    const acquire = vi.spyOn(RunStore.prototype, "tryAcquireWorker");
+    const settle = vi.spyOn(RunStore.prototype, "settleCall");
+    const { result, reviewed, fixChecked, config } = await setup({
+      reviews: [requestChanges([blockingFinding("Add a test for zero")])],
+    });
+    expect(result.status).toBe("succeeded");
+    expect(reviewed).toHaveLength(2);
+    expect(fixChecked).toHaveLength(1);
+    const reviewerCalls = reserve.mock.calls.filter(([, callId]) =>
+      callId.startsWith("worker-review-"),
+    );
+    // The first review, the fix check and the second review.
+    expect(reviewerCalls).toHaveLength(3);
+    for (const [, callId, provider, reservedUsd, , maxTurns] of reviewerCalls) {
+      expect(provider).toBe("reviewer");
+      expect(reservedUsd).not.toBeNull();
+      expect(maxTurns).toBe(config.policy.maxTurns);
+      expect(acquire.mock.calls.map(([slot]) => slot)).toContain(callId);
+      expect(settle.mock.calls.map(([, settled]) => settled)).toContain(callId);
+    }
   });
 
   it("lets a person approve a run that stopped at an unfixed earlier finding", async () => {
