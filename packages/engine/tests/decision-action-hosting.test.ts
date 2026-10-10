@@ -20,6 +20,7 @@ import {
   type DecisionProvider,
   type PromotionEvidence,
 } from "../src/decisions.js";
+import { selectContext } from "../src/decision-controls.js";
 import { routePlan } from "../src/planning.js";
 import { RunStore } from "../src/store.js";
 import * as promotionAuthority from "../src/promotion-authority.js";
@@ -290,6 +291,56 @@ describe("engine-derived decision action labels", () => {
       long.records.every((record) => record.evidence.contextComplete === false),
     ).toBe(true);
   });
+  it("marks a context selection with a cut label as incomplete context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            model,
+            answers: Object.fromEntries(
+              Object.keys(body.questions).map((key) => [
+                key,
+                { choice: "include", confidence: 0.8 },
+              ]),
+            ),
+          }),
+        );
+      }),
+    );
+    const complete = (result: { records: DecisionRecord[] }) =>
+      result.records.map((record) => record.evidence.contextComplete);
+    const select = (
+      candidates: Parameters<typeof selectContext>[0]["candidates"],
+    ) => selectContext({ ...options(), candidates });
+    const item = (id: string, label = `toy/${id}.ts:1-9`) => ({
+      id,
+      kind: "file" as const,
+      label,
+    });
+    expect(complete(await select([item("a"), item("b")]))).toEqual([
+      true,
+      true,
+    ]);
+    // Cut by selectContext itself at 220 characters.
+    expect(
+      complete(await select([item("a"), item("long", "y".repeat(221))])),
+    ).toEqual([false, false]);
+    // Cut by the caller before selectContext saw it.
+    expect(
+      complete(
+        await select([item("a"), { ...item("cut"), labelTruncated: true }]),
+      ),
+    ).toEqual([false, false]);
+    // Each batch of twelve is judged on its own labels.
+    const many = Array.from({ length: 13 }, (_, index) => item(`f${index}`));
+    many[12] = item("f12", "z".repeat(300));
+    expect(complete(await select(many))).toEqual([
+      ...Array(12).fill(true),
+      false,
+    ]);
+  });
   it("reads decision rows stored before the action label existed", async () => {
     const store = new RunStore(await tempDir(), "toy-action-project");
     stores.push(store);
@@ -372,8 +423,8 @@ describe("hosted decision providers are guarded by hosting, not name", () => {
     offline.policy = { ...offline.policy, network: "deny" };
     offline.providers = [hostedProvider("acme")];
     // A denied network refuses the remote endpoint before the offline check.
-    expect((await decideBatch(offline)).records[0]?.evidence.failure).toMatch(
-      /denies endpoint|offline policy/,
+    expect((await decideBatch(offline)).records[0]?.evidence.failure).toBe(
+      "Project policy denies endpoint api.example.test",
     );
     const capped = options();
     capped.policy = { ...capped.policy, maxCostUsd: 1 };
@@ -382,6 +433,117 @@ describe("hosted decision providers are guarded by hosting, not name", () => {
       "Unknown hosted pricing",
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it("refuses a hosted provider on a loopback endpoint by offline policy, not by endpoint", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    vi.stubGlobal("fetch", fetch);
+    const loopbackHosted = (id: string): DecisionProvider => ({
+      ...hostedProvider(id),
+      endpoint: "http://127.0.0.1:7444/v1/decide",
+    });
+    for (const id of ["jev", "acme"]) {
+      // A loopback endpoint passes the endpoint check, so only the hosted
+      // offline-policy branch can refuse it.
+      const denied = options();
+      denied.policy = { ...denied.policy, network: "deny" };
+      denied.providers = [loopbackHosted(id)];
+      expect((await decideBatch(denied)).records[0]).toMatchObject({
+        selected: null,
+        action: "escalate",
+        evidence: {
+          failure: `Hosted decision provider ${id} is disabled by offline policy`,
+        },
+      });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("refuses hosted providers under local-only inference, even on loopback, but still asks a local one", async () => {
+    const fetch = vi.fn(async () => answer("alternative", 0.9));
+    vi.stubGlobal("fetch", fetch);
+    const localOnly = options();
+    localOnly.policy = { ...localOnly.policy, inference: "local" };
+    localOnly.providers = [
+      {
+        ...hostedProvider("acme"),
+        endpoint: "http://127.0.0.1:7444/v1/decide",
+      },
+    ];
+    expect((await decideBatch(localOnly)).records[0]?.evidence.failure).toBe(
+      "Hosted decision provider acme is disabled by offline policy",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    localOnly.providers = [laya()];
+    const local = await decideBatch(localOnly);
+    expect(local.records[0]?.evidence.failure).toBeUndefined();
+    expect(local.records[0]?.selected).toBe("alternative");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it("checks hosted pricing against the cost cap and reservation ledger before any request", async () => {
+    const fetch = vi.fn(async () => answer("alternative", 0.9));
+    vi.stubGlobal("fetch", fetch);
+    const priced = (usdPerUnit: number, maxCostUsd: number) => {
+      const input = options();
+      input.policy = { ...input.policy, maxCostUsd };
+      input.providers = [
+        {
+          ...hostedProvider("acme"),
+          pricing: { unit: "question", usdPerUnit, version: "toy-price" },
+        },
+      ];
+      const reserve = vi.fn(async () => undefined);
+      const settle = vi.fn(async () => undefined);
+      input.budget = { reserve, settle };
+      return { input, reserve, settle };
+    };
+    const failure = async (input: DecisionBatchOptions) =>
+      (await decideBatch(input)).records[0]?.evidence.failure;
+
+    const zero = priced(0, 1);
+    expect(await failure(zero.input)).toBe(
+      "Hosted pricing must be a positive reviewed price; cost-capped projects abstain",
+    );
+    expect(zero.reserve).not.toHaveBeenCalled();
+    const over = priced(2, 1);
+    expect(await failure(over.input)).toBe(
+      "Decision request exceeds the configured cost ceiling",
+    );
+    expect(over.reserve).not.toHaveBeenCalled();
+    // A zero cap admits no hosted call at any positive price.
+    const zeroCap = priced(0.002, 0);
+    expect(await failure(zeroCap.input)).toBe(
+      "Decision request exceeds the configured cost ceiling",
+    );
+    expect(zeroCap.reserve).not.toHaveBeenCalled();
+    const noLedger = priced(0.002, 1);
+    delete noLedger.input.budget;
+    expect(await failure(noLedger.input)).toBe(
+      "Unknown hosted pricing or missing reservation ledger; cost-capped projects abstain",
+    );
+    const refused = priced(0.002, 1);
+    refused.reserve.mockRejectedValueOnce(
+      new Error("Toy ledger refused the reservation"),
+    );
+    expect(await failure(refused.input)).toBe(
+      "Toy ledger refused the reservation",
+    );
+    expect(refused.settle).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+
+    // A positive price under the cap reserves that price before dispatch and
+    // settles the call afterwards.
+    const admitted = priced(0.002, 1);
+    const result = await decideBatch(admitted.input);
+    expect(result.records[0]?.evidence.failure).toBeUndefined();
+    expect(admitted.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "acme", amountUsd: 0.002 }),
+    );
+    expect(admitted.reserve.mock.invocationCallOrder[0]!).toBeLessThan(
+      fetch.mock.invocationCallOrder[0]!,
+    );
+    expect(admitted.settle).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "acme", reservedUsd: 0.002 }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
   it("refuses a provider named jev configured as local instead of bypassing the guard", async () => {
     const relabelled = { ...hostedProvider("jev"), hosting: "local" as const };
