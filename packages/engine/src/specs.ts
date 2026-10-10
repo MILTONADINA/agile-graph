@@ -324,19 +324,22 @@ export function testSwitch(text: string, name: string): string | undefined {
   if (at === undefined) return undefined;
   // The innermost gated describe block whose braces enclose the test.
   const blocks = new RegExp(`(?:^|[^.\\w])describe${GATE}\\(`, "gm");
+  // One linear pass pairs every brace and records the next opening brace at
+  // each offset, so many gated blocks cost no more than one scan.
+  const closeOf = new Int32Array(text.length + 1).fill(-1);
+  const nextOpen = new Int32Array(text.length + 1).fill(-1);
+  const stack: number[] = [];
+  for (let index = 0; index < text.length; index++) {
+    if (text[index] === "{") stack.push(index);
+    else if (text[index] === "}" && stack.length) closeOf[stack.pop()!] = index;
+  }
+  for (let index = text.length - 1; index >= 0; index--)
+    nextOpen[index] = text[index] === "{" ? index : nextOpen[index + 1]!;
   let found: string | undefined;
   for (const match of text.matchAll(blocks)) {
-    const open = text.indexOf("{", match.index + match[0].length);
+    const open = nextOpen[match.index + match[0].length]!;
     if (open < 0 || open > at) continue;
-    let depth = 0;
-    let close = -1;
-    for (let index = open; index < text.length; index++) {
-      if (text[index] === "{") depth++;
-      else if (text[index] === "}" && --depth === 0) {
-        close = index;
-        break;
-      }
-    }
+    const close = closeOf[open]!;
     if (close > at)
       found = switchOf(match[1]!, match[2]!, match[3]!, match[4]!) ?? found;
   }

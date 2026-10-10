@@ -12,6 +12,7 @@ import {
   prepareJavaSnapshot,
   resolveJavaBindings,
   validateJavaOutput,
+  watchRss,
 } from "../src/context/java.js";
 
 const runtime = await javaRuntime();
@@ -416,6 +417,60 @@ public class Processor extends AbstractProcessor { static { if(true)throw new Ru
     } finally {
       await engine?.close();
       await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+describe("Java analyzer memory sampling", () => {
+  it("kills the analyzer only on an over-limit reading, not a failed or slow sample", async () => {
+    vi.useFakeTimers();
+    try {
+      const watch = (sample: () => Promise<number | undefined>) => {
+        const onOverLimit = vi.fn();
+        const calls = vi.fn(sample);
+        const unwatch = watchRss({
+          sample: calls,
+          limitKiB: 1000,
+          onOverLimit,
+          intervalMs: 40,
+        });
+        return { onOverLimit, calls, unwatch };
+      };
+      // A ps call that fails (as under load or after exit) or reads nothing.
+      let reads = 0;
+      const failing = watch(async () => {
+        if (++reads % 2) throw new Error("ps failed");
+        return undefined;
+      });
+      // A ps call that never answers.
+      const hanging = watch(() => new Promise(() => {}));
+      // A healthy reading under the limit.
+      const healthy = watch(async () => 900);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(failing.calls.mock.calls.length).toBeGreaterThan(10);
+      expect(healthy.calls.mock.calls.length).toBeGreaterThan(10);
+      expect(hanging.calls).toHaveBeenCalledTimes(1);
+      for (const watcher of [failing, hanging, healthy]) {
+        expect(watcher.onOverLimit).not.toHaveBeenCalled();
+        watcher.unwatch();
+      }
+      const before = failing.calls.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(400);
+      expect(failing.calls.mock.calls.length).toBe(before);
+
+      // An actual reading over the limit stops the analyzer once.
+      let rss = 900;
+      const growing = watch(async () => rss);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(growing.onOverLimit).not.toHaveBeenCalled();
+      rss = 1001;
+      await vi.advanceTimersByTimeAsync(200);
+      expect(growing.onOverLimit).toHaveBeenCalledTimes(1);
+      const sampled = growing.calls.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(400);
+      expect(growing.calls.mock.calls.length).toBe(sampled);
+      growing.unwatch();
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
