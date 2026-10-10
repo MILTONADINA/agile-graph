@@ -84,7 +84,10 @@ export function recordShown(shown: SuppliedLines, packet: ContextPacket) {
 const RANGE = /^(.+)#L(\d+)-L(\d+)$/;
 function parseRequest(entry: string) {
   const match = RANGE.exec(entry);
-  if (!match) return { path: entry };
+  // Models often name a directory with a trailing slash; the scope rules
+  // match paths without one, so "src/" would otherwise end the run instead
+  // of getting the directory's listing.
+  if (!match) return { path: entry.replace(/(?<=[^/])\/+$/, "") };
   const start = Number(match[2]);
   const end = Number(match[3]);
   if (!Number.isSafeInteger(start) || start < 1 || end < start)
