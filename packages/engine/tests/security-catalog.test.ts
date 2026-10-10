@@ -563,8 +563,9 @@ describe.runIf(process.env.GRAPH_ENGINE_SECURITY_IMAGE === "1")(
         await import("../src/security/scan.js");
       const root = await mkdtemp(path.join(os.tmpdir(), "graph-security-"));
       try {
-        const token = () =>
-          `ghp_${randomBytes(27).toString("base64url").slice(0, 36)}`;
+        // Letters and digits only: gitleaks' GitHub token rule matches
+        // [0-9a-zA-Z]{36}, so a base64url "-" or "_" made it miss at random.
+        const token = () => `ghp_${randomBytes(18).toString("hex")}`;
         const files: Record<string, string> = {
           "app.js": `export const token = "${token()}"; // gitleaks:allow\nexport const run = (input) => eval(input); // nosemgrep\n`,
           "tests/helper.js": "export const run = (input) => eval(input);\n",
