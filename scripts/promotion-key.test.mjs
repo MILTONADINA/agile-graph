@@ -360,6 +360,7 @@ test("promotion-key backup re-encrypts, decrypts independently in Node and resto
     "aes-256-gcm",
     derived,
     Buffer.from(envelope.nonce, "base64"),
+    { authTagLength: 16 },
   );
   decipher.setAAD(
     Buffer.from(`${BACKUP_FORMAT}:v1:issuer:${envelope.publicKeySha256}`),

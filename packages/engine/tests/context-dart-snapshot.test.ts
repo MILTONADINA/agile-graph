@@ -297,6 +297,13 @@ describe("Dart analyzer snapshot boundary", () => {
     await expect(
       attempt({ "lib/../escape.dart": "int x()=>1;" }),
     ).rejects.toThrow(/Unsafe Dart snapshot path/);
+    // A portable name the source-path check refuses must fail quickly, not
+    // backtrack exponentially through its "_" and "-" separated parts.
+    const started = performance.now();
+    await expect(
+      attempt({ [`lib/${"a_".repeat(30)}a..dart`]: "int x()=>1;" }),
+    ).rejects.toThrow(/Unsafe Dart snapshot path/);
+    expect(performance.now() - started).toBeLessThan(1000);
     await expect(attempt({ "Lib/main.dart": "int x()=>1;" })).rejects.toThrow(
       /Case-colliding Dart snapshot path/,
     );

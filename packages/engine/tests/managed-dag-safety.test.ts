@@ -4050,7 +4050,8 @@ describe("stored run events", () => {
     const { root } = await fixture();
     // "sk-" and 20 or more name characters: the shape of an API key.
     const file = "packages/sk-button-component-library/index.js";
-    const token = "sk-proj-A1b2C3d4E5f6G7h8I9j0K1l2";
+    // Built by concatenation so the source itself holds no credential shape.
+    const token = "sk-" + "proj-A1b2C3d4E5f6G7h8I9j0K1l2";
     let calls = 0,
       checks = 0;
     const engine = await open(root, {

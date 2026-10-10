@@ -20,11 +20,11 @@ import {
 
 const IMAGE_ID = `sha256:${"a".repeat(64)}`;
 // Built by concatenation so the source itself holds no credential shape.
-const KEY_BODY = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC";
+const PKCS8_BODY = "MIIEvQIBADANBgkq" + "hkiG9w0BAQEFAASC";
 const key =
   "-----BEGIN " +
   "PRIVATE KEY-----\n" +
-  KEY_BODY.repeat(20) +
+  PKCS8_BODY.repeat(20) +
   "\n-----END " +
   "PRIVATE KEY-----";
 // The key's BEGIN line lies outside the last 300 characters, so cutting the
@@ -74,7 +74,7 @@ describe("a failing scanner's stderr", () => {
     const error = scan.errors.find((line) => line.startsWith("osv-scanner:"));
     expect(error).toContain("osv-scanner exited 127");
     expect(error).toContain("[REDACTED PRIVATE KEY]");
-    expect(error).not.toContain(KEY_BODY);
+    expect(error).not.toContain(PKCS8_BODY);
     expect(error!.endsWith("done")).toBe(true);
   });
 
@@ -95,7 +95,7 @@ describe("a failing scanner's stderr", () => {
     );
     expect(failure).toContain("osv-scanner could not download its database");
     expect(failure).toContain("[REDACTED PRIVATE KEY]");
-    expect(failure).not.toContain(KEY_BODY);
+    expect(failure).not.toContain(PKCS8_BODY);
   });
 });
 

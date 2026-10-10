@@ -306,7 +306,11 @@ export function sealKey({ pkcs8, role, passphrase, format = KEY_FORMAT }) {
   const nonce = randomBytes(12);
   const derived = pbkdf2Sync(passphrase, salt, ITERATIONS, 32, "sha256");
   try {
-    const cipher = createCipheriv("aes-256-gcm", derived, nonce);
+    // The full 128-bit tag, stated on both sides so decryption never
+    // accepts a shorter one.
+    const cipher = createCipheriv("aes-256-gcm", derived, nonce, {
+      authTagLength: 16,
+    });
     cipher.setAAD(aad(format, role, publicKeySha256));
     const ciphertext = Buffer.concat([cipher.update(pkcs8), cipher.final()]);
     const envelope = {
@@ -388,7 +392,9 @@ export function openKey(json, { role, passphrase, format = KEY_FORMAT }) {
   );
   let pkcs8;
   try {
-    const decipher = createDecipheriv("aes-256-gcm", derived, nonce);
+    const decipher = createDecipheriv("aes-256-gcm", derived, nonce, {
+      authTagLength: 16,
+    });
     decipher.setAAD(aad(format, role, envelope.publicKeySha256));
     decipher.setAuthTag(tag);
     pkcs8 = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
