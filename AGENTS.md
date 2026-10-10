@@ -16,6 +16,8 @@ Beyond that, read what the task needs:
 - In-flight work, the owner's requirements, or the fork and evidence state:
   the rest of the [agent handover](docs/claude-code-handover.md), which can be
   out of date where the live state differs.
+- Taking over as a local model with a small context window:
+  [docs/qwen-handover.md](docs/qwen-handover.md).
 - Commands, configuration and policy: [docs/platform.md](docs/platform.md).
 - Connecting an AI client to the project MCP server:
   [docs/mcp-clients.md](docs/mcp-clients.md).
