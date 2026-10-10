@@ -104,6 +104,7 @@ import { createServer } from "./server.js";
 import {
   createMcpServer,
   mcpToolHashes,
+  mcpToolHashUnion,
   serveMcp,
   type McpServerOptions,
   type McpToolHashPins,
@@ -2303,9 +2304,16 @@ cli
   .option("--allow-run", "As for mcp")
   .option("--allow-run-status", "As for mcp")
   .option("--hashes", "Include each tool's definition SHA-256")
+  .option(
+    "--all-configurations",
+    "With --hashes, list every tool a local or cloud server could expose with any optional tool enabled: the set the project's mcp.toolHashes needs to pin when more than one configuration will be started",
+  )
   .action(async (options) => {
     const serverOptions = mcpServerOptions(options);
+    if (options.allConfigurations && !options.hashes)
+      throw new Error("--all-configurations needs --hashes");
     await withEngine(async (engine) => {
+      if (options.allConfigurations) return mcpToolHashUnion(engine);
       const hashes = mcpToolHashes(createMcpServer(engine, serverOptions));
       return options.hashes ? hashes : Object.keys(hashes);
     });

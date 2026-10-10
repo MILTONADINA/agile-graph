@@ -127,6 +127,91 @@ describe("agent-config token passthrough", () => {
     ).toBeUndefined();
   });
 
+  it("treats false-like values, empty lists and non-authorization header lists as off, and still flags authorization header lists", () => {
+    for (const value of ["false", "FALSE", 0, "0", "off", [], {}])
+      expect(
+        tokenPassthrough({ command: "toy", forwardAuthorization: value }),
+      ).toBeUndefined();
+    expect(
+      tokenPassthrough({ command: "toy", forwardHeaders: ["X-Request-Id"] }),
+    ).toBeUndefined();
+    expect(
+      tokenPassthrough({
+        command: "toy",
+        forwardHeaders: "X-Request-Id, X-Trace",
+      }),
+    ).toBeUndefined();
+    for (const arg of [
+      "--forward-token=false",
+      "--forward-token=0",
+      "--forward-headers=X-Request-Id",
+    ])
+      expect(tokenPassthrough({ command: "toy", args: [arg] })).toBeUndefined();
+    expect(
+      tokenPassthrough({
+        command: "toy",
+        forwardHeaders: ["X-Request-Id", "Authorization"],
+      }),
+    ).toContain("forwardHeaders");
+    expect(
+      tokenPassthrough({ command: "toy", forwardHeaders: true }),
+    ).toContain("forwardHeaders");
+    expect(
+      tokenPassthrough({ command: "toy", forwardAuthorization: "true" }),
+    ).toContain("forwardAuthorization");
+    expect(
+      tokenPassthrough({ command: "toy", args: ["--forward-token=true"] }),
+    ).toContain("forwards the caller's authorization");
+    expect(
+      tokenPassthrough({
+        command: "toy",
+        args: ["--forward-headers=authorization"],
+      }),
+    ).toContain("forwards the caller's authorization");
+  });
+
+  it("flags a Codex config.toml server whose header tables, env values or env_vars refer to an inbound token variable, naming no value", () => {
+    const result = scan({
+      ".codex/config.toml": [
+        "[mcp_servers.headers]",
+        'url = "https://downstream.example.invalid/mcp"',
+        "[mcp_servers.headers.http_headers]",
+        `Authorization = "Bearer \${INBOUND_TOKEN}"`,
+        "[mcp_servers.envheaders]",
+        'url = "https://other.example.invalid/mcp"',
+        "[mcp_servers.envheaders.env_http_headers]",
+        'Authorization = "CALLER_AUTHORIZATION"',
+        "[mcp_servers.envtable]",
+        'command = "toy-proxy"',
+        "[mcp_servers.envtable.env]",
+        `UPSTREAM = "\${HTTP_AUTHORIZATION}"`,
+        "[mcp_servers.inline]",
+        'command = "toy-proxy"',
+        `env = { TOY = "\${REQUEST_TOKEN}" }`,
+        "[mcp_servers.vars]",
+        'command = "toy-proxy"',
+        'env_vars = ["HOME", "INBOUND_TOKEN"]',
+        "[mcp_servers.own]",
+        'url = "https://api.example.invalid/mcp"',
+        'env_http_headers = { Authorization = "TOY_SERVICE_API_KEY" }',
+        'args = ["--forward-token=false", "--forward-headers=X-Request-Id"]',
+        `env = { K = "${SECRET}" }`,
+      ].join("\n"),
+    });
+    const found = result.findings.filter((f) => f.rule === "token-passthrough");
+    expect(found.map((f) => f.resource).sort()).toEqual([
+      "mcp_servers.envheaders",
+      "mcp_servers.envtable",
+      "mcp_servers.headers",
+      "mcp_servers.inline",
+      "mcp_servers.vars",
+    ]);
+    for (const f of found) {
+      expect(f.message).not.toContain(SECRET);
+      expect(f.message).not.toContain("Bearer");
+    }
+  });
+
   it("flags a passthrough flag in a Codex config.toml server's args", () => {
     const result = scan({
       ".codex/config.toml": [

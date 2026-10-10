@@ -1216,7 +1216,7 @@ describe("command line", () => {
     const mcpFailure = "stub: the MCP transport failed to connect";
     await writeFile(
       path.join(stubs, "mcp.mjs"),
-      `export async function serveMcp() { throw new Error(${JSON.stringify(mcpFailure)}); }\nexport function createMcpServer() {}\nexport function mcpToolHashes() { return {}; }\n`,
+      `export async function serveMcp() { throw new Error(${JSON.stringify(mcpFailure)}); }\nexport function createMcpServer() {}\nexport function mcpToolHashes() { return {}; }\nexport function mcpToolHashUnion() { return {}; }\n`,
     );
     // tsx registers in-thread hooks, and later ones resolve first.
     const failingMcp = path.join(stubs, "register.mjs");
@@ -1353,6 +1353,15 @@ describe("command line", () => {
         .stdout,
     ) as Record<string, string>;
     expect(allowed.run_start).toMatch(/^[a-f0-9]{64}$/);
+    const union = JSON.parse(
+      (await graph("mcp-tools", "--hashes", "--all-configurations")).stdout,
+    ) as Record<string, string>;
+    expect(union).toMatchObject(hashes);
+    expect(union.run_start).toBe(allowed.run_start);
+    expect(union.run_status).toMatch(/^[a-f0-9]{64}$/);
+    const bare = await graph("mcp-tools", "--all-configurations");
+    expect(bare.code).not.toBe(0);
+    expect(bare.stderr).toContain("--all-configurations needs --hashes");
     const drifted = { ...hashes, context_get: "0".repeat(64) };
     const pins = path.join(root, "pins.json");
     await writeFile(pins, JSON.stringify(drifted));
