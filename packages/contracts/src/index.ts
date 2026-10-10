@@ -14,8 +14,39 @@ export type Language =
   | "text";
 export type MemoryKind =
   "observation" | "decision" | "requirement" | "constraint" | "solution";
-export type ProviderKind =
-  "local" | "openai" | "anthropic" | "codex" | "claude" | "cursor";
+/** Workers that run on this machine's loopback model server. */
+export const LOCAL_KINDS = ["local"] as const;
+/**
+ * Metered HTTP model APIs. `chat` is any OpenAI-compatible chat-completions
+ * endpoint (a hosted Qwen, a gateway, a vLLM server). Every API kind is a
+ * cloud consumer: it receives only exportable context.
+ */
+export const API_KINDS = ["openai", "anthropic", "chat"] as const;
+/** Installed coding clients the engine drives through their own adapter. */
+export const INSTALLED_KINDS = ["codex", "claude", "cursor"] as const;
+export type LocalKind = (typeof LOCAL_KINDS)[number];
+export type ApiKind = (typeof API_KINDS)[number];
+export type InstalledKind = (typeof INSTALLED_KINDS)[number];
+export type ProviderKind = LocalKind | ApiKind | InstalledKind;
+export const PROVIDER_KINDS = [
+  ...LOCAL_KINDS,
+  ...API_KINDS,
+  ...INSTALLED_KINDS,
+] as const;
+export function isInstalledKind(kind: string): kind is InstalledKind {
+  return (INSTALLED_KINDS as readonly string[]).includes(kind);
+}
+export function isApiKind(kind: string): kind is ApiKind {
+  return (API_KINDS as readonly string[]).includes(kind);
+}
+/**
+ * Whether a provider kind is on the cloud side of the export boundary.
+ * Anything but a local worker is, installed agents included, so an unknown
+ * kind fails closed.
+ */
+export function isCloudKind(kind: string): boolean {
+  return !(LOCAL_KINDS as readonly string[]).includes(kind);
+}
 export type RunStatus =
   | "planned"
   | "running"

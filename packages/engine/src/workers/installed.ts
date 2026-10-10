@@ -4,11 +4,15 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
+import {
+  INSTALLED_KINDS,
+  isInstalledKind,
+  type InstalledKind,
+} from "@graph-engineering/contracts";
 import type {
   InstalledWorkerIdentity,
   ProjectPolicy,
   ProviderConfig,
-  ProviderKind,
   Usage,
 } from "@graph-engineering/contracts";
 import {
@@ -33,7 +37,6 @@ import {
   isInstalledProvider,
 } from "./identity.js";
 
-type InstalledKind = Extract<ProviderKind, "codex" | "claude" | "cursor">;
 export interface InstalledWorkerCapability {
   kind: InstalledKind;
   executable: string;
@@ -577,9 +580,7 @@ export async function discoverInstalledWorkers(
         }
       }),
     );
-  return Promise.all(
-    (["codex", "claude", "cursor"] as const).map((kind) => inspect(kind)),
-  );
+  return Promise.all(INSTALLED_KINDS.map((kind) => inspect(kind)));
 }
 
 function finiteCount(value: unknown): number | null {
@@ -1193,7 +1194,7 @@ export async function invokeInstalledWorker(
 ): Promise<WorkerResult> {
   const { provider, policy, signal } = input;
   signal?.throwIfAborted();
-  if (!["codex", "claude", "cursor"].includes(provider.kind))
+  if (!isInstalledKind(provider.kind))
     throw new Error("Provider is not an installed-agent worker");
   assertProvider(provider, policy, input.effort);
   if (policy.maxCostUsd !== null)

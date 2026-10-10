@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { lstat, readdir, realpath } from "node:fs/promises";
 import picomatch from "picomatch";
-import type {
-  ContextPacket,
-  ProjectPolicy,
-  ProviderConfig,
+import {
+  isApiKind,
+  isInstalledKind,
+  type ContextPacket,
+  type ProjectPolicy,
+  type ProviderConfig,
 } from "@graph-engineering/contracts";
 
 const protectedPaths = [
@@ -652,6 +654,24 @@ export function assertEndpoint(
     throw new Error(`Project policy denies endpoint ${url.hostname}`);
   return url;
 }
+/**
+ * An OpenAI-compatible chat provider is always a cloud consumer, whatever
+ * its address: it needs an endpoint, HTTPS, and a host the policy lists,
+ * with no loopback exception.
+ */
+export function assertChatEndpoint(
+  endpoint: string | undefined,
+  policy: ProjectPolicy,
+): URL {
+  if (!endpoint)
+    throw new Error("A chat provider needs its HTTPS endpoint configured");
+  const url = assertEndpoint(endpoint, policy);
+  if (url.protocol !== "https:" || !policy.allowedHosts.includes(url.hostname))
+    throw new Error(
+      `Project policy denies endpoint ${url.hostname}: a chat provider needs an HTTPS endpoint on a host in policy.allowedHosts`,
+    );
+  return url;
+}
 export function assertProvider(
   provider: ProviderConfig,
   policy: ProjectPolicy,
@@ -678,6 +698,8 @@ export function assertProvider(
     assertEndpoint(provider.endpoint ?? "https://api.openai.com/v1", policy);
   else if (provider.kind === "anthropic")
     assertEndpoint(provider.endpoint ?? "https://api.anthropic.com", policy);
+  else if (provider.kind === "chat")
+    assertChatEndpoint(provider.endpoint, policy);
   const refusal =
     policy.maxCostUsd === null ? undefined : costBudgetRefusal(provider);
   if (refusal) throw new Error(refusal);
@@ -693,13 +715,13 @@ export function costBudgetRefusal(
   provider: ProviderConfig,
 ): string | undefined {
   if (
-    ["openai", "anthropic", "local"].includes(provider.kind) &&
+    (isApiKind(provider.kind) || provider.kind === "local") &&
     provider.inputCostPerMillion !== undefined &&
     provider.outputCostPerMillion !== undefined
   )
     return undefined;
-  if (["codex", "claude", "cursor"].includes(provider.kind))
-    return `This provider cannot support the configured cost budget: an installed ${provider.kind} agent reports no cost the engine can enforce, so it cannot run under a numeric policy.maxCostUsd whatever prices are recorded for it. Use an openai, anthropic or local worker with its prices recorded instead`;
+  if (isInstalledKind(provider.kind))
+    return `This provider cannot support the configured cost budget: an installed ${provider.kind} agent reports no cost the engine can enforce, so it cannot run under a numeric policy.maxCostUsd whatever prices are recorded for it. Use an openai, anthropic, chat or local worker with its prices recorded instead`;
   if (provider.kind === "local")
     return `This provider cannot support the configured cost budget until its prices are recorded. A local worker costs nothing, so record zero prices with graph-engine provider-add ${provider.id} local ${provider.model} --input-cost 0 --output-cost 0, repeating its other options such as --endpoint, since provider-add replaces the stored worker`;
   return "This provider cannot support the configured cost budget; configure pricing or use a metered API worker";

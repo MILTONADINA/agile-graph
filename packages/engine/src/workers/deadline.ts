@@ -1,4 +1,8 @@
-import type { ProjectPolicy, ProviderKind } from "@graph-engineering/contracts";
+import {
+  isInstalledKind,
+  type ProjectPolicy,
+  type ProviderKind,
+} from "@graph-engineering/contracts";
 
 /** null deliberately means completion-driven, never a missing default. */
 export function installedWorkerTimeoutMs(policy: ProjectPolicy): number | null {
@@ -11,7 +15,7 @@ export function workerTimeoutMs(
   policy: ProjectPolicy,
   kind: ProviderKind | undefined,
 ): number | null {
-  return kind === "claude" || kind === "codex" || kind === "cursor"
+  return kind !== undefined && isInstalledKind(kind)
     ? installedWorkerTimeoutMs(policy)
     : policy.timeoutSeconds * 1000;
 }

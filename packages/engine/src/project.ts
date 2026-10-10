@@ -6,6 +6,8 @@ import {
   assertProjectConfig,
   assertInstalledWorkerIdentity,
   DEFAULT_POLICY,
+  isInstalledKind,
+  PROVIDER_KINDS,
   SCHEMA_VERSION,
   type ProjectConfig,
   type ProviderConfig,
@@ -65,7 +67,7 @@ export function projectDataDir(projectId: string): string {
 const providerSchema = z
   .object({
     id: z.string().regex(/^[a-zA-Z0-9_-]+$/),
-    kind: z.enum(["local", "openai", "anthropic", "codex", "claude", "cursor"]),
+    kind: z.enum(PROVIDER_KINDS),
     model: z.string().min(1),
     endpoint: z.string().url().optional(),
     apiKeyEnv: z
@@ -106,10 +108,18 @@ const providerSchema = z
     "Local inference options apply only to local providers",
   )
   .refine(
-    (provider) =>
-      !provider.installedIdentity ||
-      ["claude", "codex", "cursor"].includes(provider.kind),
+    (provider) => !provider.installedIdentity || isInstalledKind(provider.kind),
     "Installed identities apply only to installed providers",
+  )
+  // An OpenAI-compatible gateway has no default address or key variable to
+  // fall back on, so both are part of its configuration.
+  .refine(
+    (provider) => provider.kind !== "chat" || provider.endpoint !== undefined,
+    "A chat provider needs its HTTPS endpoint (--endpoint <url>)",
+  )
+  .refine(
+    (provider) => provider.kind !== "chat" || provider.apiKeyEnv !== undefined,
+    "A chat provider needs the environment variable holding its API key (--api-key-env <name>)",
   );
 export async function loadProviders(
   dataDir: string,

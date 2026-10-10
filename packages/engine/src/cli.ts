@@ -9,6 +9,8 @@ import { z } from "zod";
 import {
   assertGeneratorRegistration,
   assertProjectConfig,
+  INSTALLED_KINDS,
+  isInstalledKind,
   type GeneratorRegistration,
   type ProviderConfig,
   type ProjectPolicy,
@@ -932,12 +934,9 @@ async function warnIfUnusable(
     console.error(
       `${providerId} is not a configured worker yet; add it with graph-engine provider-add.`,
     );
-  else if (
-    role === "reviewer" &&
-    ["codex", "claude", "cursor"].includes(provider.kind)
-  )
+  else if (role === "reviewer" && isInstalledKind(provider.kind))
     console.error(
-      `Runs cannot use ${providerId} as their reviewer: it is an installed ${provider.kind} agent, and installed agents cannot review yet. Set an openai, anthropic or local provider with graph-engine reviewer <providerId>.`,
+      `Runs cannot use ${providerId} as their reviewer: it is an installed ${provider.kind} agent, and installed agents cannot review yet. Set an openai, anthropic, chat or local provider with graph-engine reviewer <providerId>.`,
     );
   else if (!project.policy.providers.includes(providerId))
     console.error(
@@ -1023,7 +1022,8 @@ cli
 cli
   .command("provider-add <id> <kind> <model>")
   .option("--endpoint <url>")
-  .option("--key-env <name>")
+  .option("--key-env <name>", "Environment variable holding the API key")
+  .option("--api-key-env <name>", "Same as --key-env")
   .option("--efforts <list>")
   .option("--default-effort <effort>")
   .option("--input-cost <usdPerMillion>", "Reviewed input-token price", Number)
@@ -1044,13 +1044,19 @@ cli
     "Allow this provider in project policy; cloud access still requires explicit policy configuration",
   )
   .action(async (id, kind, model, options) => {
+    if (
+      options.keyEnv !== undefined &&
+      options.apiKeyEnv !== undefined &&
+      options.keyEnv !== options.apiKeyEnv
+    )
+      throw new Error("--key-env and --api-key-env name different variables");
     const project = await loadProject(root());
     const provider: ProviderConfig = {
       id,
       kind,
       model,
       endpoint: options.endpoint,
-      apiKeyEnv: options.keyEnv,
+      apiKeyEnv: options.keyEnv ?? options.apiKeyEnv,
       efforts: options.efforts?.split(","),
       defaultEffort: options.defaultEffort,
       inputCostPerMillion: options.inputCost,
@@ -1131,11 +1137,7 @@ cli
     "Inspect the installed native executable's canonical path and SHA-256 without executing it, configuring a provider, or approving a plan",
   )
   .action(async (kind) => {
-    print(
-      await inspectInstalledIdentity(
-        z.enum(["claude", "codex", "cursor"]).parse(kind),
-      ),
-    );
+    print(await inspectInstalledIdentity(z.enum(INSTALLED_KINDS).parse(kind)));
   });
 cli
   .command("provider-identity <id>")

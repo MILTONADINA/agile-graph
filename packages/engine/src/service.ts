@@ -27,6 +27,8 @@ import type {
 import {
   assertGeneratorRegistration,
   assertInstalledWorkerBinding,
+  isApiKind,
+  isInstalledKind,
   sameGeneratorRegistration,
 } from "@graph-engineering/contracts";
 import { ContextEngine } from "./context/index.js";
@@ -596,9 +598,7 @@ export class GraphEngine {
    */
   async workerReasons(): Promise<{ id: string; reason: string | null }[]> {
     const configured = await this.providers();
-    const installed = configured.some((p) =>
-      ["codex", "claude", "cursor"].includes(p.kind),
-    )
+    const installed = configured.some((p) => isInstalledKind(p.kind))
       ? await discoverInstalledWorkers(configured, this.config.policy)
       : [];
     return configured.map((p) => {
@@ -617,7 +617,7 @@ export class GraphEngine {
         };
       }
       if (
-        ["codex", "claude", "cursor"].includes(p.kind) &&
+        isInstalledKind(p.kind) &&
         !installed.some(
           (c) =>
             (c.providerId ? c.providerId === p.id : c.kind === p.kind) &&
@@ -643,16 +643,14 @@ export class GraphEngine {
   }
   private async availableWorkers(): Promise<ProviderConfig[]> {
     const configured = await this.providers();
-    const installed = configured.some((p) =>
-      ["codex", "claude", "cursor"].includes(p.kind),
-    )
+    const installed = configured.some((p) => isInstalledKind(p.kind))
       ? await discoverInstalledWorkers(configured, this.config.policy)
       : [];
     return configured.filter((p) => {
       try {
         assertProvider(p, this.config.policy);
         return (
-          !["codex", "claude", "cursor"].includes(p.kind) ||
+          !isInstalledKind(p.kind) ||
           installed.some(
             (capability) =>
               (capability.providerId
@@ -703,7 +701,7 @@ export class GraphEngine {
       throw new Error(
         `Planner ${input.plannerId} is not a configured provider`,
       );
-    if (!["openai", "anthropic", "local"].includes(planner.kind))
+    if (!isApiKind(planner.kind) && planner.kind !== "local")
       throw new Error(
         `Planner ${planner.id} must be an API or local provider; installed agents cannot plan yet`,
       );
@@ -843,7 +841,7 @@ export class GraphEngine {
       throw new Error(
         `Configured reviewer ${providerId} is not a configured provider`,
       );
-    if (!["openai", "anthropic", "local"].includes(reviewer.kind))
+    if (!isApiKind(reviewer.kind) && reviewer.kind !== "local")
       throw new Error(
         `Reviewer ${reviewer.id} must be an API or local provider; installed agents cannot review yet`,
       );
@@ -1001,7 +999,7 @@ export class GraphEngine {
       onReserved?.();
       const result = this.deps.worker
         ? await this.deps.worker(input, workspace)
-        : ["codex", "claude", "cursor"].includes(input.provider.kind)
+        : isInstalledKind(input.provider.kind)
           ? await invokeInstalledWorker(input, workspace)
           : await invokeApiWorker(input);
       this.store.settleCall(
