@@ -73,7 +73,9 @@ refusal so the implementation changes them visibly.
 4. The engine, not the worker, decides whether a patch applies: `before` stays
    an exact substring that is unique in the whole file.
 5. The shared per-run worker-turn budget (`maxTurns`, counted across attempts,
-   steps and resumes) is unchanged.
+   steps and resumes) is unchanged. Request-only answers also count against
+   the run's read budget (`maxReadTurns`), which is part of `maxTurns`
+   ([tester read budget](../specs/runs/tester-read-budget.md)).
 6. Budgets stay conservative (one token per UTF-8 byte) and are measured once,
    the way the transport measures them.
 

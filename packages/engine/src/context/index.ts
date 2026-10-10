@@ -1053,6 +1053,13 @@ export class ContextEngine {
      * memory goes through the same export checks as any other.
      */
     retainExpired?: readonly string[];
+    /**
+     * Repository paths to lead with, ahead of the paths the query names,
+     * such as a tester's related tests and the code they exercise. Screened
+     * like a path the query names: a priority hint within the budget, never
+     * authority to read an excluded or unexportable file.
+     */
+    focusPaths?: readonly string[];
   }): Promise<ContextPacket> {
     const retrieval = input.retrieval ?? "hybrid";
     const exportOnly = input.exportOnly === true;
@@ -1269,11 +1276,12 @@ export class ContextEngine {
       // to read an arbitrary file or bypass the context budget.
       const pathHints = [
         ...new Set(
-          (
-            input.query.match(
+          [
+            ...(input.focusPaths ?? []),
+            ...(input.query.match(
               /(?<![A-Za-z0-9_./-])(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+/g,
-            ) ?? []
-          )
+            ) ?? []),
+          ]
             .map((value) => value.replace(/[.,;:!?]+$/, ""))
             .filter(
               (value) =>
