@@ -66,7 +66,7 @@ See [context lifecycle](context-lifecycle.md) for API signatures, limits, backup
 
 ## MCP clients
 
-Configure the installed CLI as a stdio MCP server:
+[Connecting an AI client](mcp-clients.md) has ready configurations for Claude Code, Codex, Cursor and other stdio clients, and [which AI can do what](installed-workers.md#which-ai-can-do-what) lists the roles each AI can take. Configure the installed CLI as a stdio MCP server:
 
 ```json
 {
