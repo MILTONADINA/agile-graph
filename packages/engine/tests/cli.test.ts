@@ -436,6 +436,52 @@ describe("command line", () => {
     expect(tester.stderr).toContain("missing is not a configured worker yet");
   }, 120_000);
 
+  it("sets up a project cloud MCP clients may use only when asked, with the export globs given", async () => {
+    const { root, graph } = await project();
+    const missing = await graph("init", "--cloud-mcp");
+    expect(missing.code).not.toBe(0);
+    expect(missing.stderr).toContain("--cloud-mcp needs at least one --export");
+    const stray = await graph("init", "--export", "src/**");
+    expect(stray.code).not.toBe(0);
+    expect(stray.stderr).toContain("--export is only used with --cloud-mcp");
+
+    const init = await graph(
+      "init",
+      "--cloud-mcp",
+      "--export",
+      "src/**",
+      "--export",
+      "!src/private/**",
+    );
+    expect(init.code).toBe(0);
+    expect(init.stderr).toContain("Cloud MCP clients may now receive");
+    const { policy } = JSON.parse(
+      await readFile(path.join(root, ".graph/project.json"), "utf8"),
+    );
+    expect(policy).toMatchObject({
+      inference: "allowlisted",
+      network: "allowlisted",
+      exportPaths: ["src/**", "!src/private/**"],
+      providers: [],
+      allowedHosts: [],
+      maxCostUsd: null,
+    });
+
+    const again = await graph("init", "--cloud-mcp", "--export", "**");
+    expect(again.code).not.toBe(0);
+    expect(again.stderr).toContain("never changes an existing policy");
+  }, 120_000);
+
+  it("keeps a plain init offline, so cloud MCP clients stay refused by default", async () => {
+    const { graph } = await project();
+    const init = await graph("init");
+    expect(JSON.parse(init.stdout).policy).toMatchObject({
+      inference: "local",
+      network: "deny",
+      exportPaths: [],
+    });
+  }, 120_000);
+
   it("explains an unusable worker, records the difficulty kind privately, and never prompts without a person", async () => {
     const { graph } = await project();
     await graph("init");

@@ -38,6 +38,43 @@ server failed to start.
 When in doubt, use `cloud`. A project whose policy is offline refuses cloud
 clients.
 
+### Letting cloud clients in
+
+`graph-engine init` creates an offline project (`policy.inference: "local"`,
+`policy.network: "deny"`, `policy.exportPaths: []`), and the server refuses
+every `--client cloud` call there. That default does not change. To let Claude
+Code, Codex, Cursor or another cloud-backed client retrieve context, choose it
+when you create the project and name the files they may receive:
+
+```sh
+graph-engine -C <path-to-project> init --cloud-mcp --export 'src/**' --export '!src/secrets/**'
+```
+
+`--cloud-mcp` needs at least one `--export` glob; repeat `--export` for more,
+and prefix `!` to exclude. It sets exactly three fields of the new
+`.graph/project.json`:
+
+- `policy.inference` and `policy.network` become `"allowlisted"`, which is
+  what stops the server refusing cloud clients;
+- `policy.exportPaths` becomes the globs you gave.
+
+Everything else stays at the default. `policy.providers` and
+`policy.allowedHosts` stay empty, so no cloud or installed worker and no
+network host is permitted until you add one (`provider-enable`, and a host in
+`allowedHosts` for an API worker), and `policy.excludedPaths` still keeps
+`.env`, keys and credentials out of the index entirely.
+
+What this means for privacy: the text of every indexed file `exportPaths`
+matches, with its symbols and graph edges, can be sent to the client and so
+to its model provider's servers. Files outside `exportPaths` are never given
+to a cloud client, and mandatory memory still reaches one only after you
+authorize its exact text (`memory-export-authorize`). Export only what you are
+willing to share with that provider. `init --cloud-mcp` never changes an
+existing project: it refuses when `.graph/project.json` exists, so to open or
+close an existing project edit those three fields there yourself (setting
+`inference` back to `"local"` or `network` to `"deny"` refuses cloud clients
+again). Changing the policy voids existing plans.
+
 Both kinds get `context_get`, `symbol_search`, `graph_neighbors`,
 `template_list` and `memory_propose`; a memory proposal stays private until it
 is accepted outside the server. The other tools are off until the operator

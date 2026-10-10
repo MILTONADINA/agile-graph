@@ -303,9 +303,28 @@ async function closeOnFailure<T>(
 cli
   .command("init")
   .option("--name <name>")
+  .option(
+    "--cloud-mcp",
+    "Let cloud-backed MCP clients (Claude Code, Codex, Cursor) retrieve context from the new project: sets policy.inference and policy.network to allowlisted, with no providers or hosts added. Needs --export",
+  )
+  .option(
+    "--export <glob>",
+    "With --cloud-mcp: a policy.exportPaths glob cloud clients may receive; repeat it for more, and prefix ! to exclude",
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
   .action(async (options) => {
-    const project = await initializeProject(root(), options.name);
+    if (options.export && !options.cloudMcp)
+      throw new Error("--export is only used with --cloud-mcp");
+    const project = await initializeProject(root(), options.name, {
+      ...(options.cloudMcp
+        ? { cloudMcpExportPaths: options.export ?? [] }
+        : {}),
+    });
     print(project);
+    if (options.cloudMcp)
+      console.error(
+        `Cloud MCP clients may now receive these files and their symbols and graph edges: ${project.policy.exportPaths.join(", ")}. No cloud or installed worker is permitted until you add it with provider-enable.`,
+      );
     if (project.policy.maxCostUsd === null)
       console.error(
         "No spending cap is set (policy.maxCostUsd is null). The default policy allows only local models, so nothing is spent; set a numeric cap before permitting metered workers.",

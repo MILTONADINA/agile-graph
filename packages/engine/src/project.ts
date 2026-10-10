@@ -10,6 +10,7 @@ import {
   PROVIDER_KINDS,
   SCHEMA_VERSION,
   type ProjectConfig,
+  type ProjectPolicy,
   type ProviderConfig,
 } from "@graph-engineering/contracts";
 import { id, readJson, writeJson } from "./util.js";
@@ -34,13 +35,49 @@ export async function loadProject(root: string): Promise<ProjectConfig> {
   assertProjectConfig(value);
   return value;
 }
+/**
+ * The policy of a new project whose person chose to let cloud-backed MCP
+ * clients retrieve context: inference and network become "allowlisted" so
+ * the MCP server stops refusing cloud clients, and exportPaths is exactly
+ * the globs the person named. providers and allowedHosts stay empty, so no
+ * cloud or installed worker and no network host is permitted by this alone.
+ */
+export function cloudMcpPolicy(exportPaths: string[]): ProjectPolicy {
+  const globs = exportPaths.map((glob) => glob.trim());
+  if (!globs.some((glob) => glob !== "" && !glob.startsWith("!")))
+    throw new Error(
+      "--cloud-mcp needs at least one --export <glob> naming the files cloud clients may receive, such as --export 'src/**'",
+    );
+  if (globs.some((glob) => glob === "" || glob === "!"))
+    throw new Error("An --export glob cannot be empty");
+  return {
+    ...structuredClone(DEFAULT_POLICY),
+    inference: "allowlisted",
+    network: "allowlisted",
+    exportPaths: globs,
+  };
+}
+export interface InitializeOptions {
+  /** Globs cloud MCP clients may receive; set means cloud MCP access is on. */
+  cloudMcpExportPaths?: string[];
+}
 export async function initializeProject(
   root: string,
   name?: string,
+  options: InitializeOptions = {},
 ): Promise<ProjectConfig> {
   const absolute = await realpath(root);
+  const policy =
+    options.cloudMcpExportPaths === undefined
+      ? structuredClone(DEFAULT_POLICY)
+      : cloudMcpPolicy(options.cloudMcpExportPaths);
   try {
-    return await loadProject(absolute);
+    const existing = await loadProject(absolute);
+    if (options.cloudMcpExportPaths !== undefined)
+      throw new Error(
+        `${PROJECT_FILE} already exists; --cloud-mcp only sets up a new project and never changes an existing policy. Edit policy.inference, policy.network and policy.exportPaths there yourself.`,
+      );
+    return existing;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
@@ -48,7 +85,7 @@ export async function initializeProject(
     version: SCHEMA_VERSION,
     projectId: id(),
     name: name ?? path.basename(absolute),
-    policy: structuredClone(DEFAULT_POLICY),
+    policy,
     verification: [],
   };
   await writeJson(path.join(absolute, PROJECT_FILE), config);

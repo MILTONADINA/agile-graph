@@ -60,6 +60,9 @@ Developers use AI clients such as Claude Code, Codex and Cursor, which should be
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: refuses to start a publishing run while the checkout has a changed file marked skip-worktree
 - AC12: Ctrl-C, SIGTERM or SIGHUP (sent when the terminal that started the server closes) stops `mcp` by closing the server and then the engine, which cancels the runs its clients started as managed-runs AC19 describes: their checks and agents are stopped, their check containers removed and each run recorded as `cancelled`, or as `needs_reconciliation` when its publication had started or a multi-step run's retained state must be reconciled, before the process exits. Further signals are ignored until that cleanup finishes, so a repeated signal cannot end the process with those runs still executing and left to be recovered as `needs_reconciliation`.
   - Test: packages/engine/tests/cli.test.ts :: stops the MCP server on SIGHUP and keeps cancelling the runs it started when the signal arrives again during cleanup
+- AC13: `graph-engine init` keeps a new project offline, so cloud MCP clients are refused by default; `init --cloud-mcp --export <glob>` (at least one glob) instead sets `policy.inference` and `policy.network` to `allowlisted` and `policy.exportPaths` to exactly the globs given, leaves `providers` and `allowedHosts` empty, and refuses to change an existing project.
+  - Test: packages/engine/tests/cli.test.ts :: sets up a project cloud MCP clients may use only when asked, with the export globs given
+  - Test: packages/engine/tests/cli.test.ts :: keeps a plain init offline, so cloud MCP clients stay refused by default
 
 ## Security considerations
 
