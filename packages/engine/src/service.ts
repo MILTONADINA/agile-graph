@@ -1647,24 +1647,30 @@ export class GraphEngine {
   }
   /**
    * Whether an approval is older than `policy.approvalTtlHours`. Without
-   * that setting approvals do not expire; an unreadable time counts as
-   * expired, so a damaged record never authorizes.
+   * that setting approvals do not expire; an unreadable time, or one more
+   * than five minutes in the future (clock skew or an edited record), counts
+   * as expired, so a damaged record never authorizes.
    */
   private approvalExpired(approval: PlanApproval): boolean {
     const ttl = this.config.policy.approvalTtlHours;
     if (ttl === undefined) return false;
     const given = Date.parse(approval.approvedAt);
-    return !Number.isFinite(given) || Date.now() - given > ttl * 3_600_000;
+    const age = Date.now() - given;
+    return !Number.isFinite(given) || age < -300_000 || age > ttl * 3_600_000;
   }
   /**
    * Why a plan has no usable approval, phrased to follow "plan <id>": no
    * approval, one given for other content, or one past approvalTtlHours.
+   * For a run's plan (`held`), other content is named as such rather than
+   * as a change to the plan, since the run holds the plan it started with.
    */
-  private unapproved(plan: ExecutionPlan): string {
+  private unapproved(plan: ExecutionPlan, held = false): string {
     const { approval } = this.store.planApproval(plan.id);
     if (!approval) return "is not approved";
     if (approval.planSha256 !== planSha256(plan))
-      return "changed after it was approved";
+      return held
+        ? "has an approval for other content than the plan this run holds"
+        : "changed after it was approved";
     return `has an approval given at ${approval.approvedAt} that expired after policy.approvalTtlHours (${this.config.policy.approvalTtlHours} hours) and must be given again`;
   }
   /**
@@ -1785,10 +1791,14 @@ export class GraphEngine {
         "Policy changed before publication: the policy baseline no longer matches the hash the plan was made under, so nothing was published; create a fresh plan",
       );
     if (run.plan.publication === "none") return;
-    if (!this.approvalOf(run.plan))
+    const approval = this.approvalOf(run.plan);
+    if (!approval)
       throw new RefusalError(
-        `Publication needs a person's current approval of the plan this run holds, and plan ${run.plan.id} ${this.store.planApproval(run.plan.id).approval && this.store.planApproval(run.plan.id).approval!.planSha256 !== planSha256(run.plan) ? "has an approval for other content than the plan this run holds" : this.unapproved(run.plan)}, so nothing was published. A person reviews it with graph-engine plan-approve ${run.plan.id}, approves it with graph-engine plan-approve ${run.plan.id} --yes --expect ${planSha256(run.plan)} and resumes the run`,
+        `Publication needs a person's current approval of the plan this run holds, and plan ${run.plan.id} ${this.unapproved(run.plan, true)}, so nothing was published. A person reviews it with graph-engine plan-approve ${run.plan.id}, approves it with graph-engine plan-approve ${run.plan.id} --yes --expect ${planSha256(run.plan)} and resumes the run`,
       );
+    // The approval in force at the irreversible step, which the receipt
+    // shows for anything recorded from here on.
+    this.recordApprovalUsed(run.id, approval);
   }
   // Which approval authorized this start or resume, so `inspect` and
   // `run-receipt` show it: the content hash it binds, when it was given, and
@@ -2707,15 +2717,21 @@ export class GraphEngine {
     const pendingGeneratorStepIds =
       await this.pendingGeneratorStepsForResume(run);
     this.assertLiveGenerators(run.plan, pendingGeneratorStepIds);
-    // Under the policy the plan this run holds must still be approved as it
-    // is: an approval removed, or replaced by one of other content, since
-    // the run started does not let it go on.
-    const approval = this.config.policy.requirePlanApproval
-      ? this.approvalOf(run.plan)
-      : undefined;
-    if (this.config.policy.requirePlanApproval && !approval)
+    // Under the policy, for a plan that publishes, and for a run that started
+    // under a stored approval (as an MCP run_start does), the plan this run
+    // holds must still be approved as it is: an approval removed, replaced
+    // by one of other content or past approvalTtlHours since the run started
+    // does not let it spend more worker budget.
+    const needsApproval =
+      this.config.policy.requirePlanApproval ||
+      run.plan.publication !== "none" ||
+      this.store
+        .events(runId)
+        .some((event) => event.type === "plan.approval_used");
+    const approval = needsApproval ? this.approvalOf(run.plan) : undefined;
+    if (needsApproval && !approval)
       throw new Error(
-        `This project requires a person to approve every plan before a run of it starts or resumes (requirePlanApproval), and ${!this.store.planApproval(run.plan.id).approval ? `plan ${run.plan.id} is not approved` : this.store.planApproval(run.plan.id).approval!.planSha256 !== planSha256(run.plan) ? `the approval of plan ${run.plan.id} is for other content than the plan this run holds` : `plan ${run.plan.id} ${this.unapproved(run.plan)}`}. A person reviews it with graph-engine plan-approve ${run.plan.id} and approves it with graph-engine plan-approve ${run.plan.id} --yes; only an approval of the exact plan this run holds counts`,
+        `${this.config.policy.requirePlanApproval ? "This project requires a person to approve every plan before a run of it starts or resumes (requirePlanApproval)" : "A run that publishes or started under a stored approval needs that approval to still hold when it resumes"}, and plan ${run.plan.id} ${this.unapproved(run.plan, true)}. A person reviews it with graph-engine plan-approve ${run.plan.id} and approves it with graph-engine plan-approve ${run.plan.id} --yes; only an approval of the exact plan this run holds counts`,
       );
     if (this.active.size >= this.config.policy.maxWorkers)
       throw new Error("Project concurrency limit reached");
