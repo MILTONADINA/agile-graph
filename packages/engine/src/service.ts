@@ -1640,7 +1640,32 @@ export class GraphEngine {
    */
   private approvalOf(plan: ExecutionPlan): PlanApproval | undefined {
     const { approval } = this.store.planApproval(plan.id);
-    return approval?.planSha256 === planSha256(plan) ? approval : undefined;
+    return approval?.planSha256 === planSha256(plan) &&
+      !this.approvalExpired(approval)
+      ? approval
+      : undefined;
+  }
+  /**
+   * Whether an approval is older than `policy.approvalTtlHours`. Without
+   * that setting approvals do not expire; an unreadable time counts as
+   * expired, so a damaged record never authorizes.
+   */
+  private approvalExpired(approval: PlanApproval): boolean {
+    const ttl = this.config.policy.approvalTtlHours;
+    if (ttl === undefined) return false;
+    const given = Date.parse(approval.approvedAt);
+    return !Number.isFinite(given) || Date.now() - given > ttl * 3_600_000;
+  }
+  /**
+   * Why a plan has no usable approval, phrased to follow "plan <id>": no
+   * approval, one given for other content, or one past approvalTtlHours.
+   */
+  private unapproved(plan: ExecutionPlan): string {
+    const { approval } = this.store.planApproval(plan.id);
+    if (!approval) return "is not approved";
+    if (approval.planSha256 !== planSha256(plan))
+      return "changed after it was approved";
+    return `has an approval given at ${approval.approvedAt} that expired after policy.approvalTtlHours (${this.config.policy.approvalTtlHours} hours) and must be given again`;
   }
   /**
    * Starts a run. A plan that publishes (commit or draft PR) needs a person's
@@ -1673,7 +1698,7 @@ export class GraphEngine {
         approval = this.approvalOf(plan);
         if (!approval)
           throw new RefusalError(
-            `A run started by a connected AI client (MCP run_start) needs a person's stored approval of the plan's exact content, and plan ${planId} ${this.store.planApproval(planId).approval ? "changed after it was approved" : "is not approved"}. A person reviews it with graph-engine plan-approve ${planId} and approves exactly this content with graph-engine plan-approve ${planId} --yes --expect ${planSha256(plan)}`,
+            `A run started by a connected AI client (MCP run_start) needs a person's stored approval of the plan's exact content, and plan ${planId} ${this.unapproved(plan)}. A person reviews it with graph-engine plan-approve ${planId} and approves exactly this content with graph-engine plan-approve ${planId} --yes --expect ${planSha256(plan)}`,
           );
       }
     } else if (this.config.policy.requirePlanApproval) {
@@ -1683,7 +1708,7 @@ export class GraphEngine {
         approval = this.approvalOf(plan);
         if (!approval)
           throw new RefusalError(
-            `This project requires a person to approve every plan before a run of it starts (requirePlanApproval), and plan ${planId} ${this.store.planApproval(planId).approval ? "changed after it was approved" : "is not approved"}. A person reviews it with graph-engine plan-approve ${planId} and approves it with graph-engine plan-approve ${planId} --yes; graph-engine run does not count as approval here`,
+            `This project requires a person to approve every plan before a run of it starts (requirePlanApproval), and plan ${planId} ${this.unapproved(plan)}. A person reviews it with graph-engine plan-approve ${planId} and approves it with graph-engine plan-approve ${planId} --yes; graph-engine run does not count as approval here`,
           );
       }
     } else if (plan.publication !== "none") {
@@ -1744,6 +1769,26 @@ export class GraphEngine {
       this.store.event(run.id, "security.database_missing", missingDatabase);
     this.launch(run);
     return this.store.run(run.id);
+  }
+  /**
+   * Re-checks, immediately before the irreversible publication step (commit,
+   * git push, pull request), what authorized the run: the policy must still
+   * be the one the plan was made under, and a publishing plan's stored
+   * approval must still be of exactly the plan this run holds and within
+   * policy.approvalTtlHours. A refusal publishes nothing; a person approves
+   * the plan again and resumes the run.
+   */
+  private async assertPublicationAuthorized(run: RunRecord): Promise<void> {
+    await this.refresh();
+    if (hash(this.config.policy) !== run.plan.policyHash)
+      throw new RefusalError(
+        "Policy changed before publication: the policy baseline no longer matches the hash the plan was made under, so nothing was published; create a fresh plan",
+      );
+    if (run.plan.publication === "none") return;
+    if (!this.approvalOf(run.plan))
+      throw new RefusalError(
+        `Publication needs a person's current approval of the plan this run holds, and plan ${run.plan.id} ${this.store.planApproval(run.plan.id).approval && this.store.planApproval(run.plan.id).approval!.planSha256 !== planSha256(run.plan) ? "has an approval for other content than the plan this run holds" : this.unapproved(run.plan)}, so nothing was published. A person reviews it with graph-engine plan-approve ${run.plan.id}, approves it with graph-engine plan-approve ${run.plan.id} --yes --expect ${planSha256(run.plan)} and resumes the run`,
+      );
   }
   // Which approval authorized this start or resume, so `inspect` and
   // `run-receipt` show it: the content hash it binds, when it was given, and
@@ -2670,7 +2715,7 @@ export class GraphEngine {
       : undefined;
     if (this.config.policy.requirePlanApproval && !approval)
       throw new Error(
-        `This project requires a person to approve every plan before a run of it starts or resumes (requirePlanApproval), and ${this.store.planApproval(run.plan.id).approval ? `the approval of plan ${run.plan.id} is for other content than the plan this run holds` : `plan ${run.plan.id} is not approved`}. A person reviews it with graph-engine plan-approve ${run.plan.id} and approves it with graph-engine plan-approve ${run.plan.id} --yes; only an approval of the exact plan this run holds counts`,
+        `This project requires a person to approve every plan before a run of it starts or resumes (requirePlanApproval), and ${!this.store.planApproval(run.plan.id).approval ? `plan ${run.plan.id} is not approved` : this.store.planApproval(run.plan.id).approval!.planSha256 !== planSha256(run.plan) ? `the approval of plan ${run.plan.id} is for other content than the plan this run holds` : `plan ${run.plan.id} ${this.unapproved(run.plan)}`}. A person reviews it with graph-engine plan-approve ${run.plan.id} and approves it with graph-engine plan-approve ${run.plan.id} --yes; only an approval of the exact plan this run holds counts`,
       );
     if (this.active.size >= this.config.policy.maxWorkers)
       throw new Error("Project concurrency limit reached");
@@ -4646,6 +4691,7 @@ export class GraphEngine {
           "Automated checks passed; additional review is required before completing this managed run",
         );
       await this.assertCurrentPlanVerification(run.plan);
+      await this.assertPublicationAuthorized(run);
       this.store.event(run.id, "publication.started", {
         mode: run.plan.publication,
         snapshotHash: verifiedHash,

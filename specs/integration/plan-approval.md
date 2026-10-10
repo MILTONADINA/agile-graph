@@ -57,6 +57,16 @@ checking a plan or a run needs to see which approval, if any, covers it.
   - Test: packages/engine/tests/cli.test.ts :: refuses graph-engine run of a plan that does not publish until plan-approve --yes when the project requires plan approval, and the run records that non-interactive approval
 - AC8: Replacing the policy with `graph-engine policy --file` warns on standard error, without refusing, when the current policy sets `requirePlanApproval` to true and the new one does not (off or absent), saying plan approval will no longer be enforced.
   - Test: packages/engine/tests/cli.test.ts :: warns, without refusing, when a new policy stops requiring plan approval
+- AC9: When the policy sets `approvalTtlHours` (an integer from 1 to 8760; absent by default and not in `DEFAULT_POLICY`, so policies without it keep their hash), a stored approval older than that many hours no longer authorizes a run to start or resume, and the refusal says the approval expired and names `graph-engine plan-approve <id>`; an approval within the TTL still authorizes, and approving the plan again lets the run start or resume. `graph-engine run` of a publishing plan without `requirePlanApproval` records a fresh approval in place of an expired one, as it does when there is none. Without the setting approvals do not expire.
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: refuses to start or resume once the stored approval is older than approvalTtlHours, naming plan-approve
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: accepts an approval stored before approvedVia was recorded, and reports its channel as null
+- AC10: Immediately before publication (the commit, git push and pull request), the run re-checks what authorized it: the current policy hash must equal the plan's `policyHash`, and for a plan that publishes, the stored approval must still be of exactly the plan the run holds and within `approvalTtlHours`. Otherwise the run fails before `publication.started`, nothing is committed or pushed, and the refusal names `graph-engine plan-approve <id>`.
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: re-checks the plan approval immediately before publication and publishes nothing once it expired or no longer matches
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: refuses publication when the plan approval was replaced by one of other content during the run
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: refuses publication when the policy baseline changed after the last execution check
+- AC11: The `run-receipt` evidence ledger records the policy baseline hash (the run plan's `policyHash`) and, on each gate stage (verification, review, security), that hash and the approval the run last started or resumed under before that result (`planSha256`, `approvedAt`, `approvedVia` from its `plan.approval_used` event), or null when it had none.
+  - Test: packages/engine/tests/store-receipt.test.ts :: binds each gate stage of the receipt to the policy baseline and the approval the run last started or resumed under
+  - Test: packages/engine/tests/store-receipt.test.ts :: reads a project-scoped run and ordered events without recovering an active run
 
 ## Security considerations
 
@@ -93,6 +103,6 @@ can approve from a script.
 
 ## Non-goals
 
-Approving plans from the dashboard, and expiring approvals. Refusing
+Approving plans from the dashboard. Refusing
 non-interactive approvals, or proving who approved a plan: `approvedVia`
 records how the approving command was run, not who ran it.

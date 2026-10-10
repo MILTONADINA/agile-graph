@@ -146,6 +146,25 @@ export interface EvidenceStage {
   /** Whether it ran against the run's final snapshot. */
   current: boolean;
   passed: boolean;
+  /**
+   * The policy baseline the gate ran under: the hash of the policy the
+   * run's plan was made under, which start, resume and publication re-check
+   * against the current policy. Null when the receipt was read without it.
+   */
+  policyHash: string | null;
+  /**
+   * The plan approval the run last started or resumed under before this
+   * result was recorded (its `plan.approval_used` event), or null when the
+   * run started without one.
+   */
+  approval: EvidenceApproval | null;
+}
+
+/** The approval a gate's result was recorded under. */
+export interface EvidenceApproval {
+  planSha256: string;
+  approvedAt: string;
+  approvedVia: "terminal" | "non-interactive" | null;
 }
 
 /**
@@ -154,6 +173,8 @@ export interface EvidenceStage {
  * result is about an earlier snapshot says nothing about the final one.
  */
 export interface RunEvidence {
+  /** The policy baseline hash of the run's plan, or null when not given. */
+  policyHash: string | null;
   /** The snapshot the latest required checks ran on. */
   finalSnapshotHash: string | null;
   verification: EvidenceStage | null;
@@ -175,7 +196,10 @@ export interface RunEvidence {
  * Projects the evidence ledger from a run's events alone. It reads what the
  * gates recorded and never decides or changes a gate.
  */
-export function runEvidence(events: readonly RunEvent[]): RunEvidence {
+export function runEvidence(
+  events: readonly RunEvent[],
+  policyHash: string | null = null,
+): RunEvidence {
   const latest = (...types: string[]) =>
     events.findLast((event) => types.includes(event.type));
   const verification = latest("verification.completed");
@@ -188,6 +212,21 @@ export function runEvidence(events: readonly RunEvent[]): RunEvidence {
     passed: (event: RunEvent) => boolean,
   ): EvidenceStage | null => {
     if (!event) return null;
+    const used = events
+      .slice(0, events.indexOf(event))
+      .findLast((item) => item.type === "plan.approval_used");
+    const via = used?.data.approvedVia;
+    const approval: EvidenceApproval | null =
+      used &&
+      typeof used.data.planSha256 === "string" &&
+      typeof used.data.approvedAt === "string"
+        ? {
+            planSha256: used.data.planSha256,
+            approvedAt: used.data.approvedAt,
+            approvedVia:
+              via === "terminal" || via === "non-interactive" ? via : null,
+          }
+        : null;
     const snapshotHash =
       typeof event.data.snapshotHash === "string"
         ? event.data.snapshotHash
@@ -198,6 +237,8 @@ export function runEvidence(events: readonly RunEvent[]): RunEvidence {
       snapshotHash,
       current: snapshotHash !== null && snapshotHash === finalSnapshotHash,
       passed: passed(event),
+      policyHash,
+      approval,
     };
   };
   const checks = (event: RunEvent) =>
@@ -253,6 +294,7 @@ export function runEvidence(events: readonly RunEvent[]): RunEvidence {
     .filter(([, open]) => open)
     .map(([gate]) => gate);
   return {
+    policyHash,
     finalSnapshotHash,
     verification: stage(verification, checks),
     review,

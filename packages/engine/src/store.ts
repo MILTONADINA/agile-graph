@@ -322,10 +322,11 @@ export function readRunReceipt(
         )
         .all(projectId, runId)
         .map((item) => JSON.parse((item as { json: string }).json) as RunEvent);
+      const run = JSON.parse(row.json) as RunRecord;
       return {
-        run: JSON.parse(row.json) as RunRecord,
+        run,
         events,
-        evidence: runEvidence(events),
+        evidence: runEvidence(events, run.plan.policyHash ?? null),
       };
     })();
   } finally {

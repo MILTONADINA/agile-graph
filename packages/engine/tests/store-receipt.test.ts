@@ -61,6 +61,7 @@ it("reads a project-scoped run and ordered events without recovering an active r
     run,
     events: [first, second],
     evidence: {
+      policyHash: "b".repeat(64),
       finalSnapshotHash: null,
       verification: null,
       review: null,
@@ -233,4 +234,82 @@ it("leaves the evidence incomplete when a gate's latest attempt never recorded a
     event("review.started", { snapshotHash: "H" }),
   ];
   expect(runEvidence(reviewCrashed as never).unfinished).toEqual(["review"]);
+});
+
+it("binds each gate stage of the receipt to the policy baseline and the approval the run last started or resumed under", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "graph-run-baseline-"));
+  directories.push(dataDir);
+  const projectId = "receipt-project";
+  const plan: ExecutionPlan = {
+    version: SCHEMA_VERSION,
+    id: "plan-1",
+    projectId,
+    snapshotId: "a".repeat(64),
+    policyHash: "c".repeat(64),
+    createdAt: "2026-10-10T00:00:00.000Z",
+    objective: "Review selected task",
+    acceptance: ["reviewed"],
+    steps: [],
+    verification: [],
+    publication: "commit",
+  };
+  const run: RunRecord = {
+    id: "run-1",
+    plan,
+    status: "succeeded",
+    createdAt: plan.createdAt,
+    updatedAt: plan.createdAt,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      costUsd: 0,
+      estimated: false,
+    },
+  };
+  const store = new RunStore(dataDir, projectId);
+  store.savePlan(plan);
+  store.saveRun(run);
+  const first = {
+    planSha256: "1".repeat(64),
+    approvedAt: "2026-10-10T01:00:00.000Z",
+    approvedVia: "terminal",
+  };
+  const second = {
+    planSha256: "1".repeat(64),
+    approvedAt: "2026-10-10T05:00:00.000Z",
+    approvedVia: "non-interactive",
+  };
+  store.event(run.id, "plan.approval_used", first);
+  store.event(run.id, "verification.completed", {
+    snapshotHash: "H",
+    checks: [{ code: 0 }],
+  });
+  // The run resumed under a newer approval before its review.
+  store.event(run.id, "plan.approval_used", second);
+  store.event(run.id, "review.completed", { snapshotHash: "H", passed: true });
+  store.close();
+  const { evidence } = readRunReceipt(dataDir, projectId, run.id);
+  expect(evidence.policyHash).toBe("c".repeat(64));
+  expect(evidence.verification).toMatchObject({
+    policyHash: "c".repeat(64),
+    approval: first,
+  });
+  expect(evidence.review).toMatchObject({
+    policyHash: "c".repeat(64),
+    approval: second,
+  });
+  expect(evidence.security).toBeNull();
+  // A run that started without an approval records none against its gates.
+  expect(
+    runEvidence([
+      {
+        id: "e1",
+        runId: "r",
+        type: "verification.completed",
+        at: "2026-10-10T00:00:00.000Z",
+        data: { snapshotHash: "H", checks: [{ code: 0 }] },
+      },
+    ] as never).verification,
+  ).toMatchObject({ policyHash: null, approval: null });
 });
