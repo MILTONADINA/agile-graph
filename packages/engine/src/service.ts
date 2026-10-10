@@ -221,6 +221,8 @@ export interface EngineDependencies {
     profile: ProjectProfile;
     signal?: AbortSignal;
   }) => Promise<SecurityScan>;
+  /** Wall clock for memory expiry, in epoch milliseconds; tests inject one. */
+  now?: () => number;
 }
 // Findings past the ones listed in full, counted by tool and rule, so the
 // worker knows how much is left rather than seeing them silently dropped.
@@ -278,6 +280,7 @@ export class GraphEngine {
       root,
       dataDir: this.dataDir,
       policy: config.policy,
+      ...(deps.now ? { now: deps.now } : {}),
     });
   }
   static async open(
@@ -2192,6 +2195,7 @@ export class GraphEngine {
           root: workspace,
           dataDir: path.join(this.dataDir, "run-context", run.id),
           policy: this.config.policy,
+          ...(this.deps.now ? { now: this.deps.now } : {}),
         });
         try {
           await latest.index();

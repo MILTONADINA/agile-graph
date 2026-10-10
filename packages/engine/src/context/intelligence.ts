@@ -5,6 +5,7 @@ import type {
 } from "@graph-engineering/contracts";
 import { hash, type ParsedFile } from "./parser.js";
 import {
+  memoryExpiresAt,
   reviewStructuredAssertions,
   reviewSupersession,
 } from "./memory-assertions.js";
@@ -168,8 +169,13 @@ export interface MemoryReview {
       | "exact-contradiction"
       | "assertion-semantics-conflict"
       | "invalid-assertions"
-      | "supersession-conflict";
-    method?: "lexical" | "structured" | "provenance" | "supersession";
+      | "supersession-conflict"
+      | "expired"
+      | "expiring";
+    method?:
+      "lexical" | "structured" | "provenance" | "supersession" | "validity";
+    /** When an expired or expiring memory stops applying (ISO 8601, UTC). */
+    validUntil?: string;
     path?: string;
     relatedMemoryId?: string;
     claimIndex?: number;
@@ -185,7 +191,10 @@ export function reviewMemoryRecords(
   files: Map<string, string>,
   snapshotId: string,
   excluded: (path: string) => boolean,
+  expiry: { now?: number; withinDays?: number } = {},
 ): MemoryReview[] {
+  const now = expiry.now ?? Date.now();
+  const horizon = now + (expiry.withinDays ?? 14) * 86_400_000;
   const active = memories.filter(
     (record) => record.status === "accepted" || record.status === "conflicted",
   );
@@ -229,6 +238,27 @@ export function reviewMemoryRecords(
         reason:
           "This record has conflicting shared content and requires explicit review.",
       });
+    // Dates only, never text: an expired memory has already left context,
+    // and one about to expire is listed so a person can renew or retire it.
+    const end = memoryExpiresAt(memory);
+    if (end !== undefined && end <= horizon) {
+      const validUntil = new Date(end).toISOString();
+      flags.push(
+        end <= now
+          ? {
+              kind: "expired",
+              method: "validity",
+              validUntil,
+              reason: `Expired at ${validUntil}; context retrieval leaves it out.`,
+            }
+          : {
+              kind: "expiring",
+              method: "validity",
+              validUntil,
+              reason: `Expires at ${validUntil}, within the review window.`,
+            },
+      );
+    }
     if (!memory.sources.length)
       flags.push({
         kind: "no-provenance",

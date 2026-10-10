@@ -97,6 +97,8 @@ import { RUST_VERSION, rustRuntime, resolveRustBindings } from "./rust.js";
 import { DART_VERSION, dartRuntime, resolveDartBindings } from "./dart.js";
 import {
   attachReviewedAssertions,
+  memoryExpired,
+  parseMemoryExpiry,
   parseReviewedAssertions,
   reviewSupersession,
 } from "./memory-assertions.js";
@@ -236,12 +238,16 @@ export class ContextEngine {
   readonly root: string;
   readonly dataDir: string;
   readonly policy: ProjectPolicy;
+  // Wall clock for memory expiry, in epoch milliseconds; tests inject one.
+  private readonly now: () => number;
   constructor(options: {
     projectId: string;
     root: string;
     dataDir: string;
     policy: ProjectPolicy;
+    now?: () => number;
   }) {
+    this.now = options.now ?? Date.now;
     this.projectId = options.projectId;
     this.root = resolve(options.root);
     this.dataDir = resolve(options.dataDir);
@@ -1067,12 +1073,22 @@ export class ContextEngine {
         (isAllowedPath(chunk.source.path, exportPolicy, true) &&
           !containsSecret(chunk.source.path) &&
           !containsSecret(chunk.text)));
-    const memories = (await this.listMemories()).filter(
-      (memory) =>
+    // An expired memory is dropped before anything else reads it: it never
+    // enters the mandatory set, its export checks or the retrieved items.
+    // Expiry only removes memories; it never adds text to a packet.
+    const now = this.now();
+    const expiredMemoryIds: string[] = [];
+    const memories = (await this.listMemories()).filter((memory) => {
+      if (!(
         memory.status === "accepted" ||
         (memory.status === "conflicted" &&
-          ["constraint", "requirement"].includes(memory.kind)),
-    );
+          ["constraint", "requirement"].includes(memory.kind))
+      ))
+        return false;
+      if (!memoryExpired(memory, now)) return true;
+      expiredMemoryIds.push(memory.id);
+      return false;
+    });
     const mandatoryMemories = memories.filter((memory) =>
       ["constraint", "requirement"].includes(memory.kind),
     );
@@ -1163,6 +1179,11 @@ export class ContextEngine {
       }
       let semantic = false;
       const warnings = [...snapshot.coverage.errors];
+      // IDs only: the text of an expired memory never reaches the packet.
+      if (expiredMemoryIds.length)
+        warnings.push(
+          `Expired memory left out of context: ${expiredMemoryIds.join(", ")}. Review it with graph-engine memory-review, then propose a successor with memory-add --supersedes <id> if it still applies.`,
+        );
       for (const memory of mandatoryMemories)
         if (memory.status === "conflicted")
           warnings.push(
@@ -1448,6 +1469,18 @@ export class ContextEngine {
       throw new Error("Invalid superseded memory id");
     if (record.assertions !== undefined)
       record.assertions = parseReviewedAssertions(record.assertions);
+    // Format only: a stored memory whose expiry has passed is still valid.
+    if (record.validUntil !== undefined)
+      record.validUntil = parseMemoryExpiry(record.validUntil);
+  }
+  /** A new expiry a person gives must still lie ahead. */
+  private futureExpiry(input: string): string {
+    const validUntil = parseMemoryExpiry(input);
+    if (Date.parse(validUntil) <= this.now())
+      throw new Error(
+        `The memory expiry ${validUntil} has already passed; give a later --valid-until`,
+      );
+    return validUntil;
   }
   /**
    * A person's proposal from the command line or dashboard. Each source is
@@ -1459,8 +1492,10 @@ export class ContextEngine {
     kind: MemoryKind;
     sources?: SourceLocation[];
     supersedes?: string;
+    validUntil?: string;
   }): Promise<MemoryRecord> {
     await this.ready;
+    if (input.validUntil !== undefined) this.futureExpiry(input.validUntil);
     if (input.supersedes !== undefined) {
       const previous = await this.memory(input.supersedes);
       if (previous.status !== "accepted")
@@ -1474,6 +1509,9 @@ export class ContextEngine {
       sources: await this.resolveSources(input.sources ?? []),
       ...(input.supersedes !== undefined
         ? { supersedes: input.supersedes }
+        : {}),
+      ...(input.validUntil !== undefined
+        ? { validUntil: input.validUntil }
         : {}),
     });
   }
@@ -1543,8 +1581,13 @@ export class ContextEngine {
     kind: MemoryKind;
     sources?: SourceReference[];
     supersedes?: string;
+    validUntil?: string;
   }): Promise<MemoryRecord> {
     await this.ready;
+    const validUntil =
+      input.validUntil !== undefined
+        ? this.futureExpiry(input.validUntil)
+        : undefined;
     const record: MemoryRecord = {
       version: SCHEMA_VERSION,
       id: randomUUID(),
@@ -1556,6 +1599,7 @@ export class ContextEngine {
       createdAt: new Date().toISOString(),
       sources: input.sources ?? [],
       ...(input.supersedes ? { supersedes: input.supersedes } : {}),
+      ...(validUntil ? { validUntil } : {}),
     };
     this.validateMemory(record);
     if (record.supersedes) await this.memory(record.supersedes);
@@ -1782,7 +1826,15 @@ export class ContextEngine {
     ]);
     return record;
   }
-  async acceptMemory(id: string): Promise<MemoryRecord> {
+  /**
+   * A person accepts a proposal, optionally setting or replacing the expiry
+   * it was proposed with. An accepted memory's expiry is fixed; a successor
+   * (memory-add --supersedes) changes it.
+   */
+  async acceptMemory(
+    id: string,
+    options: { validUntil?: string } = {},
+  ): Promise<MemoryRecord> {
     await this.ready;
     const original = await this.memoryPayload(id);
     const record = JSON.parse(original) as MemoryRecord;
@@ -1795,7 +1847,25 @@ export class ContextEngine {
         `A ${record.status} memory cannot be accepted; propose a new one instead`,
       );
     this.validateMemory(record);
-    if (record.status === "accepted") return record;
+    if (record.status === "accepted") {
+      if (
+        options.validUntil !== undefined &&
+        parseMemoryExpiry(options.validUntil) !== record.validUntil
+      )
+        throw new Error(
+          `Memory ${record.id} is already accepted, so its expiry cannot change; propose a successor with memory-add --supersedes ${record.id} --valid-until <iso>`,
+        );
+      return record;
+    }
+    if (options.validUntil !== undefined)
+      record.validUntil = this.futureExpiry(options.validUntil);
+    else if (
+      record.validUntil !== undefined &&
+      Date.parse(record.validUntil) <= this.now()
+    )
+      throw new Error(
+        `The proposed expiry ${record.validUntil} has already passed; accept with a later --valid-until`,
+      );
     record.status = "accepted";
     const statements: Statement[] = [];
     if (record.supersedes) {
@@ -1922,7 +1992,8 @@ export class ContextEngine {
           JSON.stringify(previous.sources) !== JSON.stringify(record.sources) ||
           canonicalJson(previous.assertions ?? null) !==
             canonicalJson(record.assertions ?? null) ||
-          previous.supersedes !== record.supersedes
+          previous.supersedes !== record.supersedes ||
+          previous.validUntil !== record.validUntil
         ) {
           previous.status = "conflicted";
           await this.db.batch([
@@ -2131,7 +2202,13 @@ export class ContextEngine {
       ? null
       : record;
   }
-  async reviewMemories(snapshotId?: string): Promise<MemoryReview[]> {
+  async reviewMemories(
+    snapshotId?: string,
+    options: { withinDays?: number } = {},
+  ): Promise<MemoryReview[]> {
+    const withinDays = options.withinDays ?? 14;
+    if (!Number.isInteger(withinDays) || withinDays < 0 || withinDays > 3650)
+      throw new Error("--within-days must be a whole number from 0 to 3650");
     const snapshot = await this.snapshot(snapshotId);
     const files = await this.db.all<{ path: string; content_hash: string }>(
       "SELECT path,content_hash FROM files WHERE snapshot_id=?",
@@ -2147,6 +2224,7 @@ export class ContextEngine {
       new Map(files.map((file) => [file.path, file.content_hash])),
       snapshot.id,
       (path) => this.excluded(path),
+      { now: this.now(), withinDays },
     );
     await this.db.batch(
       reviews.map((review) => ({
