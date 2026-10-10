@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import type * as CursorSdk from "@cursor/sdk";
+import { estimateTokens } from "../tokens.js";
 
 export interface CursorRunnerRequest {
   workspace: string;
@@ -36,7 +37,7 @@ export async function runCursorTextProposal(
     request.maxOutputTokens <= 0
   )
     throw new Error("Cursor token bounds are invalid");
-  if (Buffer.byteLength(request.prompt, "utf8") > request.maxInputTokens)
+  if (estimateTokens(request.prompt) > request.maxInputTokens)
     throw new Error("Cursor prompt exceeds the configured input bound");
 
   const agent = await sdk.Agent.create({

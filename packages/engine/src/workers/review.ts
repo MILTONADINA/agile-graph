@@ -13,6 +13,7 @@ import {
   usageFrom,
   type ProviderFetch,
 } from "./api.js";
+import { tokensForBytes } from "../tokens.js";
 
 export const reviewSchema = z
   .object({
@@ -120,7 +121,7 @@ function assertReviewerCall(
     policy.maxContextTokens,
     provider.maxContextTokens ?? policy.maxContextTokens,
   );
-  if (Buffer.byteLength(request) + 256 > ceiling)
+  if (tokensForBytes(Buffer.byteLength(request) + 256) > ceiling)
     throw new Error(
       "The change is too large for the reviewer's context budget; split the work or raise the reviewer's budget",
     );

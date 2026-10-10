@@ -12,6 +12,7 @@ import type { ExecutionPlan, RunRecord } from "@graph-engineering/contracts";
 import { GraphEngine } from "../src/service.js";
 import { initializeProject, projectDataDir } from "../src/project.js";
 import { createMcpServer } from "../src/mcp.js";
+import { estimateTokens } from "../src/tokens.js";
 
 it("serves real indexed context through MCP and refuses cloud export for offline projects", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "graph-mcp-"));
@@ -442,7 +443,7 @@ it("cloud graph traversal cannot expose resolved private targets or bridge throu
                 .text,
             ) as import("@graph-engineering/contracts").ContextPacket;
             expect(packet.items).toEqual([]);
-            expect(packet.estimatedTokens).toBe(Buffer.byteLength(query) + 64);
+            expect(packet.estimatedTokens).toBe(estimateTokens(query) + 64);
           }
         }
       } finally {

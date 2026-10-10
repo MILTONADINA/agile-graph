@@ -17,6 +17,7 @@ import {
   usageFrom,
   type ProviderFetch,
 } from "./api.js";
+import { tokensForBytes } from "../tokens.js";
 
 /** The most steps one decomposition proposes; a person reviews each. */
 export const MAX_PROPOSED_STEPS = 12;
@@ -114,8 +115,8 @@ export async function invokePlanWorker(
     policy.maxContextTokens,
     provider.maxContextTokens ?? policy.maxContextTokens,
   );
-  // Like worker requests, the serialized request's bytes must fit the token
-  // ceiling; the lowest-scoring context goes first.
+  // Like worker requests, the serialized request's estimated tokens
+  // (tokens.ts) must fit the ceiling; the lowest-scoring context goes first.
   const items = [...packet.items].sort((a, b) => b.score - a.score);
   // Accepted project requirements and constraints, as workers receive them;
   // the acceptance criteria are sent once, on their own.
@@ -141,12 +142,14 @@ export async function invokePlanWorker(
     Buffer.byteLength(
       PLANNER_INSTRUCTIONS + JSON.stringify(decompositionJsonSchema),
     ) + 256;
+  const tokens = (text: string) =>
+    tokensForBytes(Buffer.byteLength(text) + fixed);
   let user = request();
-  while (items.length && Buffer.byteLength(user) + fixed > ceiling) {
+  while (items.length && tokens(user) > ceiling) {
     items.pop();
     user = request();
   }
-  if (Buffer.byteLength(user) + fixed > ceiling)
+  if (tokens(user) > ceiling)
     throw new Error("The task is too large for the planner's context budget");
   const { text, result } = await callStructuredProvider(
     {

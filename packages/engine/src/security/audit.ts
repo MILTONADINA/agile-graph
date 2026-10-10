@@ -11,6 +11,7 @@ import {
   type Usage,
 } from "@graph-engineering/contracts";
 import { assertProvider, containsSecret } from "../policy.js";
+import { tokensForBytes } from "../tokens.js";
 import {
   callStructuredProvider,
   nodeProviderFetch,
@@ -483,9 +484,11 @@ async function auditCall<T>(
     provider.maxContextTokens ?? policy.maxContextTokens,
   );
   if (
-    Buffer.byteLength(user + call.instructions + JSON.stringify(call.schema)) +
-      256 >
-    ceiling
+    tokensForBytes(
+      Buffer.byteLength(
+        user + call.instructions + JSON.stringify(call.schema),
+      ) + 256,
+    ) > ceiling
   )
     throw new AuditNotSentError(
       "The change is too large for the auditor's context budget; audit a smaller change or raise the auditor's budget",

@@ -22,6 +22,7 @@ import {
   contextForProvider,
 } from "../policy.js";
 import { command, isDecisionCredentialEnvName } from "../util.js";
+import { tokensForBytes } from "../tokens.js";
 import {
   proposalJsonSchema,
   proposalSchema,
@@ -820,12 +821,12 @@ async function invokeCodexWorker(
     provider.maxContextTokens ?? policy.maxContextTokens,
   );
   if (
-    Buffer.byteLength(
-      prompt + WORKER_INSTRUCTIONS + JSON.stringify(proposalJsonSchema),
-      "utf8",
-    ) +
-      256 >
-    budget
+    tokensForBytes(
+      Buffer.byteLength(
+        prompt + WORKER_INSTRUCTIONS + JSON.stringify(proposalJsonSchema),
+        "utf8",
+      ) + 256,
+    ) > budget
   )
     throw new Error(
       "Installed-worker request exceeds configured context budget",
@@ -1117,7 +1118,7 @@ async function invokeCursorWorker(
       feedback: input.feedback ?? null,
     },
   )}`;
-  if (Buffer.byteLength(prompt, "utf8") + 256 > budget)
+  if (tokensForBytes(Buffer.byteLength(prompt, "utf8") + 256) > budget)
     throw new Error(
       "Installed-worker request exceeds configured context budget",
     );
@@ -1262,12 +1263,12 @@ export async function invokeInstalledWorker(
     provider.maxContextTokens ?? policy.maxContextTokens,
   );
   if (
-    Buffer.byteLength(
-      prompt + WORKER_INSTRUCTIONS + JSON.stringify(proposalJsonSchema),
-      "utf8",
-    ) +
-      256 >
-    budget
+    tokensForBytes(
+      Buffer.byteLength(
+        prompt + WORKER_INSTRUCTIONS + JSON.stringify(proposalJsonSchema),
+        "utf8",
+      ) + 256,
+    ) > budget
   )
     throw new Error(
       "Installed-worker request exceeds configured context budget",

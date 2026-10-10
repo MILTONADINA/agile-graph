@@ -15,9 +15,10 @@ import {
   safePath,
 } from "../policy.js";
 import { hash } from "../util.js";
+import { estimateTokens } from "../tokens.js";
 import {
   fitWorkerContext,
-  workerRequestBytes,
+  workerRequestTokens,
   type WorkerInput,
   type WorkerProposal,
 } from "../workers/api.js";
@@ -179,8 +180,8 @@ export async function requestedSourcePacket(options: {
       ...input.context,
       items,
       estimatedTokens:
-        Buffer.byteLength(JSON.stringify(items)) +
-        Buffer.byteLength(JSON.stringify(input.context.mandatory)),
+        estimateTokens(JSON.stringify(items)) +
+        estimateTokens(JSON.stringify(input.context.mandatory)),
     },
   });
   const routedLimit =
@@ -289,8 +290,8 @@ export async function requestedSourcePacket(options: {
     const fits = (item: ContextItem) =>
       !(
         (routedLimit !== undefined &&
-          Buffer.byteLength(item.text) > routedLimit) ||
-        (mandatoryFits && workerRequestBytes(withItems([item])) > ceiling)
+          estimateTokens(item.text) > routedLimit) ||
+        (mandatoryFits && workerRequestTokens(withItems([item])) > ceiling)
       );
     const score = supplied.nextScore();
     let item = excerpt(
@@ -299,7 +300,7 @@ export async function requestedSourcePacket(options: {
         : Math.min(request.end!, lastLine),
     );
     // Measured after the path checks so they still run first.
-    mandatoryFits ??= workerRequestBytes(withItems([])) <= ceiling;
+    mandatoryFits ??= workerRequestTokens(withItems([])) <= ceiling;
     if (!fits(item) && request.start !== undefined) {
       // Send the longest prefix of the range that fits; the worker can
       // request the rest from where it ends.

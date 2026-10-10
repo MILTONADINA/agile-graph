@@ -8,6 +8,7 @@ import {
   PLANNER_INSTRUCTIONS,
   type Decomposition,
 } from "../src/workers/plan.js";
+import { tokensForBytes } from "../src/tokens.js";
 
 const decomposition: Decomposition = {
   rationale: "Model first, then the endpoint",
@@ -159,7 +160,8 @@ describe("plan worker", () => {
     const policy = {
       ...DEFAULT_POLICY,
       providers: ["planner"],
-      maxContextTokens: 2500,
+      // Room for about 2500 bytes of request (see tokens.ts).
+      maxContextTokens: tokensForBytes(2500),
     };
     await invokePlanWorker(
       input({

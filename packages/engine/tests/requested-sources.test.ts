@@ -15,7 +15,8 @@ import {
   unexportableRequestFeedback,
   unseenPatchLocation,
 } from "../src/execution/requested-sources.js";
-import { workerRequestBytes, type WorkerInput } from "../src/workers/api.js";
+import { workerRequestTokens, type WorkerInput } from "../src/workers/api.js";
+import { BYTES_PER_TOKEN, tokensForBytes } from "../src/tokens.js";
 import { containsSecret } from "../src/policy.js";
 import { checked } from "../src/util.js";
 
@@ -53,6 +54,11 @@ const input = (
   provider,
   policy: {
     ...DEFAULT_POLICY,
+    // The fixtures below are sized in bytes: keep the default's byte room
+    // under the token estimate (tokens.ts).
+    maxContextTokens: Math.floor(
+      DEFAULT_POLICY.maxContextTokens / BYTES_PER_TOKEN,
+    ),
     providers: [provider.id],
     ...(provider.kind === "local"
       ? {}
@@ -140,7 +146,7 @@ describe("requested source packets", () => {
         worker: "Worker",
         routedBudget,
       });
-    await expect(routed(2048)).resolves.toMatchObject({
+    await expect(routed(tokensForBytes(2048))).resolves.toMatchObject({
       items: [{ kind: "outline", source: { path: "file.ts" } }],
     });
     await expect(routed(11_200)).resolves.toMatchObject({
@@ -294,12 +300,12 @@ describe("requested source packets", () => {
       // Room for the two requested files and fitting's reduction warning,
       // not for the retrieval excerpt too.
       maxContextTokens:
-        workerRequestBytes(
+        workerRequestTokens(
           input({
             ...second,
             items: second.items.filter((item) => item.id !== "retrieved"),
           }),
-        ) + 120,
+        ) + tokensForBytes(120),
     };
     // c.ts is the same size as b.ts, so retrieval must go to make room.
     const evicted = await request(root, ["c.ts"], supplied, tight);
@@ -429,7 +435,8 @@ describe("requested source packets", () => {
         snapshotId: "snapshot",
         supplied,
         worker: "Worker",
-        routedBudget: 2000,
+        // At most 2000 bytes (see tokens.ts).
+        routedBudget: Math.floor(2000 / BYTES_PER_TOKEN),
       });
     const outline = await routed(["big.ts"]);
     expect(outline.items[0]!.kind).toBe("outline");
@@ -482,7 +489,8 @@ describe("requested sources under a tight budget", () => {
       acceptance: ["It changes"],
     };
     // Room for one file with its JSON framing, not two.
-    input.policy.maxContextTokens = workerRequestBytes(input) + 7000;
+    input.policy.maxContextTokens =
+      workerRequestTokens(input) + tokensForBytes(7000);
     const result = await requestedSourcePacket({
       workspace: root,
       input,

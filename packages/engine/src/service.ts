@@ -53,6 +53,8 @@ import {
   invokeApiWorker,
   estimateRequestCost,
   fitWorkerContext,
+  StructuredOutputError,
+  structuredOutputFeedback,
   type WorkerInput,
   type WorkerProposal,
   type WorkerResult,
@@ -1081,11 +1083,25 @@ export class GraphEngine {
         input.policy.maxTurns,
       );
       onReserved?.();
-      const result = this.deps.worker
-        ? await this.deps.worker(input, workspace)
-        : isInstalledKind(input.provider.kind)
-          ? await invokeInstalledWorker(input, workspace)
-          : await invokeApiWorker(input);
+      let result: WorkerResult;
+      try {
+        result = this.deps.worker
+          ? await this.deps.worker(input, workspace)
+          : isInstalledKind(input.provider.kind)
+            ? await invokeInstalledWorker(input, workspace)
+            : await invokeApiWorker(input);
+      } catch (error) {
+        // The provider answered: record what it reported spending before
+        // the turn loop returns the output to the worker.
+        if (error instanceof StructuredOutputError)
+          this.store.settleCall(
+            run.plan.id,
+            callId,
+            input.provider.id,
+            error.usage,
+          );
+        throw error;
+      }
       this.store.settleCall(
         run.plan.id,
         callId,
@@ -3756,6 +3772,7 @@ export class GraphEngine {
             let repeatedRequests = 0;
             let repeatedReads = 0;
             let unexportablePatches = 0;
+            let unusableOutputs = 0;
             // Tests the tester wrote earlier in this plan, which implementing
             // steps must make pass and may not change.
             const testsWritten =
@@ -3789,12 +3806,29 @@ export class GraphEngine {
                 signal: state.signal,
               };
               recordShown(shown, fitWorkerContext(stepInput).context);
-              const result = await this.invokeWorker(
-                stepInput,
-                workspace,
-                run,
-                step.id,
-              );
+              let result: WorkerResult;
+              try {
+                result = await this.invokeWorker(
+                  stepInput,
+                  workspace,
+                  run,
+                  step.id,
+                );
+              } catch (error) {
+                // Cut-off or malformed structured output goes back to the
+                // worker once in a row, within the turn budget.
+                if (
+                  !(error instanceof StructuredOutputError) ||
+                  ++unusableOutputs > 1
+                )
+                  throw error;
+                run.usage = this.store.usage(run.plan.id);
+                save("running");
+                returned(step.id, error.reason);
+                patchFeedback = structuredOutputFeedback(error);
+                continue;
+              }
+              unusableOutputs = 0;
               run.usage = this.store.usage(run.plan.id);
               save("running");
               this.store.event(
@@ -4161,6 +4195,7 @@ export class GraphEngine {
           let repeatedRequests = 0;
           let repeatedReads = 0;
           let unexportablePatches = 0;
+          let unusableOutputs = 0;
           for (let turn = 0; turn < this.config.policy.maxTurns; turn++) {
             await this.refresh();
             if (hash(this.config.policy) !== run.plan.policyHash)
@@ -4219,19 +4254,36 @@ export class GraphEngine {
               signal,
             };
             recordShown(shown, fitWorkerContext(input).context);
-            const result = await this.invokeWorker(
-              input,
-              workspace,
-              run,
-              step.id,
-              () =>
-                this.store.event(
-                  run.id,
-                  "worker.dispatched",
-                  dispatched,
-                  step.id,
-                ),
-            );
+            let result: WorkerResult;
+            try {
+              result = await this.invokeWorker(
+                input,
+                workspace,
+                run,
+                step.id,
+                () =>
+                  this.store.event(
+                    run.id,
+                    "worker.dispatched",
+                    dispatched,
+                    step.id,
+                  ),
+              );
+            } catch (error) {
+              // Cut-off or malformed structured output goes back to the
+              // worker once in a row, within the turn budget.
+              if (
+                !(error instanceof StructuredOutputError) ||
+                ++unusableOutputs > 1
+              )
+                throw error;
+              run.usage = this.store.usage(run.plan.id);
+              save("running");
+              returned(step.id, error.reason);
+              patchFeedback = structuredOutputFeedback(error);
+              continue;
+            }
+            unusableOutputs = 0;
             run.usage = this.store.usage(run.plan.id);
             save("running");
             this.store.event(

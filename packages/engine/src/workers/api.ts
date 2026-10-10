@@ -18,6 +18,7 @@ import {
   contextForProvider,
 } from "../policy.js";
 import { isDecisionCredentialEnvName } from "../util.js";
+import { tokensForBytes } from "../tokens.js";
 
 export const proposalSchema = z
   .object({
@@ -139,6 +140,12 @@ export function workerRequestBytes(input: WorkerInput): number {
   );
 }
 
+// The serialized request in estimated tokens (see tokens.ts), the unit every
+// context budget is compared in.
+export function workerRequestTokens(input: WorkerInput): number {
+  return tokensForBytes(workerRequestBytes(input));
+}
+
 // Retrieval budgets exclude transport metadata. Fit whole optional evidence
 // items to the serialized request before reserving money or calling a worker.
 // Mandatory requirements, provenance, task and feedback are never truncated.
@@ -163,18 +170,18 @@ export function fitWorkerContext(input: WorkerInput): WorkerInput {
       },
     },
   };
-  if (workerRequestBytes(prepared) > ceiling) {
+  if (workerRequestTokens(prepared) > ceiling) {
     prepared.context.coverage.warnings.push(
       "Optional evidence reduced to fit the complete serialized worker request.",
     );
     prepared.context.items.sort((a, b) => b.score - a.score);
     while (
       prepared.context.items.length &&
-      workerRequestBytes(prepared) > ceiling
+      workerRequestTokens(prepared) > ceiling
     )
       prepared.context.items.pop();
   }
-  if (workerRequestBytes(prepared) > ceiling)
+  if (workerRequestTokens(prepared) > ceiling)
     throw new Error(
       "Mandatory worker request exceeds configured context budget",
     );
@@ -238,6 +245,27 @@ export const nodeProviderFetch: ProviderFetch = (url, init) =>
     request.on("error", reject);
     request.end(init.body);
   });
+// A provider answered, but its structured output was cut off at the output
+// limit or did not parse as the required schema. It is the model's to fix:
+// an execution turn returns it to the worker as feedback (once in a row),
+// rather than failing the run. It carries the call's reported usage so the
+// spend is still recorded.
+export class StructuredOutputError extends Error {
+  constructor(
+    message: string,
+    readonly reason: "truncated-output" | "malformed-output",
+    readonly usage: Usage,
+  ) {
+    super(message);
+    this.name = "StructuredOutputError";
+  }
+}
+// What the worker is told after a StructuredOutputError.
+export function structuredOutputFeedback(error: StructuredOutputError): string {
+  return error.reason === "truncated-output"
+    ? "Your previous answer was cut off at the output token limit, so it was not valid JSON and nothing was applied. Return a shorter proposal: fewer or smaller changes, with before strings just long enough to be unique, and a brief summary."
+    : `Your previous answer was not a valid JSON proposal for the required schema (${error.message.slice(0, 300)}), so nothing was applied. Return only one JSON object with summary, changes and requests, exactly as the schema requires.`;
+}
 // Sends one structured-output request to an API or local provider and returns
 // the model's JSON text with the raw response. Shared by implementation and
 // review calls, so both get the same transport, limits and output checks.
@@ -401,9 +429,19 @@ export async function callStructuredProvider(
   // Refused or truncated structured output need not match the schema.
   if (provider.kind === "anthropic" && result.stop_reason === "refusal")
     throw new Error(`Provider ${provider.id} declined the request`);
-  if (provider.kind === "anthropic" && result.stop_reason === "max_tokens")
-    throw new Error(
+  // Each API reports a cut-off answer its own way: Anthropic's stop_reason,
+  // the Responses API's incomplete status, chat completions' finish_reason.
+  const truncated =
+    provider.kind === "anthropic"
+      ? result.stop_reason === "max_tokens"
+      : provider.kind === "openai"
+        ? result.status === "incomplete"
+        : result.choices?.[0]?.finish_reason === "length";
+  if (truncated)
+    throw new StructuredOutputError(
       `Provider ${provider.id} output reached maxOutputTokens; the proposal may be truncated`,
+      "truncated-output",
+      usageFrom(provider, result),
     );
   const text =
     provider.kind === "anthropic"
@@ -473,10 +511,10 @@ export async function invokeApiWorker(
     context: packet,
     feedback: input.feedback ?? null,
   });
-  // One UTF-8 byte per token is a deliberately conservative content bound.
-  // Reserve framing/schema overhead; never silently trim mandatory context.
+  // Estimated tokens (tokens.ts) with framing/schema overhead reserved;
+  // never silently trim mandatory context.
   if (
-    workerRequestBytes(input) >
+    workerRequestTokens(input) >
     Math.min(
       policy.maxContextTokens,
       provider.maxContextTokens ?? policy.maxContextTokens,
@@ -496,10 +534,32 @@ export async function invokeApiWorker(
     },
     providerFetch,
   );
-  const proposal: unknown = JSON.parse(text);
+  const usage = usageFrom(provider, result);
+  let proposal: WorkerProposal;
+  try {
+    proposal = proposalSchema.parse(JSON.parse(text));
+  } catch (error) {
+    const detail =
+      error instanceof SyntaxError
+        ? "invalid JSON"
+        : error instanceof z.ZodError
+          ? error.issues
+              .slice(0, 3)
+              .map(
+                (issue) =>
+                  `${issue.path.join(".") || "root"}: ${issue.message}`,
+              )
+              .join("; ")
+          : String(error);
+    throw new StructuredOutputError(
+      `Worker output did not match the proposal schema: ${detail}`,
+      "malformed-output",
+      usage,
+    );
+  }
   return {
-    proposal: proposalSchema.parse(proposal),
+    proposal,
     model: result.model ?? provider.model,
-    usage: usageFrom(provider, result),
+    usage,
   };
 }

@@ -29,7 +29,7 @@ import {
 } from "../src/project.js";
 import { GraphEngine } from "../src/service.js";
 import { applyProposal } from "../src/execution/workspace.js";
-import { invokeApiWorker } from "../src/workers/api.js";
+import { invokeApiWorker, StructuredOutputError } from "../src/workers/api.js";
 import { findingId } from "../src/workers/review.js";
 import { checked, writeJson } from "../src/util.js";
 import * as util from "../src/util.js";
@@ -310,7 +310,8 @@ describe("managed execution", () => {
   it("works through outlines, line ranges and patch feedback on a large file", async () => {
     const { root } = await fixture();
     const large = Array.from(
-      { length: 1200 },
+      // Over the default 16k-token budget even counted at 3 bytes a token.
+      { length: 3600 },
       (_, index) => `exports.value${index + 1} = ${index + 1};`,
     ).join("\n");
     await writeFile(path.join(root, "large.cjs"), `${large}\n`);
@@ -396,7 +397,7 @@ describe("managed execution", () => {
       path: "large.cjs",
       kind: "outline",
       start: 1,
-      end: 1201,
+      end: 3601,
     });
     expect(received[3]!.items).toContainEqual({
       path: "large.cjs",
@@ -470,6 +471,111 @@ describe("managed execution", () => {
       "Patch precondition failed: twice.cjs must contain exactly one matching substring",
     );
     expect(result.status).toBe("succeeded");
+  });
+
+  it("returns malformed or truncated worker output to the worker as feedback instead of failing the run", async () => {
+    const { root } = await fixture();
+    const feedback: (string | undefined)[] = [];
+    const usage = (outputTokens: number) => ({
+      inputTokens: 5,
+      outputTokens,
+      cachedTokens: 0,
+      costUsd: 0,
+      estimated: true,
+    });
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async (input) => {
+        feedback.push(input.feedback);
+        if (feedback.length === 1)
+          throw new StructuredOutputError(
+            "Worker output did not match the proposal schema: invalid JSON",
+            "malformed-output",
+            usage(11),
+          );
+        // A usable answer in between resets the one-repair bound.
+        if (feedback.length === 2)
+          return {
+            model: "fixture",
+            proposal: { summary: "Read", requests: ["math.cjs"], changes: [] },
+            usage: usage(1),
+          };
+        if (feedback.length === 3)
+          throw new StructuredOutputError(
+            "Provider local output reached maxOutputTokens; the proposal may be truncated",
+            "truncated-output",
+            usage(13),
+          );
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            requests: [],
+            changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
+          },
+          usage: usage(17),
+        };
+      },
+      verify: async (_workspace, checks, _policy, snapshotHash) =>
+        checks.map((check) => ({
+          ...check,
+          code: 0,
+          stdout: "passed",
+          stderr: "",
+          snapshotHash,
+        })),
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["passes"],
+    });
+    const run = await engine.wait((await engine.start(plan.id)).id);
+    expect(run.error ?? "").toBe("");
+    expect(run.status).toBe("succeeded");
+    expect(feedback).toHaveLength(4);
+    expect(feedback[1]).toContain("not a valid JSON proposal");
+    expect(feedback[3]).toContain("cut off at the output token limit");
+    expect(
+      engine.store
+        .events(run.id)
+        .filter((event) => event.type === "proposal.returned")
+        .map((event) => event.data.reason),
+    ).toEqual(["malformed-output", "truncated-output"]);
+    // The unusable calls' reported spend is still recorded.
+    expect(run.usage.outputTokens).toBe(11 + 1 + 13 + 17);
+  });
+
+  it("stops a worker whose structured output is unusable twice in a row", async () => {
+    const { root } = await fixture();
+    let calls = 0;
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async () => {
+        calls++;
+        throw new StructuredOutputError(
+          "Worker output did not match the proposal schema: invalid JSON",
+          "malformed-output",
+          {
+            inputTokens: 5,
+            outputTokens: 7,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: true,
+          },
+        );
+      },
+      verify: unreachedVerify,
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["passes"],
+    });
+    const run = await engine.wait((await engine.start(plan.id)).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("did not match the proposal schema");
+    expect(calls).toBe(2);
   });
 
   it("answers a directory or missing source request with the files the worker may read", async () => {
