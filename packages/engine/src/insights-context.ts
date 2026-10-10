@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 import type {
   ContextPacket,
@@ -42,8 +42,10 @@ export async function packetSavings(
     try {
       if (relative.startsWith("..") || path.isAbsolute(relative))
         throw new Error("outside the workspace");
-      const info = await stat(full);
-      if (!info.isFile()) throw new Error("not a file");
+      // lstat, not stat: a symlink may point outside the workspace, so it
+      // counts as unreadable rather than adding an external file's size.
+      const info = await lstat(full);
+      if (!info.isFile()) throw new Error("not a regular file");
       wholeFileTokens += tokensForBytes(info.size);
     } catch {
       unreadableFiles++;

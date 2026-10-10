@@ -8,6 +8,7 @@
 import type { ProjectPolicy } from "@graph-engineering/contracts";
 import { z } from "zod";
 import type { DecisionProvider } from "./decisions.js";
+import { decisionCostCap } from "./policy.js";
 import type { PromotionRouteRefusal } from "./promotion-refusal-codes.js";
 import { digestSchema, hashJson } from "./sealed-collection-schema.js";
 import { hash } from "./util.js";
@@ -227,10 +228,7 @@ export function checkGrantedRoute(
     return "candidate-configuration-unavailable";
   if (l.candidateConfigurationSha256 !== g.candidateConfigurationSha256)
     return "candidate-configuration-drift";
-  const cap =
-    check.policy.decisionMaxCostUsd !== undefined
-      ? check.policy.decisionMaxCostUsd
-      : check.policy.maxCostUsd;
+  const cap = decisionCostCap(check.policy);
   if (
     g.providerKind === "jev" &&
     (typeof cap !== "number" || !Number.isFinite(cap) || cap < 0)
