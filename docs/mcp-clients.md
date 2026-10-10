@@ -148,7 +148,12 @@ with `graph-engine mcp-tools --hashes`, passing the same `--client` and
 project's `mcp.toolHashes` or into a file passed as
 `graph-engine mcp --tool-hashes <file>`. When pins are given, `mcp` refuses to
 start if a tool it would expose is unpinned or its definition changed; every
-given set must hold, and pins for optional tools left off are ignored. Review
+given set must hold, and pins for optional tools left off are ignored. The
+default listing is the cloud one, and a local client also exposes `run_status`,
+`run_list` and `run_events`, so cloud pins make `mcp --client local` refuse to
+start. When the project's pins must serve more than one configuration, pin
+`graph-engine mcp-tools --hashes --all-configurations` instead: every tool
+either client kind could expose with any optional tool enabled. Review
 the change behind a refusal before updating the pins. See
 [MCP security coverage](mcp-security-coverage.md) for how this and the other
 guards map to the OWASP MCP Top 10.

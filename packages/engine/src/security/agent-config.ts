@@ -620,6 +620,60 @@ const PASSTHROUGH_KEY =
   /^(?:pass[-_]?through|forward(?:ed)?)[-_]?(?:auth|authorization|token|tokens|bearer|headers?|credentials?)$|^(?:auth|authorization|token|bearer)[-_]?(?:pass[-_]?through|forwarding)$/i;
 const PASSTHROUGH_FLAG =
   /^--?(?:pass-?through|forward)-(?:auth|authorization|token|tokens|bearer|headers?|credentials?)(?:=|$)|^--?(?:auth|token)-pass-?through(?:=|$)/i;
+// A key or flag that forwards headers by name forwards authorization only
+// when the names include an authorization or token header.
+const HEADER_LIST_KEY = /headers?$/i;
+const AUTH_HEADER = /^(?:proxy-)?authorization$|token|bearer/i;
+const OFF_TEXT = /^(?:false|0|no|off|none|)$/i;
+
+/** Whether a passthrough setting's value switches it off. */
+function passthroughOff(value: unknown): boolean {
+  if (value === false || value === null || value === undefined || value === 0)
+    return true;
+  if (typeof value === "string") return OFF_TEXT.test(value.trim());
+  if (Array.isArray(value)) return value.length === 0;
+  if (isObject(value)) return Object.keys(value).length === 0;
+  return false;
+}
+
+/**
+ * Whether a header-forwarding value names an authorization header: a list
+ * of names, a comma-separated string or an object keyed by name. Any other
+ * on value (true, "*", "all") forwards every header, authorization included.
+ */
+function forwardsAuthHeader(value: unknown): boolean {
+  const names = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : isObject(value)
+        ? Object.keys(value)
+        : undefined;
+  if (names === undefined) return true;
+  const strings = names
+    .filter((name): name is string => typeof name === "string")
+    .map((name) => name.trim());
+  if (
+    typeof value === "string" &&
+    /^(?:true|yes|on|1|\*|all)$/i.test(value.trim())
+  )
+    return true;
+  return strings.some((name) => name === "*" || AUTH_HEADER.test(name));
+}
+
+/** Whether a setting or flag value (after off values) forwards authorization. */
+function passthroughOn(key: string, value: unknown): boolean {
+  if (passthroughOff(value)) return false;
+  return !HEADER_LIST_KEY.test(key) || forwardsAuthHeader(value);
+}
+
+/** Whether one command-line argument is a passthrough flag that is on. */
+function passthroughFlag(arg: string): boolean {
+  if (!PASSTHROUGH_FLAG.test(arg)) return false;
+  const at = arg.indexOf("=");
+  if (at < 0) return true;
+  return passthroughOn(arg.slice(0, at), arg.slice(at + 1));
+}
 
 /** The inbound-token variable names a value refers to. */
 function inboundTokenNames(value: unknown): string[] {
@@ -646,11 +700,11 @@ export function tokenPassthrough(
     }
   }
   for (const [key, value] of Object.entries(server))
-    if (PASSTHROUGH_KEY.test(key) && value !== false && value !== null)
+    if (PASSTHROUGH_KEY.test(key) && passthroughOn(key, value))
       return `setting ${label(key)} forwards the caller's authorization`;
   if (Array.isArray(server.args))
     for (const arg of server.args)
-      if (typeof arg === "string" && PASSTHROUGH_FLAG.test(arg.slice(0, 100)))
+      if (typeof arg === "string" && passthroughFlag(arg.slice(0, 100)))
         return `argument ${label(arg.slice(0, 100).split("=")[0]!)} forwards the caller's authorization`;
   return undefined;
 }
@@ -823,6 +877,12 @@ const SERVER_TABLE = new RegExp(
 const ENV_TABLE = new RegExp(
   String.raw`^\s*\[\s*mcp_servers\s*\.\s*${TOML_KEY}\s*\.\s*env\s*\]\s*(#.*)?$`,
 );
+// Header tables: http_headers holds header values, env_http_headers maps a
+// header to the name of the environment variable that supplies it.
+const HEADER_TABLE = new RegExp(
+  String.raw`^\s*\[\s*mcp_servers\s*\.\s*${TOML_KEY}\s*\.\s*(http_headers|env_http_headers)\s*\]\s*(#.*)?$`,
+);
+const TOML_PAIR = new RegExp(String.raw`${TOML_KEY}\s*=\s*${TOML_STRING}`, "g");
 const SERVERS_TABLE = /^\s*\[\s*mcp_servers\s*\]\s*(#.*)?$/;
 const INLINE_SERVER = new RegExp(String.raw`^\s*${TOML_KEY}\s*=\s*\{(.*)$`);
 const DOTTED_SERVER = new RegExp(
@@ -838,7 +898,44 @@ const KEYS = {
   cwd: /(?:^|[\s,{])cwd\s*=\s*/,
   args: /(?:^|[\s,{])args\s*=\s*/,
   env: /(?:^|[\s,{])env\s*=\s*/,
+  http_headers: /(?:^|[\s,{])http_headers\s*=\s*/,
+  env_http_headers: /(?:^|[\s,{])env_http_headers\s*=\s*/,
+  env_vars: /(?:^|[\s,{])env_vars\s*=\s*/,
 };
+
+type CodexValueTable = "env" | "http_headers" | "env_http_headers";
+/**
+ * Why one key = "value" pair of a Codex server's env or header table passes
+ * an inbound token on, or undefined. Only variable names are reported.
+ */
+function codexPassthrough(
+  table: CodexValueTable,
+  key: string,
+  value: string,
+): string | undefined {
+  if (table === "env_http_headers")
+    return INBOUND_TOKEN_NAME.test(value.trim())
+      ? `header ${label(key)} takes the inbound token variable ${label(value.trim())}`
+      : undefined;
+  const [name] = inboundTokenNames(value);
+  if (!name) return undefined;
+  return `${table === "env" ? "environment variable" : "header"} ${label(key)} carries the inbound token variable ${label(name)} (value not shown)`;
+}
+/** The first passthrough among a line's or inline table's key = "value" pairs. */
+function codexPairsPassthrough(
+  table: CodexValueTable,
+  text: string,
+): string | undefined {
+  for (const pair of text.matchAll(TOML_PAIR)) {
+    const reason = codexPassthrough(
+      table,
+      pair[1] ?? pair[2] ?? pair[3]!,
+      pair[4] ?? pair[5] ?? "",
+    );
+    if (reason) return reason;
+  }
+  return undefined;
+}
 const STRING_AT = new RegExp(TOML_STRING, "y");
 const valueAt = (name: keyof typeof KEYS, text: string) => {
   const key = KEYS[name].exec(text);
@@ -857,6 +954,18 @@ const bracketed = (name: keyof typeof KEYS, text: string, open: string) => {
   if (at < 0 || text[at] !== open) return undefined;
   const end = text.indexOf(open === "[" ? "]" : "}", at);
   return end < 0 ? text.slice(at) : text.slice(at, end + 1);
+};
+
+/**
+ * The rest of the line holding `name = { ... }`: an inline table is one line
+ * in TOML, and its string values may hold "}" (as in "${VAR}"), so the line
+ * end bounds it rather than the first closing brace.
+ */
+const inlineTable = (name: keyof typeof KEYS, text: string) => {
+  const at = valueAt(name, text);
+  if (at < 0 || text[at] !== "{") return "";
+  const end = text.indexOf("\n", at);
+  return end < 0 ? text.slice(at) : text.slice(at, end);
 };
 
 /**
@@ -883,9 +992,11 @@ export function stripTomlComment(line: string): string {
 export function codexServers(file: string, lines: Lines): Finding[] {
   const servers = new Map<
     string,
-    { line: number; text: string[]; env: string[] }
+    { line: number; text: string[]; env: string[]; passthrough?: string }
   >();
-  let section: "top" | "server" | "servers" | "env" | "other" = "top";
+  let section: "top" | "server" | "servers" | "env" | "headers" | "other" =
+    "top";
+  let headerTable: "http_headers" | "env_http_headers" = "http_headers";
   let current: string | undefined;
   const add = (name: string, line: number, text: string) => {
     const known = servers.get(name);
@@ -911,6 +1022,14 @@ export function codexServers(file: string, lines: Lines): Finding[] {
       if (!servers.has(current)) add(current, index + 1, "");
       return;
     }
+    const headers = HEADER_TABLE.exec(line);
+    if (headers) {
+      section = "headers";
+      current = headers[1] ?? headers[2] ?? headers[3]!;
+      headerTable = headers[4] as typeof headerTable;
+      if (!servers.has(current)) add(current, index + 1, "");
+      return;
+    }
     if (SERVERS_TABLE.test(line)) {
       section = "servers";
       return;
@@ -925,7 +1044,14 @@ export function codexServers(file: string, lines: Lines): Finding[] {
     }
     if (section === "env" && current) {
       const key = TOML_ENV_KEY.exec(line);
-      if (key) servers.get(current)!.env.push(key[1] ?? key[2] ?? key[3]!);
+      const server = servers.get(current)!;
+      if (key) server.env.push(key[1] ?? key[2] ?? key[3]!);
+      server.passthrough ??= codexPairsPassthrough("env", line);
+      return;
+    }
+    if (section === "headers" && current) {
+      const server = servers.get(current)!;
+      server.passthrough ??= codexPairsPassthrough(headerTable, line);
       return;
     }
     if (section === "servers") {
@@ -941,7 +1067,8 @@ export function codexServers(file: string, lines: Lines): Finding[] {
         `${dotted[4]} = ${dotted[5]}`,
       );
   });
-  return [...servers].flatMap(([name, { line, text: parts, env }]) => {
+  return [...servers].flatMap(([name, { line, text: parts, env, ...rest }]) => {
+    let passthrough = rest.passthrough;
     const text = parts.join("\n");
     const command = field("command", text);
     const url = field("url", text);
@@ -974,22 +1101,33 @@ export function codexServers(file: string, lines: Lines): Finding[] {
         identity,
       ),
     ];
-    // Flags in args only; the env table's values are never read.
-    const flag = /["']\s*(--?[A-Za-z-]{1,60})(?:=[^"']*)?\s*["']/g;
+    // Inline env and header tables, then the env_vars list of variables
+    // passed through from the parent environment. Names are reported, and
+    // values are read only for the variable names they refer to.
+    for (const table of ["env", "http_headers", "env_http_headers"] as const)
+      passthrough ??= codexPairsPassthrough(table, inlineTable(table, text));
+    for (const item of (bracketed("env_vars", text, "[") ?? "").matchAll(
+      new RegExp(TOML_STRING, "g"),
+    )) {
+      const variable = item[1] ?? item[2] ?? "";
+      if (!passthrough && INBOUND_TOKEN_NAME.test(variable))
+        passthrough = `env_vars passes the inbound token variable ${label(variable)} through`;
+    }
+    const flag = /["']\s*(--?[A-Za-z-]{1,60}(?:=[^"']{0,100})?)\s*["']/g;
     for (const match of (bracketed("args", text, "[") ?? "").matchAll(flag))
-      if (PASSTHROUGH_FLAG.test(match[1]!)) {
-        found.push(
-          finding(
-            "token-passthrough",
-            file,
-            line,
-            `MCP server ${label(name)} passes an inbound authorization token on to the server it ${target.replace(/ \(arguments not shown\)$/, "")}: argument ${label(match[1]!)} forwards the caller's authorization. A server must use a token issued for it, not forward its caller's`,
-            `mcp_servers.${label(name)}`,
-            identity,
-          ),
-        );
-        break;
-      }
+      if (!passthrough && passthroughFlag(match[1]!))
+        passthrough = `argument ${label(match[1]!.split("=")[0]!)} forwards the caller's authorization`;
+    if (passthrough)
+      found.push(
+        finding(
+          "token-passthrough",
+          file,
+          line,
+          `MCP server ${label(name)} passes an inbound authorization token on to the server it ${target.replace(/ \(arguments not shown\)$/, "")}: ${passthrough}. A server must use a token issued for it, not forward its caller's`,
+          `mcp_servers.${label(name)}`,
+          identity,
+        ),
+      );
     return found;
   });
 }

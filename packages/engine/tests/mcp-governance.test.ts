@@ -17,6 +17,7 @@ import {
   enabledMcpTools,
   mcpArgsSha256,
   mcpToolHashes,
+  mcpToolHashUnion,
   mcpToolListingSha256,
   MCP_LIMITATION_NOTES,
   type McpLimitations,
@@ -710,4 +711,31 @@ it("refuses to start when a pinned tool definition hash drifts or an exposed too
       ],
     }),
   ).toThrow(/--tool-hashes/);
+});
+
+it("starts a local and a cloud server against one project pin set taken from the all-configurations union, while cloud-only pins refuse a local start", async () => {
+  const { engine } = await fixture();
+  const union = mcpToolHashUnion(engine);
+  for (const tool of MCP_OPTIONAL_TOOLS)
+    expect(union[tool]).toMatch(/^[a-f0-9]{64}$/);
+  const project = [
+    { source: ".graph/project.json mcp.toolHashes", hashes: union },
+  ];
+  for (const options of [
+    { client: "local" },
+    { client: "cloud" },
+    { client: "cloud", allowRun: true, allowRunStatus: true },
+    { client: "local", allowRun: true },
+  ] as const)
+    expect(() =>
+      createMcpServer(engine, { ...options, toolHashPins: project }),
+    ).not.toThrow();
+  // The default listing is the cloud one; it does not cover a local start.
+  const cloudOnly = mcpToolHashes(createMcpServer(engine, { client: "cloud" }));
+  expect(() =>
+    createMcpServer(engine, {
+      client: "local",
+      toolHashPins: [{ source: "project", hashes: cloudOnly }],
+    }),
+  ).toThrow(/not pinned: run_events, run_list, run_status/);
 });

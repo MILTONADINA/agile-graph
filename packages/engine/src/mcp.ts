@@ -24,6 +24,7 @@ import {
 import { MAX_PLAN_OBJECTIVE } from "./planning.js";
 import { listTemplates } from "./templates.js";
 import {
+  MCP_OPTIONAL_TOOLS,
   MCP_RUN_CONTROL_TOOLS,
   MCP_RUN_STATUS_TOOLS,
   type McpOptionalTool,
@@ -178,6 +179,31 @@ export function mcpToolHashes(server: McpServer): Record<string, string> {
   if (!hashes) throw new Error("Not a Graph Engineering MCP server");
   return Object.fromEntries(
     Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+/**
+ * The definition hash of every tool any server configuration could expose:
+ * both client kinds with every optional tool enabled. One project pin set
+ * covers every `mcp` start only when it holds this union. Throws when a tool
+ * hashes differently between configurations, since one flat set cannot pin
+ * both.
+ */
+export function mcpToolHashUnion(engine: GraphEngine): Record<string, string> {
+  const union: Record<string, string> = {};
+  for (const client of ["cloud", "local"] as const) {
+    const hashes = mcpToolHashes(
+      createMcpServer(engine, { client, allowTools: [...MCP_OPTIONAL_TOOLS] }),
+    );
+    for (const [name, sha] of Object.entries(hashes)) {
+      if (Object.hasOwn(union, name) && union[name] !== sha)
+        throw new Error(
+          `Tool ${name} has a different definition for a local and a cloud client, so one pin set cannot cover both`,
+        );
+      union[name] = sha;
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(union).sort(([a], [b]) => a.localeCompare(b)),
   );
 }
 /**
@@ -912,7 +938,7 @@ export function createMcpServer(
     const drift = mcpToolHashDrift(toolHashes, pins.hashes);
     if (drift.unpinned.length || drift.changed.length)
       throw new Error(
-        `Refusing to start the MCP server: its tool definitions do not match the hashes pinned in ${pins.source}${drift.changed.length ? `; changed: ${drift.changed.join(", ")}` : ""}${drift.unpinned.length ? `; not pinned: ${drift.unpinned.join(", ")}` : ""}. Compare graph-engine mcp-tools --hashes with the pins and update them only after reviewing the change`,
+        `Refusing to start the MCP server: its tool definitions do not match the hashes pinned in ${pins.source}${drift.changed.length ? `; changed: ${drift.changed.join(", ")}` : ""}${drift.unpinned.length ? `; not pinned: ${drift.unpinned.join(", ")}` : ""}. Compare graph-engine mcp-tools --hashes (with this server's options, or --all-configurations for a set shared by every configuration) with the pins and update them only after reviewing the change`,
       );
   }
   return server;
