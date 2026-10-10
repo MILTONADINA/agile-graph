@@ -3533,6 +3533,175 @@ describe("plan approval required by the project policy", () => {
     );
   });
 
+  function ageApproval(data: string, planId: string, hours: number) {
+    const db = runDatabase(data);
+    try {
+      const row = db
+        .prepare("SELECT json FROM plan_approvals WHERE plan_id=?")
+        .get(planId) as { json: string };
+      const approvedAt = new Date(Date.now() - hours * 3_600_000).toISOString();
+      db.prepare("UPDATE plan_approvals SET json=? WHERE plan_id=?").run(
+        JSON.stringify({ ...JSON.parse(row.json), approvedAt }),
+        planId,
+      );
+      return approvedAt;
+    } finally {
+      db.close();
+    }
+  }
+
+  it("refuses to start or resume once the stored approval is older than approvalTtlHours, naming plan-approve", async () => {
+    const { root, data } = await fixture((value) => {
+      value.policy.requirePlanApproval = true;
+      value.policy.approvalTtlHours = 2;
+    });
+    const engine = await open(root, {
+      worker: vi.fn(async (input: WorkerInput) => result(input.objective)),
+      verify: passesWhen("first.js", "= 3"),
+    });
+    const planned = await plan(engine, [step("one")]);
+    engine.store.approvePlan(planned.id);
+    const approvedAt = ageApproval(data, planned.id, 3);
+    await expect(engine.start(planned.id)).rejects.toThrow(
+      `plan ${planned.id} has an approval given at ${approvedAt} that expired after policy.approvalTtlHours (2 hours) and must be given again. A person reviews it with graph-engine plan-approve ${planned.id}`,
+    );
+    expect(engine.store.runs()).toEqual([]);
+    // An approval within the TTL still authorizes.
+    ageApproval(data, planned.id, 1);
+    vi.spyOn(workspaceModule, "createWorkspace").mockRejectedValueOnce(
+      new Error("Simulated interruption"),
+    );
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(run.status).toBe("failed");
+    ageApproval(data, planned.id, 3);
+    await expect(engine.resume(run.id, true)).rejects.toThrow(
+      /expired after policy\.approvalTtlHours \(2 hours\).*graph-engine plan-approve/,
+    );
+    expect(engine.store.run(run.id).status).toBe("failed");
+    engine.store.approvePlan(planned.id);
+    await engine.resume(run.id, true);
+    const resumed = await engine.wait(run.id);
+    expect(resumed.error ?? "").toBe("");
+    expect(resumed.status).toBe("succeeded");
+  });
+
+  it("re-checks the plan approval immediately before publication and publishes nothing once it expired or no longer matches", async () => {
+    const { root, data } = await fixture((value) => {
+      value.policy.publication = "commit";
+      value.policy.approvalTtlHours = 2;
+    });
+    const head = await checked("git", ["rev-parse", "HEAD"], { cwd: root });
+    // The approval ages past the TTL while the run works.
+    let planId = "";
+    const engine = await open(root, {
+      worker: vi.fn(async (input: WorkerInput) => {
+        ageApproval(data, planId, 3);
+        return result(input.objective);
+      }),
+      verify: passesWhen("first.js", "= 3"),
+    });
+    const expiring = await plan(engine, [step("one")]);
+    planId = expiring.id;
+    const run = await engine.wait(
+      (await engine.start(expiring.id, { approvedByPerson: true })).id,
+    );
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain(
+      `Publication needs a person's current approval of the plan this run holds, and plan ${expiring.id} has an approval given at`,
+    );
+    expect(run.error).toContain(`graph-engine plan-approve ${expiring.id}`);
+    expect(run.commit).toBeUndefined();
+    const types = engine.store.events(run.id).map((event) => event.type);
+    expect(types).not.toContain("publication.started");
+    expect(await checked("git", ["rev-parse", "HEAD"], { cwd: root })).toBe(
+      head,
+    );
+  });
+
+  it("refuses publication when the plan approval was replaced by one of other content during the run", async () => {
+    const { root, data } = await fixture((value) => {
+      value.policy.publication = "commit";
+    });
+    let planId = "";
+    const engine = await open(root, {
+      worker: vi.fn(async (input: WorkerInput) => {
+        const db = runDatabase(data);
+        const row = db
+          .prepare("SELECT json FROM plan_approvals WHERE plan_id=?")
+          .get(planId) as { json: string };
+        db.prepare("UPDATE plan_approvals SET json=? WHERE plan_id=?").run(
+          JSON.stringify({
+            ...JSON.parse(row.json),
+            planSha256: "0".repeat(64),
+          }),
+          planId,
+        );
+        db.close();
+        return result(input.objective);
+      }),
+      verify: passesWhen("first.js", "= 3"),
+    });
+    const planned = await plan(engine, [step("one")]);
+    planId = planned.id;
+    const run = await engine.wait(
+      (await engine.start(planned.id, { approvedByPerson: true })).id,
+    );
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain(
+      `plan ${planned.id} has an approval for other content than the plan this run holds, so nothing was published`,
+    );
+    expect(run.commit).toBeUndefined();
+  });
+
+  it("refuses publication when the policy baseline changed after the last execution check", async () => {
+    const { root, config } = await fixture((value) => {
+      value.policy.publication = "commit";
+    });
+    const engine = await open(root, {
+      worker: vi.fn(async (input: WorkerInput) => result(input.objective)),
+      verify: passesWhen("first.js", "= 3"),
+    });
+    const planned = await plan(engine, [step("one")]);
+    // The policy changes just after the run's last check of its plan's
+    // verification, immediately before publication.
+    const original = (
+      engine as unknown as {
+        assertCurrentPlanVerification: (plan: unknown) => Promise<void>;
+      }
+    ).assertCurrentPlanVerification.bind(engine);
+    vi.spyOn(
+      engine as unknown as {
+        assertCurrentPlanVerification: (plan: unknown) => Promise<void>;
+      },
+      "assertCurrentPlanVerification",
+    ).mockImplementation(async (value: unknown) => {
+      await original(value);
+      const [current] = engine.store.runs();
+      if (
+        !current ||
+        !engine.store
+          .events(current.id)
+          .some((event) => event.type === "verification.completed")
+      )
+        return;
+      await writeJson(path.join(root, PROJECT_FILE), {
+        ...config,
+        policy: {
+          ...config.policy,
+          maxAttempts: config.policy.maxAttempts + 1,
+        },
+      });
+    });
+    const run = await engine.wait(
+      (await engine.start(planned.id, { approvedByPerson: true })).id,
+    );
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain(
+      "Policy changed before publication: the policy baseline no longer matches the hash the plan was made under, so nothing was published",
+    );
+    expect(run.commit).toBeUndefined();
+  });
+
   it("refuses a plan made before the project required plan approval as planned under another policy, not as unapproved", async () => {
     const { root, config } = await fixture();
     const engine = await open(root, {

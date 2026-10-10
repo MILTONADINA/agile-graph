@@ -95,6 +95,14 @@ export interface ProjectPolicy {
    */
   requirePlanApproval?: boolean;
   /**
+   * Hours a stored plan approval stays valid after it was given. An older
+   * approval no longer authorizes a run to start or resume, nor a run to
+   * publish, until a person approves the plan again. Absent means
+   * approvals do not expire; it is not in DEFAULT_POLICY, so policies
+   * without it keep their hash.
+   */
+  approvalTtlHours?: number;
+  /**
    * Require reviewed native executable identities for installed workers.
    * Absent means false; changing its presence or value changes the policy
    * hash. Existing plans never refresh executable or provider-profile pins.
@@ -767,6 +775,7 @@ export const policySchema = {
     },
     publication: { enum: ["none", "commit", "draft-pr"] },
     requirePlanApproval: { type: "boolean" },
+    approvalTtlHours: { type: "integer", minimum: 1, maximum: 8760 },
     requireInstalledWorkerIdentity: { type: "boolean" },
     maxWorkers: { type: "integer", minimum: 1, maximum: 8 },
     maxAttempts: { type: "integer", minimum: 1, maximum: 10 },
