@@ -73,6 +73,11 @@ GE is a local-first "AI agile team" engine.
 
 ## 3. State and how to merge
 
+> **Update, end of 2026-10-10:**
+>
+> - Round 4 is already stacked on `dev` as one PR, #148. Don't do the per-branch rebase steps; wait for its CI, then merge it through the merge gate.
+> - Round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `fork/dev` and ignore any local `fix/round5-*` branches.
+
 - **Rounds 1, 2 and 3:** merged into `fork/dev` (round 3 as #144). To see the tip: `git log --oneline -5 fork/dev`.
 - **Round 4:** finished, reviewed and repaired, then pushed to the fork with no PRs yet. Each branch has a build commit and a review-fix commit, and they were built on the round-3 branch before it merged. Each branch must be rebased onto `fork/dev`, then stacked, as described in section 5.
 
