@@ -26,8 +26,9 @@ name rather than on where the provider runs.
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: escalates failed calls, malformed or refused answers and low confidence
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: escalates a promoted answer the engine withholds below its threshold
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: relabels a revoked promoted record escalate when policy changes in flight
-- AC3: Context completeness is recorded as `evidence.contextComplete`. A caller that cuts its state passes `stateTruncated: true`; the engine's routing, worker-selection and run-stage callers set it whenever they slice the objective. Oversized state is never truncated at dispatch: it abstains and escalates.
+- AC3: Context completeness is recorded as `evidence.contextComplete`. A caller that cuts its state passes `stateTruncated: true`; the engine's routing, worker-selection and run-stage callers set it whenever they slice the objective. Context selection sets it for a batch when any candidate label is cut, either by `selectContext` at 220 characters or by its caller (`labelTruncated`, which the run stage sets when it cuts unsourced text to 160 characters). Oversized state is never truncated at dispatch: it abstains and escalates.
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: marks a routing decision with a cut objective as incomplete context
+  - Test: packages/engine/tests/decision-action-hosting.test.ts :: marks a context selection with a cut label as incomplete context
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: labels a promoted answer auto, but review when the caller truncated its state
 - AC4: `action` is optional in stored data. Rows written before it existed still read back unchanged, without an action.
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: reads decision rows stored before the action label existed
@@ -38,8 +39,13 @@ name rather than on where the provider runs.
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: a hosted provider with another id refuses non-exportable state exactly as jev does
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: sends a hosted provider with another id only its reviewed cloud state
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: applies offline policy and metered cost caps to any hosted id
+  - Test: packages/engine/tests/decision-action-hosting.test.ts :: refuses a hosted provider on a loopback endpoint by offline policy, not by endpoint
+  - Test: packages/engine/tests/decision-action-hosting.test.ts :: refuses hosted providers under local-only inference, even on loopback, but still asks a local one
+  - Test: packages/engine/tests/decision-action-hosting.test.ts :: checks hosted pricing against the cost cap and reservation ledger before any request
 - AC7: A built-in id cannot be relabelled: `jev` configured `local` (or `laya` configured `hosted`) is refused when `decisions.json` loads and when `decideBatch` validates its providers. `providerHosting` returns a built-in id's fixed hosting even for an object that skipped validation.
   - Test: packages/engine/tests/decision-action-hosting.test.ts :: refuses a provider named jev configured as local instead of bypassing the guard
+- AC8: Evaluation export accepts only `laya` and `jev` records. A record from another provider id fails the export with a message saying custom providers, hosted or local, are not yet supported in evaluation exports.
+  - Test: packages/engine/tests/decision-evaluation.test.ts :: refuses to export a record from a custom provider id with a clear message
 
 ## Security considerations
 

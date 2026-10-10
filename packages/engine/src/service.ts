@@ -2188,6 +2188,7 @@ export class GraphEngine {
           label: item.source
             ? `${item.source.path}:${item.source.startLine}-${item.source.endLine}`
             : item.text.slice(0, 160),
+          labelTruncated: !item.source && item.text.length > 160,
           baselineInclude: true,
         })),
       });

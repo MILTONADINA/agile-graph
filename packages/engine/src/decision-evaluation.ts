@@ -12,6 +12,7 @@ import {
 // fail the import (a provider-reported model name with a control character,
 // say) is refused when it is exported or collected, not after labelling.
 const label = labelSchema;
+const evaluationProviders: readonly string[] = ["laya", "jev"];
 const observationSchema = z
   .object({
     recordId: label,
@@ -49,6 +50,12 @@ export function exportEvaluationDraft(
       if (!taskId)
         throw new Error(
           `Assign an originating task to decision ${record.id} before evaluation export`,
+        );
+      // Promotion evidence and route identity accept only these two ids, so
+      // an evaluation of another provider could never promote it.
+      if (!evaluationProviders.includes(record.provider))
+        throw new Error(
+          `Decision ${record.id} comes from provider ${record.provider}; custom providers, hosted or local, are not yet supported in evaluation exports (only ${evaluationProviders.join(" and ")})`,
         );
       return {
         recordId: record.id,

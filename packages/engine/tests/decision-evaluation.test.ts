@@ -55,6 +55,22 @@ const annotation: EvaluationLabel = {
   policyViolation: false,
 };
 
+it("refuses to export a record from a custom provider id with a clear message", () => {
+  const custom: DecisionRecord = {
+    ...observed,
+    id: "custom-decision",
+    provider: "acme",
+  };
+  expect(() =>
+    exportEvaluationDraft([observed, custom], {
+      datasetId: "unit-dataset",
+      taskIds: { [observed.id]: "task-1", [custom.id]: "task-2" },
+    }),
+  ).toThrow(
+    "Decision custom-decision comes from provider acme; custom providers, hosted or local, are not yet supported in evaluation exports (only laya and jev)",
+  );
+});
+
 it("exports only recorded observations, requiring explicit task identity and manual labels", () => {
   expect(() =>
     exportEvaluationDraft([observed], {

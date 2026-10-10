@@ -12,6 +12,8 @@ export interface SelectionCandidate {
   kind: "context" | "file" | "memory";
   /** Compact index metadata, never a source-file dump. */
   label: string;
+  /** The caller already cut `label` from longer text. */
+  labelTruncated?: boolean;
   required?: boolean;
   baselineInclude?: boolean;
   exportable?: boolean;
@@ -23,6 +25,7 @@ const promoted = (result: DecisionBatchResult, id: string, baseline: string) =>
 export async function selectContext(
   options: DecisionSession & { candidates: SelectionCandidate[] },
 ): Promise<DecisionBatchResult & { selectedIds: string[] }> {
+  const labelLimit = 220;
   if (
     new Set(options.candidates.map((candidate) => candidate.id)).size !==
     options.candidates.length
@@ -37,7 +40,7 @@ export async function selectContext(
     const questions = group.map<DecisionQuestion>((candidate) => ({
       id: `item-${hash(candidate.id).slice(0, 16)}`,
       category: `${candidate.kind}-selection`,
-      instructions: `Relevance of ${candidate.label.slice(0, 220)}`,
+      instructions: `Relevance of ${candidate.label.slice(0, labelLimit)}`,
       candidates: Object.fromEntries(
         candidate.required
           ? [["include", "Required evidence"]]
@@ -52,7 +55,18 @@ export async function selectContext(
           : "exclude",
       exportable: candidate.exportable === true,
     }));
-    const result = await decideBatch({ ...options, questions });
+    // A label cut here or by the caller is incomplete context: never `auto`.
+    const result = await decideBatch({
+      ...options,
+      questions,
+      stateTruncated:
+        options.stateTruncated === true ||
+        group.some(
+          (candidate) =>
+            candidate.labelTruncated === true ||
+            candidate.label.length > labelLimit,
+        ),
+    });
     records.push(...result.records);
     usage.push(...result.usage);
     Object.assign(selections, result.selections);
