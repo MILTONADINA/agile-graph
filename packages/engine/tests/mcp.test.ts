@@ -1007,6 +1007,8 @@ it("lets a connected client plan, start, follow, list and cancel runs only when 
       },
     ]);
     expect(plannerSaw[0]!.join("\n")).toContain("exports.add");
+    // A person approved it (plan-approve --yes), as every MCP start needs.
+    engine.store.approvePlan(plan.id);
     const started = json(
       await local.client.callTool({
         name: "run_start",
@@ -1293,7 +1295,7 @@ it("refuses a connected client's run_start and the dashboard's start of a plan t
     expect(
       tools.find((tool) => tool.name === "run_start")?.description,
     ).toContain(
-      "When the project policy sets requirePlanApproval, every plan, including one that does not publish, needs that approval",
+      "Every plan, including one that does not publish and whatever the project policy says, needs a person's stored approval of its exact content",
     );
   } finally {
     await app.close();
@@ -1671,6 +1673,8 @@ it("tells a cloud client a verification image is missing, never its name", async
       objective: "Fix addition",
       acceptance: ["2 + 3 is 5"],
     });
+    // A person approved it (plan-approve --yes), as every MCP start needs.
+    engine.store.approvePlan(plan.id);
     const cloud = await runStart("cloud", plan.id);
     expect(cloud.isError).toBe(true);
     const text = JSON.stringify(cloud);

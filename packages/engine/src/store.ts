@@ -44,7 +44,94 @@ function legacyOwnerState(pid: number | undefined): "dead" | "unknown" {
   }
 }
 
-const RUN_SCHEMA_VERSION = 4;
+// 5 added mcp_calls, the MCP call log. Each version only adds tables (CREATE
+// TABLE IF NOT EXISTS), so opening an older database migrates it in place.
+export const RUN_SCHEMA_VERSION = 5;
+
+/** The result of one MCP tool call as the call log records it. */
+export type McpCallOutcome = "ok" | "refused" | "error";
+/**
+ * One MCP tool call. It holds the SHA-256 of the call's canonical JSON
+ * arguments, never the arguments, and no error text. `outcome` is null while
+ * the call is in progress, and stays null when its process ended first.
+ * `planId` and `runId` are set only when they name a plan or run of this
+ * project.
+ */
+export interface McpCallRecord {
+  id: string;
+  at: string;
+  tool: string;
+  clientKind: "local" | "cloud";
+  argsSha256: string;
+  outcome: McpCallOutcome | null;
+  planId?: string;
+  runId?: string;
+}
+interface McpCallRow {
+  id: string;
+  at: string;
+  tool: string;
+  client_kind: "local" | "cloud";
+  args_sha256: string;
+  outcome: McpCallOutcome | null;
+  plan_id: string | null;
+  run_id: string | null;
+}
+const mcpCallRecord = (row: McpCallRow): McpCallRecord => ({
+  id: row.id,
+  at: row.at,
+  tool: row.tool,
+  clientKind: row.client_kind,
+  argsSha256: row.args_sha256,
+  outcome: row.outcome,
+  ...(row.plan_id ? { planId: row.plan_id } : {}),
+  ...(row.run_id ? { runId: row.run_id } : {}),
+});
+function selectMcpCalls(
+  db: Database.Database,
+  projectId: string,
+  options: { limit: number; tool?: string },
+): McpCallRecord[] {
+  const rows = db
+    .prepare(
+      `SELECT id,at,tool,client_kind,args_sha256,outcome,plan_id,run_id FROM mcp_calls WHERE project_id=?${options.tool === undefined ? "" : " AND tool=?"} ORDER BY seq DESC LIMIT ?`,
+    )
+    .all(
+      ...(options.tool === undefined
+        ? [projectId, options.limit]
+        : [projectId, options.tool, options.limit]),
+    ) as McpCallRow[];
+  return rows.map(mcpCallRecord);
+}
+
+/**
+ * Reads the MCP call log, newest first, through a read-only connection,
+ * without opening the engine or running recovery. Local CLI use only (the
+ * `mcp-log` command); no MCP tool reads it. A database without the log (one
+ * no engine with it has opened) has no entries.
+ */
+export function readMcpCalls(
+  dataDir: string,
+  projectId: string,
+  options: { limit: number; tool?: string },
+): McpCallRecord[] {
+  const file = path.join(dataDir, "runs.sqlite");
+  if (!existsSync(file)) return [];
+  const db = new Database(file, { readonly: true, fileMustExist: true });
+  try {
+    const version = db.pragma("user_version", { simple: true }) as number;
+    if (version > RUN_SCHEMA_VERSION)
+      throw new Error("Run database is newer than this engine");
+    const table = db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='mcp_calls'",
+      )
+      .get();
+    return table ? selectMcpCalls(db, projectId, options) : [];
+  } finally {
+    db.close();
+  }
+}
 
 /**
  * A person's approval of a plan, bound to the SHA-256 of its stored content.
@@ -304,7 +391,9 @@ export class RunStore {
       CREATE TABLE IF NOT EXISTS plan_approvals(plan_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS run_outcomes(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT NOT NULL,project_id TEXT NOT NULL,json TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS outcomes_run ON run_outcomes(project_id,run_id,seq);
-      PRAGMA user_version = 4;`);
+      CREATE TABLE IF NOT EXISTS mcp_calls(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,at TEXT NOT NULL,tool TEXT NOT NULL,client_kind TEXT NOT NULL,args_sha256 TEXT NOT NULL,outcome TEXT,plan_id TEXT,run_id TEXT);
+      CREATE INDEX IF NOT EXISTS mcp_calls_tool ON mcp_calls(project_id,tool,seq);
+      PRAGMA user_version = 5;`);
       })
       .immediate();
     localProcessOwner();
@@ -1075,6 +1164,63 @@ export class RunStore {
       .prepare(`SELECT json FROM ${table} WHERE project_id=? ORDER BY rowid`)
       .all(this.projectId)
       .map((r) => JSON.parse((r as { json: string }).json));
+  }
+  /**
+   * Records that an MCP tool call began, before its tool runs, and returns
+   * the entry's id for finishMcpCall. Only the arguments' hash is stored.
+   */
+  beginMcpCall(entry: {
+    tool: string;
+    clientKind: "local" | "cloud";
+    argsSha256: string;
+  }): string {
+    const callId = id();
+    this.db
+      .prepare(
+        "INSERT INTO mcp_calls(id,project_id,at,tool,client_kind,args_sha256,outcome,plan_id,run_id) VALUES(?,?,?,?,?,?,NULL,NULL,NULL)",
+      )
+      .run(
+        callId,
+        this.projectId,
+        now(),
+        entry.tool,
+        entry.clientKind,
+        entry.argsSha256,
+      );
+    return callId;
+  }
+  /** Records how an MCP call ended and the plan or run it concerned. */
+  finishMcpCall(
+    callId: string,
+    result: { outcome: McpCallOutcome; planId?: string; runId?: string },
+  ): void {
+    this.db
+      .prepare(
+        "UPDATE mcp_calls SET outcome=?,plan_id=?,run_id=? WHERE id=? AND project_id=?",
+      )
+      .run(
+        result.outcome,
+        result.planId ?? null,
+        result.runId ?? null,
+        callId,
+        this.projectId,
+      );
+  }
+  /** The MCP call log, newest first. */
+  mcpCalls(options: { limit: number; tool?: string }): McpCallRecord[] {
+    return selectMcpCalls(this.db, this.projectId, options);
+  }
+  /** Whether a plan with this id exists in this project. */
+  hasPlan(planId: string): boolean {
+    return !!this.db
+      .prepare("SELECT 1 FROM plans WHERE id=? AND project_id=?")
+      .get(planId, this.projectId);
+  }
+  /** Whether a run with this id exists in this project. */
+  hasRun(runId: string): boolean {
+    return !!this.db
+      .prepare("SELECT 1 FROM runs WHERE id=? AND project_id=?")
+      .get(runId, this.projectId);
   }
   close(): void {
     this.db.close();

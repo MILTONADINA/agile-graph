@@ -109,7 +109,7 @@ it("refuses a run database written by a newer engine", async () => {
   directories.push(dataDir);
   new RunStore(dataDir, "project").close();
   const db = new Database(path.join(dataDir, "runs.sqlite"));
-  db.pragma("user_version = 5");
+  db.pragma("user_version = 6");
   db.close();
   expect(() => readPlanStatus(dataDir, "project", ["plan"])).toThrow(
     "Run database is newer than this engine",

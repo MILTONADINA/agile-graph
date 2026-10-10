@@ -43,6 +43,7 @@ import {
   LocalDetailError,
   now,
   readJson,
+  RefusalError,
   writeJson,
 } from "./util.js";
 import { decide, decisionProviders } from "./decisions.js";
@@ -1623,24 +1624,41 @@ export class GraphEngine {
    * records it, while MCP and dashboard API callers need `plan-approve`.
    * Under `policy.requirePlanApproval` every plan needs a stored approval of
    * its exact content, whoever starts it, and `approvedByPerson` does not
-   * count. The approval a run starts under is recorded as its
-   * `plan.approval_used` event.
+   * count. With `requireStoredApproval` (MCP `run_start` passes it) every
+   * plan needs that stored approval whatever the policy says. The approval a
+   * run starts under is recorded as its `plan.approval_used` event.
    */
   async start(
     planId: string,
-    options: { approvedByPerson?: boolean } = {},
+    options: {
+      approvedByPerson?: boolean;
+      requireStoredApproval?: boolean;
+    } = {},
   ): Promise<RunRecord> {
     await this.refresh();
     const plan = this.store.plan(planId);
     const policyChanged = plan.policyHash !== hash(this.config.policy);
     let approval: PlanApproval | undefined;
-    if (this.config.policy.requirePlanApproval) {
+    if (options.requireStoredApproval) {
+      // A connected AI client never counts as a person: a run it starts
+      // needs a stored approval of exactly this plan, whether or not the
+      // plan publishes and whatever the project policy says. A plan made
+      // under another policy is refused as changed below, as it is under
+      // requirePlanApproval.
+      if (!policyChanged) {
+        approval = this.approvalOf(plan);
+        if (!approval)
+          throw new RefusalError(
+            `A run started by a connected AI client (MCP run_start) needs a person's stored approval of the plan's exact content, and plan ${planId} ${this.store.planApproval(planId).approval ? "changed after it was approved" : "is not approved"}. A person reviews it with graph-engine plan-approve ${planId} and approves exactly this content with graph-engine plan-approve ${planId} --yes --expect ${planSha256(plan)}`,
+          );
+      }
+    } else if (this.config.policy.requirePlanApproval) {
       // A plan made under another policy can never start, so it is refused
       // as changed below rather than sent to a person for approval.
       if (!policyChanged) {
         approval = this.approvalOf(plan);
         if (!approval)
-          throw new Error(
+          throw new RefusalError(
             `This project requires a person to approve every plan before a run of it starts (requirePlanApproval), and plan ${planId} ${this.store.planApproval(planId).approval ? "changed after it was approved" : "is not approved"}. A person reviews it with graph-engine plan-approve ${planId} and approves it with graph-engine plan-approve ${planId} --yes; graph-engine run does not count as approval here`,
           );
       }
@@ -1653,7 +1671,7 @@ export class GraphEngine {
       else {
         approval = this.approvalOf(plan);
         if (!approval)
-          throw new Error(
+          throw new RefusalError(
             `This plan publishes (${plan.publication}); a person must approve it first with graph-engine plan-approve ${planId} --yes`,
           );
       }

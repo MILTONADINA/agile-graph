@@ -186,6 +186,18 @@ export class LocalDetailError extends Error {
     this.name = "LocalDetailError";
   }
 }
+/**
+ * A governance gate turned the request down (a missing approval, an offline
+ * project for a cloud client), as opposed to the work failing. The MCP call
+ * log records it as `refused` rather than `error`; callers see an ordinary
+ * error.
+ */
+export class RefusalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RefusalError";
+  }
+}
 /** An error's message, with any detail meant only for this machine. */
 export function localErrorMessage(error: unknown): string {
   return error instanceof LocalDetailError
