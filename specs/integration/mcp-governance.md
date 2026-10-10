@@ -45,6 +45,12 @@ three places.
   - Test: packages/engine/tests/mcp.test.ts :: cloud graph traversal cannot expose resolved private targets or bridge through private nodes
 - AC8: A plan objective is bounded by one constant, `MAX_PLAN_OBJECTIVE` in `planning.ts` (16000 characters), in MCP `plan_create` and `plan_decompose` and in the dashboard API's plan creation.
   - Test: packages/engine/tests/mcp-governance.test.ts :: bounds a plan objective by MAX_PLAN_OBJECTIVE in plan_create, plan_decompose and the dashboard API
+- AC9: When the server is created it computes, for every tool it exposes, the SHA-256 of the canonical JSON (keys sorted) of the tool's name, description and JSON input schema, converted exactly as the MCP library publishes it in `tools/list`, so a changed description or schema (a "rug pull") changes the hash. Each `mcp_calls` entry records the called tool's definition hash as `definitionSha256`. The column is added to an existing log in place (`ALTER TABLE`, still schema version 5, nullable), so an older engine still opens the database and entries logged before it have no `definitionSha256`.
+  - Test: packages/engine/tests/mcp-governance.test.ts :: hashes each exposed tool's name, description and input schema exactly as tools/list publishes them, and records the hash with each logged call
+  - Test: packages/engine/tests/mcp-call-definition.test.ts :: adds the tool definition hash column to an existing call log in place and reads entries logged before it
+- AC10: `graph-engine mcp-tools [--client <kind>] [--allow-tool <name>] [--allow-run] [--allow-run-status] [--hashes]` lists the tools a server started with those options would expose, and with `--hashes` a JSON object of each tool's definition hash. An operator can pin them in the project's `mcp.toolHashes` (tool name to lowercase SHA-256, validated by the project schema) or in a JSON file passed as `mcp --tool-hashes <file>`. Every given set must hold: `mcp` refuses to start, naming the set and the tool names (never a hash), when a tool it exposes is missing from a set or hashes differently. Pinned tools the server does not enable (optional tools left off) are ignored.
+  - Test: packages/engine/tests/mcp-governance.test.ts :: refuses to start when a pinned tool definition hash drifts or an exposed tool is unpinned, and ignores pins for tools not enabled
+  - Test: packages/engine/tests/cli.test.ts :: lists tool definition hashes with mcp-tools --hashes and refuses to start mcp when a pinned hash in --tool-hashes or mcp.toolHashes drifts
 
 ## Security considerations
 

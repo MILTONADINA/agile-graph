@@ -225,6 +225,12 @@ export interface ProjectConfig {
   tester?: { providerId: string; writes?: string[] };
   /** Security settings a person records for the project. */
   security?: { liveTargets?: LiveTarget[] };
+  /**
+   * MCP server settings. toolHashes pins each tool's definition SHA-256
+   * (`graph-engine mcp-tools --hashes`); when set, `graph-engine mcp` refuses
+   * to start if a tool it exposes is unpinned or hashes differently.
+   */
+  mcp?: { toolHashes?: Record<string, string> };
 }
 /**
  * A target a person has authorized, in writing, for dynamic security testing.
@@ -876,6 +882,18 @@ export const projectSchema = {
           items: { ...globEntry, maxLength: 200 },
           // At least one entry that is not an exclusion.
           contains: { type: "string", pattern: "^[^!]" },
+        },
+      },
+    },
+    mcp: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        toolHashes: {
+          type: "object",
+          maxProperties: 200,
+          propertyNames: { pattern: "^[A-Za-z0-9_.-]{1,128}$" },
+          additionalProperties: { type: "string", pattern: "^[a-f0-9]{64}$" },
         },
       },
     },

@@ -32,6 +32,11 @@ export interface SecurityFinding {
   /** The resource a finding is about, when the tool reports one. */
   resource?: string;
   /**
+   * Classification tags, such as the OWASP MCP Top 10 IDs (`MCP01:2025`) an
+   * agent-config finding bears on. Not part of the fingerprint.
+   */
+  tags?: string[];
+  /**
    * Tool, rule, path, resource and the text around the flagged line; stable
    * across edits elsewhere in the file.
    */

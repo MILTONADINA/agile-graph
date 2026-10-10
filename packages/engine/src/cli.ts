@@ -3,7 +3,14 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { Command } from "commander";
-import { mkdir, open, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import {
@@ -12,6 +19,7 @@ import {
   INSTALLED_KINDS,
   isInstalledKind,
   type GeneratorRegistration,
+  type ProjectConfig,
   type ProviderConfig,
   type ProjectPolicy,
   type RunStatus,
@@ -93,7 +101,13 @@ import {
   runLiveScan,
 } from "./security/live.js";
 import { createServer } from "./server.js";
-import { serveMcp } from "./mcp.js";
+import {
+  createMcpServer,
+  mcpToolHashes,
+  serveMcp,
+  type McpServerOptions,
+  type McpToolHashPins,
+} from "./mcp.js";
 import { MCP_OPTIONAL_TOOLS, parseAllowedTools } from "./mcp-tools.js";
 import { listTemplates, scaffold, validateArtifacts } from "./templates.js";
 import { evaluateDecisions, type EvaluationRow } from "./decisions.js";
@@ -289,6 +303,45 @@ async function withRunEngine(
 // open engine's database worker keeps the process alive, so a step that
 // fails after the open must close it, or the error is printed and the
 // process never exits.
+/** The server options `mcp` and `mcp-tools` share, validated. */
+function mcpServerOptions(options: {
+  client: string;
+  allowTool: string[];
+  allowRun?: boolean;
+  allowRunStatus?: boolean;
+}): McpServerOptions {
+  const client = z.enum(["local", "cloud"]).safeParse(options.client);
+  if (!client.success)
+    throw new Error(`--client must be local or cloud, not ${options.client}`);
+  return {
+    client: client.data,
+    allowRun: options.allowRun,
+    allowRunStatus: options.allowRunStatus,
+    allowTools: parseAllowedTools(options.allowTool),
+  };
+}
+/** The project's pinned tool hashes, when it records any. */
+function projectToolHashPins(config: ProjectConfig): McpToolHashPins[] {
+  const hashes = config.mcp?.toolHashes;
+  return hashes ? [{ source: `${PROJECT_FILE} mcp.toolHashes`, hashes }] : [];
+}
+/** A --tool-hashes file: a JSON object of tool names to SHA-256s. */
+async function toolHashPinsFile(
+  file: string | undefined,
+): Promise<McpToolHashPins | undefined> {
+  if (file === undefined) return undefined;
+  const parsed = z
+    .record(
+      z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/),
+      z.string().regex(/^[a-f0-9]{64}$/),
+    )
+    .safeParse(JSON.parse(await readFile(path.resolve(file), "utf8")));
+  if (!parsed.success)
+    throw new Error(
+      "--tool-hashes must name a JSON object mapping tool names to lowercase SHA-256 hashes",
+    );
+  return { source: "--tool-hashes", hashes: parsed.data };
+}
 async function closeOnFailure<T>(
   engine: GraphEngine,
   fn: () => Promise<T>,
@@ -2206,18 +2259,21 @@ cli
     "--allow-run-status",
     "Alias for --allow-tool run_status, run_list and run_events (run status, usage, commit and PR metadata); a local client has them by default",
   )
+  .option(
+    "--tool-hashes <file>",
+    "A JSON file mapping tool names to definition SHA-256s (as mcp-tools --hashes prints them); refuse to start when an exposed tool is unpinned or differs. Checked in addition to the project's mcp.toolHashes",
+  )
   .action(async (options) => {
-    const client = z.enum(["local", "cloud"]).safeParse(options.client);
-    if (!client.success)
-      throw new Error(`--client must be local or cloud, not ${options.client}`);
-    const allowTools = parseAllowedTools(options.allowTool);
+    const serverOptions = mcpServerOptions(options);
+    const pins = await toolHashPinsFile(options.toolHashes);
     const engine = await GraphEngine.open(root());
     const server = await closeOnFailure(engine, () =>
       serveMcp(engine, {
-        client: client.data,
-        allowRun: options.allowRun,
-        allowRunStatus: options.allowRunStatus,
-        allowTools,
+        ...serverOptions,
+        toolHashPins: [
+          ...projectToolHashPins(engine.config),
+          ...(pins ? [pins] : []),
+        ],
       }),
     );
     // Output goes to stderr: stdout carries the MCP stream.
@@ -2231,6 +2287,28 @@ cli
         }
       },
     );
+  });
+cli
+  .command("mcp-tools")
+  .description(
+    "List the tools an MCP server started with these options would expose, and with --hashes each one's definition SHA-256 (name, description and input schema), so an operator can pin them in the project's mcp.toolHashes or a --tool-hashes file",
+  )
+  .option("--client <kind>", "local or cloud", "cloud")
+  .option(
+    "--allow-tool <name>",
+    "Count one optional tool as enabled; repeat for more",
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
+  .option("--allow-run", "As for mcp")
+  .option("--allow-run-status", "As for mcp")
+  .option("--hashes", "Include each tool's definition SHA-256")
+  .action(async (options) => {
+    const serverOptions = mcpServerOptions(options);
+    await withEngine(async (engine) => {
+      const hashes = mcpToolHashes(createMcpServer(engine, serverOptions));
+      return options.hashes ? hashes : Object.keys(hashes);
+    });
   });
 cli
   .command("feedback [note...]")

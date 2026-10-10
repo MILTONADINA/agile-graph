@@ -139,6 +139,20 @@ told only that the log could not be written, and the reason goes to the
 server's standard error. An entry whose outcome is `null` is a call still in
 progress, or one whose server stopped before it finished.
 
+## Pinning tool definitions
+
+Each entry also records `definitionSha256`, the SHA-256 of the called tool's
+name, description and input schema as the server published them. List them
+with `graph-engine mcp-tools --hashes`, passing the same `--client` and
+`--allow-tool` options as `mcp`. To pin them, copy that object into the
+project's `mcp.toolHashes` or into a file passed as
+`graph-engine mcp --tool-hashes <file>`. When pins are given, `mcp` refuses to
+start if a tool it would expose is unpinned or its definition changed; every
+given set must hold, and pins for optional tools left off are ignored. Review
+the change behind a refusal before updating the pins. See
+[MCP security coverage](mcp-security-coverage.md) for how this and the other
+guards map to the OWASP MCP Top 10.
+
 ### What a result leaves out
 
 `symbol_search` returns `{ symbols, limitations }`, `graph_neighbors` returns

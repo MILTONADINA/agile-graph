@@ -3,6 +3,11 @@ import {
   type ToolCallback,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  normalizeObjectSchema,
+  objectFromShape,
+} from "@modelcontextprotocol/sdk/server/zod-compat.js";
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import { z } from "zod";
 import {
   MAX_VERIFICATION_SELECTION,
@@ -95,6 +100,85 @@ export interface McpServerOptions {
   allowRunStatus?: boolean;
   /** Individual optional tools to enable (`--allow-tool`). */
   allowTools?: readonly McpOptionalTool[];
+  /**
+   * Operator-pinned tool definition hashes (tool name to SHA-256), each set
+   * with where it came from. Every set must hold: the server refuses to start
+   * when a tool it exposes is missing from a set or hashes differently.
+   * Pinned tools this server does not enable are ignored.
+   */
+  toolHashPins?: readonly McpToolHashPins[];
+}
+/** One operator-pinned set of tool definition hashes and where it came from. */
+export interface McpToolHashPins {
+  source: string;
+  hashes: Readonly<Record<string, string>>;
+}
+/**
+ * SHA-256 of one tool's definition as a client sees it in tools/list: the
+ * canonical JSON (keys sorted) of its name, description and JSON input
+ * schema, converted the way the MCP library converts it. A changed
+ * description or schema (a "rug pull") changes the hash.
+ */
+export function mcpToolDefinitionSha256(
+  name: string,
+  description: string,
+  inputSchema: z.ZodRawShape,
+): string {
+  // As the library stores a raw shape and its tools/list handler converts it.
+  const object = normalizeObjectSchema(objectFromShape(inputSchema));
+  return mcpToolListingSha256({
+    name,
+    description,
+    inputSchema: object
+      ? toJsonSchemaCompat(object, {
+          strictUnions: true,
+          pipeStrategy: "input",
+        })
+      : { type: "object", properties: {} },
+  });
+}
+/** The same hash computed from a tools/list entry. */
+export function mcpToolListingSha256(tool: {
+  name: string;
+  description?: string;
+  inputSchema: unknown;
+}): string {
+  return hash(
+    canonicalJson(
+      JSON.parse(
+        JSON.stringify({
+          name: tool.name,
+          description: tool.description ?? "",
+          inputSchema: tool.inputSchema,
+        }),
+      ),
+    ),
+  );
+}
+/**
+ * How exposed tools differ from a set of pins: tools the set leaves out and
+ * tools it hashes differently. Names only, sorted.
+ */
+export function mcpToolHashDrift(
+  actual: Readonly<Record<string, string>>,
+  pinned: Readonly<Record<string, string>>,
+): { unpinned: string[]; changed: string[] } {
+  const names = Object.keys(actual).sort();
+  return {
+    unpinned: names.filter((name) => !Object.hasOwn(pinned, name)),
+    changed: names.filter(
+      (name) => Object.hasOwn(pinned, name) && pinned[name] !== actual[name],
+    ),
+  };
+}
+const toolHashesByServer = new WeakMap<McpServer, Record<string, string>>();
+/** The definition hash of every tool a server created here exposes. */
+export function mcpToolHashes(server: McpServer): Record<string, string> {
+  const hashes = toolHashesByServer.get(server);
+  if (!hashes) throw new Error("Not a Graph Engineering MCP server");
+  return Object.fromEntries(
+    Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)),
+  );
 }
 /**
  * The optional tools a server exposes: those named with allowTools, the
@@ -131,6 +215,8 @@ export function createMcpServer(
     content: [{ type: "text" as const, text: JSON.stringify(value) }],
   });
   const enabled = enabledMcpTools(options);
+  const toolHashes: Record<string, string> = {};
+  toolHashesByServer.set(server, toolHashes);
   const cloud = options.client === "cloud";
   /**
    * Builds a result's limitations. A cloud client gets fixed sentences and
@@ -215,8 +301,14 @@ export function createMcpServer(
       args: z.objectOutputType<Shape, z.ZodTypeAny>,
       value: unknown,
     ) => { planId?: unknown; runId?: unknown },
-  ) =>
-    server.registerTool(tool, config, (async (
+  ) => {
+    const definitionSha256 = mcpToolDefinitionSha256(
+      tool,
+      config.description,
+      config.inputSchema,
+    );
+    toolHashes[tool] = definitionSha256;
+    return server.registerTool(tool, config, (async (
       args: z.objectOutputType<Shape, z.ZodTypeAny>,
     ) => {
       let callId: string | undefined;
@@ -225,6 +317,7 @@ export function createMcpServer(
           tool,
           clientKind: options.client,
           argsSha256: mcpArgsSha256(args),
+          definitionSha256,
         });
       } catch (error) {
         logFailure(tool, error);
@@ -254,6 +347,7 @@ export function createMcpServer(
           }
       }
     }) as unknown as ToolCallback<Shape>);
+  };
   register(
     "context_get",
     {
@@ -814,6 +908,13 @@ export function createMcpServer(
       },
       ({ runId }) => ({ runId }),
     );
+  for (const pins of options.toolHashPins ?? []) {
+    const drift = mcpToolHashDrift(toolHashes, pins.hashes);
+    if (drift.unpinned.length || drift.changed.length)
+      throw new Error(
+        `Refusing to start the MCP server: its tool definitions do not match the hashes pinned in ${pins.source}${drift.changed.length ? `; changed: ${drift.changed.join(", ")}` : ""}${drift.unpinned.length ? `; not pinned: ${drift.unpinned.join(", ")}` : ""}. Compare graph-engine mcp-tools --hashes with the pins and update them only after reviewing the change`,
+      );
+  }
   return server;
 }
 export async function serveMcp(
