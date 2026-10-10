@@ -1,4 +1,4 @@
-# MCP governance: approval, call log and tool allowlist
+# MCP governance: approval, call log, tool allowlist and result limitations
 
 - ID: mcp-governance
 - Status: implemented
@@ -13,7 +13,9 @@ and change a workspace. Nothing recorded which tools a client called, so an
 operator could not tell afterwards what a client had attempted. Run control
 and run status could only be enabled as two fixed groups, so an operator who
 wanted a client to follow runs and cancel them, but not start them, could not
-say so.
+say so. A client also could not tell when a search, graph or context result
+was incomplete, and the plan objective limit was written out as a literal in
+three places.
 
 ## Acceptance criteria
 
@@ -37,6 +39,12 @@ say so.
   - Test: packages/engine/tests/mcp-governance.test.ts :: enables individual tools with allowTools, keeps allowRun and allowRunStatus as aliases for their tool sets, and refuses unknown tool names
   - Test: packages/engine/tests/cli.test.ts :: refuses an unknown --allow-tool name before starting the MCP server
   - Test: packages/engine/tests/mcp.test.ts :: lets a connected client plan, start, follow, list and cancel runs only when enabled
+- AC7: `symbol_search` returns `{ symbols, limitations }`, `graph_neighbors` returns `{ edges, limitations }`, and `context_get`'s packet carries `limitations`. Limitations hold counts and flags only: `filtered` (results withheld by credential screening), `truncated` (the result reached its limit: 100 symbols, 200 edges, or candidates left out by the token budget or deduplication), `coverageIncomplete` (indexing reported files it could not cover), for `graph_neighbors` `unresolvedEdges` (edges whose `to` is null), and `notes`. A cloud client's notes are fixed sentences that name no path and carry no diagnostic, and always say that results outside the export policy are left out before counting; a local client's notes also carry the indexing diagnostics. For a cloud client, results outside the export policy are never counted, in `filtered` or in `truncated`, since a count would tell a client how many private names contain text it chooses; a local client has nothing withheld, so its `filtered` is 0.
+  - Test: packages/engine/tests/mcp-governance.test.ts :: states a cloud client's result limitations as counts and fixed sentences, never paths, diagnostics or a count of private matches
+  - Test: packages/engine/tests/mcp-governance.test.ts :: gives a local client the same limitations with the indexing diagnostics
+  - Test: packages/engine/tests/mcp.test.ts :: cloud graph traversal cannot expose resolved private targets or bridge through private nodes
+- AC8: A plan objective is bounded by one constant, `MAX_PLAN_OBJECTIVE` in `planning.ts` (16000 characters), in MCP `plan_create` and `plan_decompose` and in the dashboard API's plan creation.
+  - Test: packages/engine/tests/mcp-governance.test.ts :: bounds a plan objective by MAX_PLAN_OBJECTIVE in plan_create, plan_decompose and the dashboard API
 
 ## Security considerations
 
@@ -51,6 +59,16 @@ Plan and run IDs are kept only when they name the project's own records, since
 an unknown ID is client input. Logging fails closed for tools that change
 state, so an action cannot happen unrecorded, and open for reads, so a full
 disk does not stop a client reading context it is already allowed to see.
+
+Limitations count only what a client could see the shape of anyway. The
+request was to count results filtered by export policy as well, but for
+`symbol_search` the export filter is the only boundary between a cloud client
+and the names of private declarations: a count of what it removed would answer
+"how many private names contain this text" for any text the client chooses.
+So results outside the export policy are dropped before anything is counted,
+and only credential screening of exportable results is counted. A cloud
+client's notes are fixed sentences, never interpolated, in the same register
+as the fixed warnings its `context_get` packets already carry.
 
 ## Non-goals
 

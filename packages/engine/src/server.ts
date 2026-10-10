@@ -18,6 +18,7 @@ import {
 } from "@graph-engineering/contracts";
 import type { GraphEngine } from "./service.js";
 import { dockerAvailable } from "./execution/docker.js";
+import { MAX_PLAN_OBJECTIVE } from "./planning.js";
 import { listTemplates } from "./templates.js";
 import { projectOverview } from "./overview.js";
 import { summarizeOutcomes } from "./insights.js";
@@ -283,7 +284,7 @@ export function createServer(
     const plan = await engine.createPlan(
       z
         .object({
-          objective: z.string().min(1).max(16000),
+          objective: z.string().min(1).max(MAX_PLAN_OBJECTIVE),
           acceptance: z.array(z.string().min(1).max(4000)).min(1).max(50),
           providerId: z.string().optional(),
           effort: z.string().optional(),

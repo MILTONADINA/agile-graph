@@ -88,7 +88,9 @@ With `graph-engine mcp --allow-run`, a connected client (Claude Code, Codex,
 Cursor) can call `plan_decompose`, show the steps to the person, and create
 the plan with `plan_create` passing the approved steps. Over MCP the
 approval is the person's answer to the client, and the client's own
-permission prompt for `plan_create`. For a cloud-backed client, the planner
+permission prompt for `plan_create`. Starting the plan's run with `run_start` then needs a
+person's approval on the command line, `graph-engine plan-approve <planId>
+--yes`, whatever the plan publishes. For a cloud-backed client, the planner
 sees only exportable context whatever its kind, proposed text containing a
 potential secret is refused, and the call works only while publication is
 `none`. Its `plan_create` is also refused unless the plan's worker steps,
