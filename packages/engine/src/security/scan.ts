@@ -127,13 +127,16 @@ const fingerprint = (parts: string[]) =>
   createHash("sha256").update(parts.join("\0")).digest("hex").slice(0, 32);
 
 // Fingerprints use the text around the flagged line and the tool's resource,
-// numbering repeats so identical findings in one file stay distinct.
+// numbering repeats so identical findings in one file stay distinct. A tool
+// that knows the whole declaration a finding is about (agent-config's MCP
+// servers and hooks) passes its hash as `identity`, which joins the
+// fingerprint, so a change outside those lines is seen; it is not recorded.
 export function withFingerprints(
-  raw: Omit<SecurityFinding, "fingerprint">[],
-  lines: (file: string) => string[] | undefined,
+  raw: (Omit<SecurityFinding, "fingerprint"> & { identity?: string })[],
+  lines: (file: string) => readonly string[] | undefined,
 ): SecurityFinding[] {
   const seen = new Map<string, number>();
-  return raw.map((finding) => {
+  return raw.map(({ identity, ...finding }) => {
     const text = lines(finding.path) ?? [];
     const context = text
       .slice(
@@ -148,6 +151,7 @@ export function withFingerprints(
       finding.path,
       finding.resource ?? "",
       context,
+      ...(identity === undefined ? [] : [identity]),
     ]);
     const count = (seen.get(base) ?? 0) + 1;
     seen.set(base, count);
@@ -556,7 +560,9 @@ export async function runSecurityScan(options: {
         );
       return result;
     };
-    const raw: Omit<SecurityFinding, "fingerprint">[] = [];
+    const raw: (Omit<SecurityFinding, "fingerprint"> & {
+      identity?: string;
+    })[] = [];
     const errors: string[] = [];
     const tools: string[] = [];
     for (const { tool } of selected) {
@@ -640,7 +646,7 @@ export async function runSecurityScan(options: {
         } else if (tool.id === "agent-config") {
           // In-process, over the same tracked files; no container.
           const result = agentConfigFindings(lines);
-          raw.push(...result.findings);
+          for (const found of result.findings) raw.push(found);
           for (const entry of result.unscanned)
             if (!unscanned.some((known) => known.path === entry.path))
               unscanned.push(entry);
