@@ -1,8 +1,7 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { devNull } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { z } from "zod";
 import type {
   ProjectPolicy,
@@ -89,6 +88,7 @@ export const runProvenanceSchema = z
         resultCommit: gitObject.nullable(),
         verifiedSnapshotHash: sha256.nullable(),
         removedFiles: z.array(z.string()),
+        filesTruncated: z.boolean(),
         approval: z
           .object({
             planSha256: sha256,
@@ -118,23 +118,41 @@ export type RunProvenance = z.infer<typeof runProvenanceSchema>;
 export interface ChangedFiles {
   /** Repository-relative paths and the sha256 of their bytes at the commit. */
   files: { path: string; sha256: string }[];
+  /** Submodule pointers (gitlinks) the commit set, with the commit each names. */
+  submodules?: { path: string; commit: string }[];
   /** Paths the commit removed; with no bytes left they are not subjects. */
   removed: string[];
+  /** True when more files changed than the digest limits allow. */
+  truncated?: boolean;
 }
+
+/** Limits on the files digested for one statement. */
+export const PROVENANCE_MAX_FILES = 5_000;
+export const PROVENANCE_MAX_BYTES = 256 * 1024 * 1024;
 
 const text = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 const hex64 = (value: unknown): string | null =>
   typeof value === "string" && /^[a-f0-9]{64}$/.test(value) ? value : null;
 
-// A local provider's model may name a file on disk; only its base name says
-// which model ran, and a full path can name the person's home directory.
+// A local provider's model may name a file on disk or an endpoint; only its
+// last name says which model ran, and a full path or URL can name the
+// person's home directory or a private host. A URL is reduced to its last
+// path segment, and to nothing when it has none.
 function modelName(model: unknown): string | null {
   const name = text(model);
   if (name === null) return null;
-  return /^([/~\\]|[A-Za-z]:[\\/])/.test(name)
-    ? path.basename(name.replace(/\\/g, "/"))
-    : name;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(name)) {
+    let segment: string | undefined;
+    try {
+      segment = new URL(name).pathname.split("/").filter(Boolean).pop();
+    } catch {
+      return null;
+    }
+    return segment ? decodeURIComponent(segment) : null;
+  }
+  if (!/[/\\]/.test(name)) return name;
+  return path.posix.basename(name.replace(/\\/g, "/")) || null;
 }
 
 /**
@@ -252,12 +270,17 @@ export function buildRunProvenance(input: {
   const subject: RunProvenance["subject"] = commit
     ? [
         { name: "git+commit", digest: { gitCommit: commit } },
-        ...[...changed.files]
-          .sort((a, b) => a.path.localeCompare(b.path))
-          .map((file) => ({
+        ...[
+          ...changed.files.map((file) => ({
             name: file.path,
-            digest: { sha256: file.sha256 },
+            digest: { sha256: file.sha256 } as
+              { sha256: string } | { gitCommit: string },
           })),
+          ...(changed.submodules ?? []).map((link) => ({
+            name: link.path,
+            digest: { gitCommit: link.commit },
+          })),
+        ].sort((a, b) => a.name.localeCompare(b.name)),
       ]
     : verifiedSnapshotHash
       ? [
@@ -289,6 +312,7 @@ export function buildRunProvenance(input: {
       resultCommit: commit,
       verifiedSnapshotHash,
       removedFiles: commit ? [...changed.removed].sort() : [],
+      filesTruncated: commit ? changed.truncated === true : false,
       approval,
       workers: [...workers.values()],
       gates,
@@ -305,64 +329,199 @@ export function buildRunProvenance(input: {
   });
 }
 
-const execFileBuffer = promisify(execFile);
+/** Runs one `git cat-file <mode>` over the given object ids; returns stdout. */
+function gitBatch(
+  root: string,
+  mode: "--batch-check",
+  ids: readonly string[],
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "git",
+      ["-c", `core.hooksPath=${devNull}`, "cat-file", mode],
+      {
+        cwd: root,
+        env: subprocessEnvironment(),
+        stdio: ["pipe", "pipe", "ignore"],
+      },
+    );
+    const chunks: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    child.on("error", reject);
+    child.stdin.on("error", reject);
+    child.on("close", (code) =>
+      code === 0
+        ? resolve(Buffer.concat(chunks))
+        : reject(new Error("Cannot read a changed file's bytes")),
+    );
+    child.stdin.end(ids.map((id) => `${id}\n`).join(""));
+  });
+}
+
+/**
+ * Streams each object through one `git cat-file --batch` process and returns
+ * the sha256 of its bytes, without holding more than one chunk at a time.
+ */
+function digestBlobs(root: string, ids: readonly string[]): Promise<string[]> {
+  if (!ids.length) return Promise.resolve([]);
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "git",
+      ["-c", `core.hooksPath=${devNull}`, "cat-file", "--batch"],
+      {
+        cwd: root,
+        env: subprocessEnvironment(),
+        stdio: ["pipe", "pipe", "ignore"],
+      },
+    );
+    const digests: string[] = [];
+    let header = Buffer.alloc(0);
+    let remaining = -1; // bytes of content still to read; -1 = reading header
+    let trailer = false;
+    let current = createHash("sha256");
+    let failed = false;
+    const fail = (error: Error) => {
+      if (failed) return;
+      failed = true;
+      child.kill();
+      reject(error);
+    };
+    child.on("error", fail);
+    child.stdout.on("data", (chunk: Buffer) => {
+      let at = 0;
+      while (at < chunk.length && !failed) {
+        if (trailer) {
+          at += 1; // the newline after each object's content
+          trailer = false;
+          digests.push(current.digest("hex"));
+          continue;
+        }
+        if (remaining < 0) {
+          const newline = chunk.indexOf(10, at);
+          if (newline < 0) {
+            header = Buffer.concat([header, chunk.subarray(at)]);
+            return;
+          }
+          const line = Buffer.concat([
+            header,
+            chunk.subarray(at, newline),
+          ]).toString("utf8");
+          header = Buffer.alloc(0);
+          at = newline + 1;
+          const match = /^[a-f0-9]+ blob (\d+)$/.exec(line);
+          if (!match)
+            return fail(new Error("Cannot read a changed file's bytes"));
+          remaining = Number(match[1]);
+          current = createHash("sha256");
+        }
+        const take = Math.min(remaining, chunk.length - at);
+        current.update(chunk.subarray(at, at + take));
+        at += take;
+        remaining -= take;
+        if (remaining === 0) {
+          remaining = -1;
+          trailer = true;
+        }
+      }
+    });
+    child.on("close", (code) => {
+      if (failed) return;
+      if (code !== 0 || digests.length !== ids.length)
+        return fail(new Error("Cannot read a changed file's bytes"));
+      resolve(digests);
+    });
+    child.stdin.on("error", fail);
+    child.stdin.end(ids.map((id) => `${id}\n`).join(""));
+  });
+}
 
 /**
  * The files a result commit changed against its base, each with the sha256
  * of its bytes at the commit. Read from the repository's object store (a run
- * workspace is a worktree of it), with hooks off and no filters applied.
+ * workspace is a worktree of it), with hooks off and no filters applied. A
+ * submodule pointer has no bytes here and is reported by the commit it names.
+ * At most PROVENANCE_MAX_FILES files and PROVENANCE_MAX_BYTES bytes are
+ * digested; past either, the rest are left out and `truncated` is set.
  */
 export async function changedFileDigests(
   root: string,
   baseCommit: string | undefined,
   commit: string,
+  limits: { maxFiles?: number; maxBytes?: number } = {},
 ): Promise<ChangedFiles> {
   // Every run the engine publishes records the commit it started from.
   if (!baseCommit)
     throw new Error("This run recorded no base commit to compare against");
+  const maxFiles = limits.maxFiles ?? PROVENANCE_MAX_FILES;
+  const maxBytes = limits.maxBytes ?? PROVENANCE_MAX_BYTES;
   const listed = await managedGit(root, [
     "diff-tree",
     "-r",
     "-z",
     "--no-renames",
-    "--name-status",
+    "--raw",
+    "--no-abbrev",
     baseCommit,
     commit,
   ]);
   if (listed.code !== 0)
     throw new Error("Cannot list the files the result commit changed");
-  const fields = listed.stdout.split("\0").filter(Boolean);
-  const files: ChangedFiles["files"] = [];
+  const fields = listed.stdout.split("\0");
+  const blobs: { path: string; id: string }[] = [];
+  const submodules: NonNullable<ChangedFiles["submodules"]> = [];
   const removed: string[] = [];
   for (let index = 0; index + 1 < fields.length; index += 2) {
-    const status = fields[index]!,
-      file = fields[index + 1]!;
-    if (status === "D") {
-      removed.push(file);
-      continue;
-    }
-    const { stdout } = await execFileBuffer(
-      "git",
-      [
-        "-c",
-        `core.hooksPath=${devNull}`,
-        "cat-file",
-        "blob",
-        `${commit}:${file}`,
-      ],
-      {
-        cwd: root,
-        encoding: "buffer",
-        maxBuffer: 512 * 1024 * 1024,
-        env: subprocessEnvironment(),
-      },
+    const meta = /^:\d+ (\d+) [a-f0-9]+ ([a-f0-9]+) ([A-Z])\d*$/.exec(
+      fields[index]!,
     );
-    files.push({
-      path: file,
-      sha256: createHash("sha256").update(stdout).digest("hex"),
-    });
+    const file = fields[index + 1]!;
+    if (!meta)
+      throw new Error("Cannot list the files the result commit changed");
+    const [, mode, id, status] = meta;
+    if (status === "D") removed.push(file);
+    else if (mode === "160000") submodules.push({ path: file, commit: id! });
+    else blobs.push({ path: file, id: id! });
   }
-  return { files, removed };
+  const sizes = blobs.length
+    ? (
+        await gitBatch(
+          root,
+          "--batch-check",
+          blobs.map((blob) => blob.id),
+        )
+      )
+        .toString("utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const size = /^[a-f0-9]+ blob (\d+)$/.exec(line)?.[1];
+          if (size === undefined)
+            throw new Error("Cannot read a changed file's bytes");
+          return Number(size);
+        })
+    : [];
+  let total = 0;
+  let count = 0;
+  while (
+    count < blobs.length &&
+    count < maxFiles &&
+    total + sizes[count]! <= maxBytes
+  )
+    total += sizes[count++]!;
+  const kept = blobs.slice(0, count);
+  const digests = await digestBlobs(
+    root,
+    kept.map((blob) => blob.id),
+  );
+  return {
+    files: kept.map((blob, index) => ({
+      path: blob.path,
+      sha256: digests[index]!,
+    })),
+    submodules,
+    removed,
+    truncated: count < blobs.length,
+  };
 }
 
 /** Where a run's statement is written when a person accepts it. */

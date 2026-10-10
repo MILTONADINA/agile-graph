@@ -264,6 +264,34 @@ describe("run provenance statement", () => {
     expect(containsSecret(text)).toBe(false);
   });
 
+  it("reduces any model path to its base name and a model URL to its last path segment", () => {
+    const models = [
+      ["models/user-dir/x.gguf", "x.gguf"],
+      ["C:\\Users\\someone\\m.gguf", "m.gguf"],
+      ["http://10.0.0.5:8080/v1/models/qwen.gguf", "qwen.gguf"],
+      ["http://localhost:11434", null],
+      ["plain-model", "plain-model"],
+    ] as const;
+    for (const [model, expected] of models) {
+      const { run, events } = receipt();
+      const dispatched = events.find(
+        (event) => event.type === "worker.dispatched",
+      )!;
+      dispatched.data = { ...dispatched.data, model };
+      const statement = buildRunProvenance({
+        run,
+        events,
+        changed,
+        providers,
+        policy: DEFAULT_POLICY,
+      });
+      expect(statement.predicate.workers[0]!.model).toBe(expected);
+      const text = JSON.stringify(statement);
+      for (const leaked of ["user-dir", "10.0.0.5", "localhost", "someone"])
+        expect(text).not.toContain(leaked);
+    }
+  });
+
   it("refuses a run a person has not accepted", () => {
     for (const humanAcceptance of ["pending", "rejected"] as const) {
       const { run, events } = receipt();
@@ -310,7 +338,106 @@ describe("run provenance statement", () => {
   });
 });
 
+async function toyRepository(): Promise<{
+  root: string;
+  head: () => Promise<string>;
+}> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "graph-provenance-git-"));
+  directories.push(root);
+  await checked("git", ["init", "-b", "dev"], { cwd: root });
+  await checked("git", ["config", "user.name", "Toy"], { cwd: root });
+  await checked("git", ["config", "user.email", "toy@example.invalid"], {
+    cwd: root,
+  });
+  await writeFile(path.join(root, "keep.txt"), "keep\n");
+  await checked("git", ["add", "."], { cwd: root });
+  await checked("git", ["commit", "-m", "base"], { cwd: root });
+  return {
+    root,
+    head: async () =>
+      (await checked("git", ["rev-parse", "HEAD"], { cwd: root })).trim(),
+  };
+}
+
 describe("run provenance from a real run", () => {
+  it("records a changed submodule pointer as a subject named by the commit it points to", async () => {
+    const { root, head } = await toyRepository();
+    const base = await head();
+    const pointed = "1".repeat(40);
+    await checked(
+      "git",
+      ["update-index", "--add", "--cacheinfo", `160000,${pointed},vendor/sub`],
+      { cwd: root },
+    );
+    await writeFile(path.join(root, "a.txt"), "a\n");
+    await checked("git", ["add", "a.txt"], { cwd: root });
+    await checked("git", ["commit", "-m", "submodule"], { cwd: root });
+    const commit = await head();
+    const changed = await changedFileDigests(root, base, commit);
+    expect(changed).toEqual({
+      files: [
+        {
+          path: "a.txt",
+          sha256: createHash("sha256").update("a\n").digest("hex"),
+        },
+      ],
+      submodules: [{ path: "vendor/sub", commit: pointed }],
+      removed: [],
+      truncated: false,
+    });
+    const { run, events } = receipt({ commit });
+    const statement = buildRunProvenance({
+      run,
+      events,
+      changed,
+      providers,
+      policy: DEFAULT_POLICY,
+    });
+    expect(statement.subject).toEqual([
+      { name: "git+commit", digest: { gitCommit: commit } },
+      { name: "a.txt", digest: { sha256: changed.files[0]!.sha256 } },
+      { name: "vendor/sub", digest: { gitCommit: pointed } },
+    ]);
+    expect(statement.predicate.filesTruncated).toBe(false);
+  });
+
+  it("stops digesting past the file and byte limits and records that the list was truncated", async () => {
+    const { root, head } = await toyRepository();
+    const base = await head();
+    for (const name of ["a.txt", "b.txt", "c.txt"])
+      await writeFile(path.join(root, name), `${name}\n`.repeat(10));
+    await checked("git", ["add", "."], { cwd: root });
+    await checked("git", ["commit", "-m", "many"], { cwd: root });
+    const commit = await head();
+    const all = await changedFileDigests(root, base, commit);
+    expect(all.files.map((file) => file.path)).toEqual([
+      "a.txt",
+      "b.txt",
+      "c.txt",
+    ]);
+    expect(all.truncated).toBe(false);
+    const byCount = await changedFileDigests(root, base, commit, {
+      maxFiles: 2,
+    });
+    expect(byCount.files).toEqual(all.files.slice(0, 2));
+    expect(byCount.truncated).toBe(true);
+    const byBytes = await changedFileDigests(root, base, commit, {
+      maxBytes: 100,
+    });
+    expect(byBytes.files).toEqual(all.files.slice(0, 1));
+    expect(byBytes.truncated).toBe(true);
+    const { run, events } = receipt({ commit });
+    expect(
+      buildRunProvenance({
+        run,
+        events,
+        changed: byCount,
+        providers,
+        policy: DEFAULT_POLICY,
+      }).predicate.filesTruncated,
+    ).toBe(true);
+  });
+
   it("digests each changed file's bytes at the result commit", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "graph-provenance-git-"));
     directories.push(root);
@@ -341,7 +468,9 @@ describe("run provenance from a real run", () => {
           sha256: createHash("sha256").update(bytes).digest("hex"),
         },
       ],
+      submodules: [],
       removed: ["gone.txt"],
+      truncated: false,
     });
     await expect(changedFileDigests(root, undefined, commit)).rejects.toThrow(
       "no base commit",

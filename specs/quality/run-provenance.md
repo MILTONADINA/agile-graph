@@ -22,14 +22,21 @@ Once a person accepts a run's result, other tools (a CI system, a release proces
   - Test: packages/engine/tests/run-provenance.test.ts :: attests the verified snapshot when a run published no commit
 - AC6: Changed-file digests are the sha256 of each file's exact bytes at the result commit, read from the repository's object store; removed files are listed in the predicate, not as subjects. A run with no recorded base commit is refused rather than diffed against a guess.
   - Test: packages/engine/tests/run-provenance.test.ts :: digests each changed file's bytes at the result commit
-- AC7: Accepting a run writes its statement to `provenance/<runId>.intoto.json` in the project data directory; a failure to write is recorded as a `provenance.capture_failed` event and never reverts the acceptance. `graph-engine run-provenance <runId> [--out file]` builds the same statement read-only.
+- AC7: Accepting a run writes its statement to `provenance/<runId>.intoto.json` in the project data directory; a failure to write is recorded as a `provenance.capture_failed` event and never reverts the acceptance. `graph-engine run-provenance <runId> [--out file]` prints the statement stored at acceptance, and builds it read-only only when none was stored.
   - Test: packages/engine/tests/run-provenance.test.ts :: writes the statement when a person accepts a run that committed its result
-- AC8: `graph-engine run-provenance` refuses a run still pending acceptance, and after `graph-engine accept` prints (or with `--out` writes) the same statement the acceptance wrote, reporting the plan approval the run used.
+- AC8: `graph-engine run-provenance` refuses a run still pending acceptance, and after `graph-engine accept` prints (or with `--out` writes) the same statement the acceptance wrote, reporting the plan approval the run used. It prints the stored statement even after the project policy or providers change, and rebuilds only when no statement was stored.
   - Test: packages/engine/tests/cli.test.ts :: refuses graph-engine run of a plan that does not publish until plan-approve --yes when the project requires plan approval, and the run records that non-interactive approval
+
+- AC9: A changed submodule pointer (gitlink) is a subject named by its path with a `gitCommit` digest of the commit it points to, rather than failing the statement.
+  - Test: packages/engine/tests/run-provenance.test.ts :: records a changed submodule pointer as a subject named by the commit it points to
+- AC10: Changed files are digested by streaming through one `git cat-file --batch` process, at most 5,000 files and 256 MiB in total; past either limit the rest are left out and the predicate's `filesTruncated` is true.
+  - Test: packages/engine/tests/run-provenance.test.ts :: stops digesting past the file and byte limits and records that the list was truncated
+- AC11: A model value containing a path separator is reduced to its base name, and a model given as a URL to its last path segment (null when it has none), so no directory, host or endpoint appears.
+  - Test: packages/engine/tests/run-provenance.test.ts :: reduces any model path to its base name and a model URL to its last path segment
 
 ## Security considerations
 
-The statement is built from fields picked one by one, never from whole records: hashes, IDs, model names, timestamps and gate results. Free text from events (notes, summaries, check output) and plan text (objective, acceptance) are never read into it. A pinned executable is identified by its sha256 and version only, since its resolved path can name the person's home directory; a model given as a filesystem path is reduced to its base name. The pull request URL is left out because it names an account. The CLI command is local only and is not offered over MCP.
+The statement is built from fields picked one by one, never from whole records: hashes, IDs, model names, timestamps and gate results. Free text from events (notes, summaries, check output) and plan text (objective, acceptance) are never read into it. A pinned executable is identified by its sha256 and version only, since its resolved path can name the person's home directory; a model given as a filesystem path (absolute or relative) is reduced to its base name, and one given as a URL to its last path segment. The pull request URL is left out because it names an account. The CLI command is local only and is not offered over MCP.
 
 The statement is unsigned (`signed: false`). Signing it, for example with Sigstore, is a future option the owner decides on, and must never use the promotion keys. An unsigned statement is a record, not promotion evidence.
 

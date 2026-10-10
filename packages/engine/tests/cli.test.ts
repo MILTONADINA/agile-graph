@@ -2534,6 +2534,34 @@ describe("command line", () => {
         0,
       );
       expect(JSON.parse(await readFile(out, "utf8"))).toEqual(statement);
+      // The command reads the statement stored at acceptance rather than
+      // recomputing it from the current policy and providers.
+      const storedPath = path.join(
+        data,
+        "projects",
+        projectId,
+        "provenance",
+        `${run.id}.intoto.json`,
+      );
+      const tampered = {
+        ...statement,
+        predicate: {
+          ...statement.predicate,
+          decisionMode: "promoted",
+          timestamps: {
+            ...statement.predicate.timestamps,
+            acceptedAt: "2001-01-01T00:00:00.000Z",
+          },
+        },
+      };
+      await writeFile(storedPath, JSON.stringify(tampered));
+      expect(
+        JSON.parse((await graph("run-provenance", run.id)).stdout),
+      ).toEqual(tampered);
+      await rm(storedPath);
+      expect(
+        JSON.parse((await graph("run-provenance", run.id)).stdout),
+      ).toEqual(statement);
     },
     300_000,
   );
