@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -13,20 +13,32 @@ import {
   PROJECT_FILE,
 } from "../src/project.js";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
-import { checked, writeJson } from "../src/util.js";
+import { checked, hash, writeJson } from "../src/util.js";
 import { stoppedAtReview } from "../src/overview.js";
 import {
+  assertVendoredPins,
   auditRecord,
+  AuditNotSentError,
   candidateFingerprint,
   HUNTER_INSTRUCTIONS,
   huntSchema,
   invokeSecurityHunter,
   invokeSecurityVerifier,
+  STATIC_TRACE_BLOCKER,
   validateFindings,
+  vendoredPath,
   VERIFIER_INSTRUCTIONS,
   type AuditCandidate,
   type AuditVerification,
 } from "../src/security/audit.js";
+
+// The engine's pin check, passed through to the real one unless a test makes
+// it refuse, to show it runs before anything else in an audit.
+vi.mock("../src/security/audit.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../src/security/audit.js")>();
+  return { ...actual, assertVendoredPins: vi.fn(actual.assertVendoredPins) };
+});
 
 const roots: string[] = [];
 const engines: GraphEngine[] = [];
@@ -102,15 +114,8 @@ const changed = new Set(["math.cjs"]);
 
 describe("audit records", () => {
   it("validates records with Cloudflare's vendored validator and report schema", () => {
-    const good = auditRecord(candidate(), confirmed, changed);
+    const good = auditRecord(candidate(), rejected, changed);
     expect(good.errors).toEqual([]);
-    expect(good.record).toMatchObject({
-      verdict: "confirmed",
-      fingerprint: candidateFingerprint(candidate()),
-      execution: {
-        observed_result: expect.stringContaining("Not executed"),
-      },
-    });
     expect(validateFindings([good.record])).toEqual([]);
     const refuted = auditRecord(candidate(), rejected, changed);
     expect(refuted.errors).toEqual([]);
@@ -131,21 +136,15 @@ describe("audit records", () => {
       changed,
     );
     expect(pending.errors).toEqual([]);
-    // Cloudflare's own checks: severity above impact, a confirmed finding
-    // without severity or reproduction, a trace not ending at a sink, and a
-    // file outside the audited change are each refused.
-    for (const verification of [
-      {
-        ...confirmed,
-        severity: { ...confirmed.severity!, overall_severity: "critical" },
-      },
-      { ...confirmed, severity: null },
-      { ...confirmed, reproduction: null },
-      { ...confirmed, trace: [confirmed.trace[1]!, confirmed.trace[0]!] },
-    ] as AuditVerification[])
-      expect(
-        auditRecord(candidate(), verification, changed).errors,
-      ).not.toEqual([]);
+    // Cloudflare's own checks: a trace not starting at an entrypoint and
+    // ending at a sink, and a file outside the audited change, are refused.
+    expect(
+      auditRecord(
+        candidate(),
+        { ...confirmed, trace: [confirmed.trace[1]!, confirmed.trace[0]!] },
+        changed,
+      ).errors,
+    ).not.toEqual([]);
     expect(
       auditRecord(candidate({ file: "../etc/passwd" }), rejected, changed)
         .errors,
@@ -162,6 +161,55 @@ describe("audit records", () => {
     ).toContain("did not touch");
     // The document must be sorted and free of duplicates.
     expect(validateFindings([good.record, good.record])).not.toEqual([]);
+  });
+});
+
+describe("statically traced findings", () => {
+  it("never reports confirmed: a verifier's static trace is needs_validation with its full trace and expected result", () => {
+    const traced = auditRecord(
+      candidate(),
+      {
+        ...confirmed,
+        trace: [
+          confirmed.trace[0]!,
+          {
+            kind: "propagation",
+            file: "math.cjs",
+            line: 1,
+            scope: "add",
+            description: "a is interpolated into a command string.",
+          },
+          confirmed.trace[1]!,
+        ],
+      },
+      changed,
+    );
+    expect(traced.errors).toEqual([]);
+    expect(traced.record.verdict).toBe("needs_validation");
+    expect(traced.record).toMatchObject({
+      fingerprint: candidateFingerprint(candidate()),
+      claimed_root_cause: confirmed.root_cause,
+      blockers: [STATIC_TRACE_BLOCKER],
+    });
+    expect(
+      (traced.record.trace as { kind: string }[]).map((entry) => entry.kind),
+    ).toEqual(["entrypoint", "propagation", "sink"]);
+    const plan = (traced.record.validation_plan as { local: string }).local;
+    expect(plan).toContain("Nothing was executed");
+    expect(plan).toContain("Expected result: The shell runs id.");
+    expect(plan).toContain("Payloads: 1; id");
+    // Fields Cloudflare reserves for a demonstrated finding are absent.
+    for (const field of ["execution", "severity", "remediation", "root_cause"])
+      expect(traced.record).not.toHaveProperty(field);
+    expect(validateFindings([traced.record])).toEqual([]);
+    // Without a reproduction the record still needs a local plan.
+    const bare = auditRecord(
+      candidate(),
+      { ...confirmed, reproduction: null, severity: null },
+      changed,
+    );
+    expect(bare.errors).toEqual([]);
+    expect(bare.record.verdict).toBe("needs_validation");
   });
 });
 
@@ -218,6 +266,37 @@ describe("security audit workers", () => {
     });
   });
 
+  it("lets a chat provider audit", async () => {
+    vi.stubEnv("GRAPH_TEST_AUDIT_CHAT_KEY", "fixture-only-not-a-real-key");
+    const gateway = {
+      id: "gateway",
+      kind: "chat" as const,
+      model: "hosted-fixture",
+      endpoint: "https://gateway.example/v1",
+      apiKeyEnv: "GRAPH_TEST_AUDIT_CHAT_KEY",
+    };
+    const urls: string[] = [];
+    const hunt = await invokeSecurityHunter(
+      {
+        provider: gateway,
+        policy: {
+          ...DEFAULT_POLICY,
+          providers: ["gateway"],
+          inference: "allowlisted",
+          network: "allowlisted",
+          allowedHosts: ["gateway.example"],
+        },
+        diff: "+execSync(a)",
+      },
+      async (url) => {
+        urls.push(url);
+        return reply({ candidates: [candidate()] });
+      },
+    );
+    expect(hunt.hunt.candidates).toHaveLength(1);
+    expect(urls).toEqual(["https://gateway.example/v1/chat/completions"]);
+  });
+
   it("refuses secrets for cloud auditors, oversized changes and installed agents", async () => {
     const fetch = vi.fn();
     vi.stubEnv("GRAPH_TEST_AUDIT_KEY", "test-key-value");
@@ -268,6 +347,14 @@ describe("security audit workers", () => {
         fetch,
       ),
     ).rejects.toThrow("installed agents cannot audit");
+    // Each is refused before sending, so the audit can give back its
+    // reservation.
+    await expect(
+      invokeSecurityHunter(
+        { provider: local, policy, diff: "+x\n".repeat(20_000) },
+        fetch,
+      ),
+    ).rejects.toBeInstanceOf(AuditNotSentError);
     expect(fetch).not.toHaveBeenCalled();
   });
 });
@@ -302,6 +389,7 @@ describe("security audit of a run", () => {
       configure?: (config: ProjectConfig) => void;
       hunter?: EngineDependencies["securityHunter"];
       verifier?: EngineDependencies["securityVerifier"];
+      providers?: Parameters<typeof configureProvider>[1][];
     } = {},
   ) {
     const root = await mkdtemp(path.join(os.tmpdir(), "graph-audit-"));
@@ -338,6 +426,8 @@ describe("security audit of a run", () => {
         model: "fixture",
         endpoint: "http://127.0.0.1:11434/v1",
       });
+    for (const provider of options.providers ?? [])
+      await configureProvider(data, provider);
     const hunter = vi.fn(
       options.hunter ??
         (async () => ({
@@ -399,8 +489,12 @@ describe("security audit of a run", () => {
       files: 1,
       candidates: 1,
       verified: 1,
-      counts: { confirmed: 1, needs_validation: 0, rejected: 0, invalid: 0 },
+      counts: { needs_validation: 1, traced: 1, rejected: 0, invalid: 0 },
     });
+    expect(result.counts).not.toHaveProperty("confirmed");
+    expect(result.findings.map((item) => item.verdict)).toEqual([
+      "needs_validation",
+    ]);
     expect(validateFindings(result.findings)).toEqual([]);
     expect(engine.store.run(run.id).status).toBe("succeeded");
     expect(engine.store.outcomes(run.id)).toEqual(outcomes);
@@ -410,7 +504,7 @@ describe("security audit of a run", () => {
     expect(completed).toHaveLength(1);
     expect(completed[0]!.data).toMatchObject({
       advisory: true,
-      counts: { confirmed: 1 },
+      counts: { traced: 1 },
     });
     // A run stopped at code review still stopped there after an audit, and
     // a person can still approve it in the reviewer's place.
@@ -458,7 +552,7 @@ describe("security audit of a run", () => {
       candidates: 12,
       verified: 10,
       unverified: 2,
-      counts: { confirmed: 1, rejected: 9 },
+      counts: { needs_validation: 1, traced: 1, rejected: 9 },
     });
     const fingerprints = result.findings.map((item) => item.fingerprint);
     expect(fingerprints).toEqual([...fingerprints].sort());
@@ -495,9 +589,35 @@ describe("security audit of a run", () => {
       },
     });
     await expect(none.engine.securityAudit(none.run.id)).rejects.toThrow(
-      "leaving no room for a hunt and one verification",
+      "reached the turn limit, policy.maxTurns (1 model calls a day), leaving no room for a hunt and one verification",
     );
     expect(none.hunter).not.toHaveBeenCalled();
+    // A cost cap names the cost cap, not the turn limit.
+    const priced = await finishedRun({
+      providers: [
+        {
+          id: "auditor",
+          kind: "local",
+          model: "fixture",
+          endpoint: "http://127.0.0.1:11434/v1",
+          inputCostPerMillion: 1,
+          outputCostPerMillion: 1,
+        },
+      ],
+    });
+    await writeJson(path.join(priced.root, PROJECT_FILE), {
+      ...priced.engine.config,
+      audit: { providerId: "auditor" },
+      policy: {
+        ...priced.engine.config.policy,
+        providers: ["local", "reviewer", "auditor"],
+        maxCostUsd: 0.000001,
+      },
+    });
+    await expect(priced.engine.securityAudit(priced.run.id)).rejects.toThrow(
+      "reached the cost cap, policy.maxCostUsd (0.000001 USD",
+    );
+    expect(priced.hunter).not.toHaveBeenCalled();
   });
 
   it("gives back verifier reservations a hunt did not use", async () => {
@@ -546,5 +666,118 @@ describe("security audit of a run", () => {
         .filter((event) => event.type === "security.audit_refused"),
     ).toHaveLength(1);
     expect(engine.store.run(run.id).status).toBe("succeeded");
+  });
+
+  it("gives back the reservation of a call the auditor refused before sending", async () => {
+    const fetch = vi.fn(async () => {
+      throw new Error("No request may be sent");
+    });
+    const { root, engine, run } = await finishedRun({
+      configure: (config) => {
+        // A hunt and one verification a day.
+        config.policy.maxTurns = 2;
+        config.policy.providers.push("auditor");
+        config.audit = { providerId: "auditor" };
+      },
+      providers: [
+        {
+          id: "auditor",
+          kind: "local",
+          model: "fixture",
+          endpoint: "http://127.0.0.1:11434/v1",
+          maxContextTokens: 512,
+        },
+      ],
+      // The auditor's own context budget refuses the hunt before sending;
+      // the reviewer answers.
+      hunter: async (input) =>
+        input.provider.id === "auditor"
+          ? invokeSecurityHunter(input, fetch)
+          : { hunt: { candidates: [candidate()] }, model: "auditor", usage },
+    });
+    await expect(engine.securityAudit(run.id)).rejects.toThrow(
+      "too large for the auditor's context budget",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    // Had the refused hunt kept its reservation, the day's second turn would
+    // leave no room for a hunt and a verification.
+    const { audit: _audit, ...config } = engine.config;
+    await writeJson(path.join(root, PROJECT_FILE), config);
+    const result = await engine.securityAudit(run.id);
+    expect(result).toMatchObject({ providerId: "reviewer", verified: 1 });
+    expect(
+      engine.store
+        .events(run.id)
+        .filter((event) => event.type === "security.audit_started")
+        .map((event) => event.data.verifierCallsReserved),
+    ).toEqual([1, 1]);
+  });
+
+  it("uses its own auditor setting, falls back to the reviewer and refuses with neither", async () => {
+    const { root, engine, run, hunter } = await finishedRun({
+      configure: (config) => {
+        config.policy.providers.push("auditor");
+        config.audit = { providerId: "auditor" };
+      },
+      providers: [
+        {
+          id: "auditor",
+          kind: "local",
+          model: "fixture",
+          endpoint: "http://127.0.0.1:11434/v1",
+        },
+      ],
+    });
+    expect(await engine.securityAudit(run.id)).toMatchObject({
+      providerId: "auditor",
+    });
+    expect(hunter.mock.calls[0]![0].provider.id).toBe("auditor");
+    // The audit key sits beside the policy, so it never enters a plan's
+    // policy hash: a project's plans are unchanged by setting it.
+    const { audit: _audit, ...withoutAudit } = engine.config;
+    expect(hash(withoutAudit.policy)).toBe(run.plan.policyHash);
+    await writeJson(path.join(root, PROJECT_FILE), withoutAudit);
+    expect(await engine.securityAudit(run.id)).toMatchObject({
+      providerId: "reviewer",
+    });
+    const { review: _review, ...neither } = withoutAudit;
+    await writeJson(path.join(root, PROJECT_FILE), neither);
+    await expect(engine.securityAudit(run.id)).rejects.toThrow(
+      "Configure a security auditor (graph-engine auditor <providerId>) or a reviewer",
+    );
+  });
+
+  it("checks the vendored files' pins before anything else", async () => {
+    const { root, engine, run, hunter } = await finishedRun();
+    const { review: _review, ...neither } = engine.config;
+    // Even with no auditor configured, the pin refusal comes first.
+    await writeJson(path.join(root, PROJECT_FILE), neither);
+    vi.mocked(assertVendoredPins).mockImplementationOnce(() => {
+      throw new Error(
+        "Vendored Cloudflare audit file validate-findings.cjs does not match its pinned digest",
+      );
+    });
+    await expect(engine.securityAudit(run.id)).rejects.toThrow(
+      "does not match its pinned digest",
+    );
+    expect(hunter).not.toHaveBeenCalled();
+    expect(
+      engine.store
+        .events(run.id)
+        .filter((event) => event.type.startsWith("security.audit")),
+    ).toEqual([]);
+    expect(assertVendoredPins).toHaveBeenCalled();
+    // The real check refuses a tampered copy, naming the file.
+    const copy = await mkdtemp(path.join(os.tmpdir(), "graph-audit-pins-"));
+    roots.push(copy);
+    await cp(path.dirname(vendoredPath("LICENSE")), copy, { recursive: true });
+    expect(() => assertVendoredPins(copy)).not.toThrow();
+    await writeFile(
+      path.join(copy, "validate-findings.cjs"),
+      "module.exports = { validateDocument: () => [] };\n",
+    );
+    expect(() => assertVendoredPins(copy)).toThrow(
+      "validate-findings.cjs does not match its pinned digest",
+    );
   });
 });

@@ -185,6 +185,11 @@ export interface ProjectConfig {
   /** A reviewer worker that must approve a run before it completes. */
   review?: { providerId: string };
   /**
+   * The provider graph-engine security-audit uses, apart from the reviewer so
+   * that auditing never turns on the review gate; without it, the reviewer.
+   */
+  audit?: { providerId: string };
+  /**
    * A tester worker that runs first, before the implementation, and writes
    * tests for each acceptance criterion as new test files only (default globs
    * unless `writes`), which implementing steps may not change. See
@@ -805,6 +810,12 @@ export const projectSchema = {
       },
     },
     review: {
+      type: "object",
+      additionalProperties: false,
+      required: ["providerId"],
+      properties: { providerId: nonempty },
+    },
+    audit: {
       type: "object",
       additionalProperties: false,
       required: ["providerId"],

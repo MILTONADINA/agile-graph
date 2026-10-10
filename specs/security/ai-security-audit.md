@@ -27,15 +27,23 @@ can ever make it blocking.
 - AC3: The hunter never verifies: its output has no verdict, and each candidate goes to a separate verifier call that receives only that candidate and the diff, at most 10 per audit.
   - Test: packages/engine/tests/security-audit.test.ts :: never lets the hunter verify: it returns candidates only, and each verifier sees one candidate
   - Test: packages/engine/tests/security-audit.test.ts :: verifies each candidate in a separate call, at most 10, with verification reserved before the hunt
-- AC4: Verifier calls are reserved before the hunt, through the same cost and turn reservation path as reviewer calls; an audit whose budget has no room for one verification refuses before hunting, and reservations a hunt did not use are given back.
+- AC4: Verifier calls are reserved before the hunt, through the same cost and turn reservation path as reviewer calls; an audit whose budget has no room for one verification refuses before hunting, naming whether the turn limit or the cost cap stopped it, and reservations a hunt did not use are given back.
   - Test: packages/engine/tests/security-audit.test.ts :: verifies each candidate in a separate call, at most 10, with verification reserved before the hunt
   - Test: packages/engine/tests/security-audit.test.ts :: gives back verifier reservations a hunt did not use
-- AC5: The auditor has the reviewer's restrictions: an API or local provider only, no potential secret sent to a cloud provider, the context budget, and a refusal before anything is sent when the run touched a path a cloud auditor may not receive.
+- AC5: The auditor has the reviewer's restrictions: an API or local provider only (`chat` included), no potential secret sent to a cloud provider, the context budget, and a refusal before anything is sent when the run touched a path a cloud auditor may not receive. A call refused before it is sent gives its reservation back, so it spends none of the day's turns or cost.
   - Test: packages/engine/tests/security-audit.test.ts :: refuses secrets for cloud auditors, oversized changes and installed agents
+  - Test: packages/engine/tests/security-audit.test.ts :: lets a chat provider audit
   - Test: packages/engine/tests/security-audit.test.ts :: refuses a cloud auditor for a change outside the export paths, sending nothing
-- AC6: Cloudflare's files are vendored unmodified with their license, commit and attribution; their SHA-256 digests are pinned by a test and checked by the engine before use.
+  - Test: packages/engine/tests/security-audit.test.ts :: gives back the reservation of a call the auditor refused before sending
+- AC6: Cloudflare's files are vendored unmodified with their license, commit and attribution; their SHA-256 digests are pinned by a test and checked by the engine first in every audit, before any provider lookup or paid call.
   - Test: packages/engine/tests/vendor-pins.test.ts :: keeps the vendored Cloudflare files byte-identical to their pinned sha256
   - Test: packages/engine/tests/vendor-pins.test.ts :: records the upstream commit and license in the vendor README and NOTICE
+  - Test: packages/engine/tests/security-audit.test.ts :: checks the vendored files' pins before anything else
+- AC7: No finding is ever `confirmed`: Cloudflare's method reserves that verdict for a demonstrated finding, and the audit executes nothing. A verifier's "confirmed" is a static trace, reported as `needs_validation` with its full entrypoint, propagation and sink trace, a blocker saying it was not executed, and a local validation plan holding the verifier's reproduction and expected result; the result counts these as `traced`.
+  - Test: packages/engine/tests/security-audit.test.ts :: never reports confirmed: a verifier's static trace is needs_validation with its full trace and expected result
+  - Test: packages/engine/tests/security-audit.test.ts :: is advisory only: it records security.audit_completed and never changes the run's status, outcome or review gate
+- AC8: The audit has its own provider setting, `audit.providerId` in the project configuration (set with `graph-engine auditor <providerId>`), so auditing never turns on the review gate; without it the audit uses the reviewer, and with neither it refuses and says how to set one. The key sits beside the policy, so it never changes a plan's policy hash.
+  - Test: packages/engine/tests/security-audit.test.ts :: uses its own auditor setting, falls back to the reviewer and refuses with neither
 
 ## Security considerations
 
@@ -50,14 +58,17 @@ redacted before they are recorded or printed. The vendored validator is
 loaded only after its bytes match the pinned digest; it exports pure
 functions and reads files or exits only when run as a script. Audits share
 a daily cost owner bounded by `policy.maxTurns` and `policy.maxCostUsd`,
-so they cannot spend a run's own budget.
+so they cannot spend a run's own budget; a call refused before sending gives
+its reservation back. The vendored files' digests are checked first in every
+audit.
 
 ## Non-goals
 
 - Gating, completing or failing a run on audit findings, or any automatic
   path to make the audit blocking. Only the owner can decide that.
-- Executing reproductions. A `confirmed` record is confirmed statically and
-  says so in its observed result.
+- Executing reproductions, and so any `confirmed` record. The verifier's
+  instructions still let it answer "confirmed" for a complete static trace;
+  the engine reports that as `needs_validation`.
 - Cloudflare's coverage ledger: `validate-coverage-ledger.cjs` is vendored
   for reference only.
 - Audits from MCP clients or the dashboard.

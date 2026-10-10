@@ -115,7 +115,9 @@ import {
 } from "./workers/plan.js";
 import { LOCKFILES, type ProjectProfile } from "./security/catalog.js";
 import {
+  assertVendoredPins,
   auditRecord,
+  AuditNotSentError,
   candidateFingerprint,
   invokeSecurityHunter,
   invokeSecurityVerifier,
@@ -227,11 +229,11 @@ export interface EngineDependencies {
     model: string;
     usage: Usage;
   }>;
-  /** The advisory security audit's hunter; defaults to the reviewer's API. */
+  /** The advisory security audit's hunter; defaults to the auditor's API. */
   securityHunter?: (
     input: AuditCallInput,
   ) => Promise<{ hunt: AuditHunt; model: string; usage: Usage }>;
-  /** One advisory audit verifier call; defaults to the reviewer's API. */
+  /** One advisory audit verifier call; defaults to the auditor's API. */
   securityVerifier?: (input: VerifyCallInput) => Promise<{
     verification: AuditVerification;
     model: string;
@@ -280,9 +282,13 @@ export interface SecurityAuditResult {
   verified: number;
   /** Candidates past the verification cap, never reported as findings. */
   unverified: number;
+  /**
+   * Never a confirmed count: nothing is executed, so a finding the verifier
+   * traced statically is a needs_validation record, counted also in traced.
+   */
   counts: {
-    confirmed: number;
     needs_validation: number;
+    traced: number;
     rejected: number;
     invalid: number;
   };
@@ -879,17 +885,20 @@ export class GraphEngine {
   // The project's configured reviewer, which must be an API or local worker.
   private async reviewer(
     providerId = this.config.review?.providerId,
+    role: "reviewer" | "auditor" = "reviewer",
   ): Promise<ProviderConfig> {
     const reviewer = (await this.providers()).find(
       (provider) => provider.id === providerId,
     );
     if (!providerId || !reviewer)
       throw new Error(
-        `Configured reviewer ${providerId} is not a configured provider`,
+        `Configured ${role === "reviewer" ? "reviewer" : "security auditor"} ${providerId} is not a configured provider`,
       );
     if (!isApiKind(reviewer.kind) && reviewer.kind !== "local")
       throw new Error(
-        `Reviewer ${reviewer.id} must be an API or local provider; installed agents cannot review yet`,
+        role === "reviewer"
+          ? `Reviewer ${reviewer.id} must be an API or local provider; installed agents cannot review yet`
+          : `Security auditor ${reviewer.id} must be an API or local provider; installed agents cannot audit`,
       );
     assertProvider(reviewer, this.config.policy);
     return reviewer;
@@ -2065,17 +2074,22 @@ export class GraphEngine {
   }
   /**
    * An advisory AI security audit of a stopped run's change, on Cloudflare's
-   * security-audit method and report schema: the configured reviewer hunts
-   * for candidates in the run's diff, then a separate verifier call per
-   * candidate (at most MAX_VERIFIED_CANDIDATES, reserved before the hunt)
-   * tries to disprove it. Advisory only: it records security.audit_completed
-   * and never changes the run's status, outcome, gates or completion.
+   * security-audit method and report schema: the configured auditor (or,
+   * without one, the reviewer) hunts for candidates in the run's diff, then a
+   * separate verifier call per candidate (at most MAX_VERIFIED_CANDIDATES,
+   * reserved before the hunt) tries to disprove it. Nothing is executed, so
+   * no finding is reported as confirmed. Advisory only: it records
+   * security.audit_completed and never changes the run's status, outcome,
+   * gates or completion.
    */
   async securityAudit(
     runId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<SecurityAuditResult> {
     const { signal } = options;
+    // Cloudflare's vendored files are checked before anything else, so a
+    // tampered validator never lets an audit reach a paid call.
+    assertVendoredPins();
     if (this.isActive(runId))
       throw new Error("The run is still executing; audit it once it stops");
     const run = this.store.run(runId);
@@ -2087,14 +2101,18 @@ export class GraphEngine {
       throw new Error("This run has no retained workspace to audit");
     await this.refresh();
     const policy = this.config.policy;
-    if (!this.config.review?.providerId)
+    // The audit's own provider, so that auditing never requires turning on
+    // the review gate; the reviewer is the fallback.
+    const auditorId =
+      this.config.audit?.providerId ?? this.config.review?.providerId;
+    if (!auditorId)
       throw new Error(
-        "Configure a reviewer (graph-engine reviewer <providerId>) to run a security audit",
+        "Configure a security auditor (graph-engine auditor <providerId>) or a reviewer to run a security audit",
       );
-    const auditor = await this.reviewer();
+    const auditor = await this.reviewer(auditorId, "auditor");
     // As for the run's own reviewer: a cloud-backed client's plan never has
     // its change sent across the export boundary.
-    assertOnPlanSide(run.plan, auditor, reviewerRole(auditor.id));
+    assertOnPlanSide(run.plan, auditor, `the security auditor (${auditor.id})`);
     let checkpoint: DagCheckpoint | undefined;
     try {
       checkpoint = parseDagCheckpoint(
@@ -2156,8 +2174,18 @@ export class GraphEngine {
     // Reservations not yet settled; released if never sent.
     const pending = new Set<string>();
     // The call sent and not yet settled: its cost is unknown, so if it fails
-    // it keeps its reservation, as a reviewer call does.
+    // it keeps its reservation, as a reviewer call does. A call the auditor
+    // refused before sending (AuditNotSentError) gives its reservation back.
     let inFlight: string | undefined;
+    const send = async <T>(callId: string, call: () => Promise<T>) => {
+      inFlight = callId;
+      try {
+        return await call();
+      } catch (error) {
+        if (error instanceof AuditNotSentError) inFlight = undefined;
+        throw error;
+      }
+    };
     const usage: Usage[] = [];
     try {
       if (signal?.aborted) throw new Error("Security audit cancelled");
@@ -2190,24 +2218,32 @@ export class GraphEngine {
           pending.delete(freed);
         }
       }
-      if (!verifierCalls.length || !pending.has(hunterCall))
+      if (!verifierCalls.length || !pending.has(hunterCall)) {
+        const reason = errorMessage(refusal);
+        const cause = reason.includes("worker-turn budget")
+          ? `the turn limit, policy.maxTurns (${policy.maxTurns} model calls a day)`
+          : reason.includes("estimated cost budget")
+            ? `the cost cap, policy.maxCostUsd (${policy.maxCostUsd} USD a day of estimated cost, and an auditor without recorded prices has no estimate)`
+            : `a reservation refusal (${reason})`;
         throw new Error(
-          `Today's security audits have reached the project's limits (policy.maxTurns calls, policy.maxCostUsd estimated cost), leaving no room for a hunt and one verification: ${errorMessage(refusal)}`,
+          `Today's security audits have reached ${cause}, leaving no room for a hunt and one verification`,
           { cause: refusal },
         );
+      }
       this.store.event(run.id, "security.audit_started", {
         providerId: auditor.id,
         files: written.length,
         verifierCallsReserved: verifierCalls.length,
         advisory: true,
       });
-      inFlight = hunterCall;
-      const hunted = await (this.deps.securityHunter ?? invokeSecurityHunter)({
-        provider: auditor,
-        policy,
-        diff,
-        signal,
-      });
+      const hunted = await send(hunterCall, () =>
+        (this.deps.securityHunter ?? invokeSecurityHunter)({
+          provider: auditor,
+          policy,
+          diff,
+          signal,
+        }),
+      );
       this.store.settleCall(ownerId, hunterCall, auditor.id, hunted.usage);
       pending.delete(hunterCall);
       inFlight = undefined;
@@ -2226,13 +2262,19 @@ export class GraphEngine {
         errors: string[];
       }[] = [];
       const changed = new Set(written);
+      let traced = 0;
       for (const [index, candidate] of verified.entries()) {
         if (signal?.aborted) throw new Error("Security audit cancelled");
         const callId = verifierCalls[index]!;
-        inFlight = callId;
-        const result = await (
-          this.deps.securityVerifier ?? invokeSecurityVerifier
-        )({ provider: auditor, policy, diff, candidate, signal });
+        const result = await send(callId, () =>
+          (this.deps.securityVerifier ?? invokeSecurityVerifier)({
+            provider: auditor,
+            policy,
+            diff,
+            candidate,
+            signal,
+          }),
+        );
         this.store.settleCall(ownerId, callId, auditor.id, result.usage);
         pending.delete(callId);
         inFlight = undefined;
@@ -2248,7 +2290,10 @@ export class GraphEngine {
             title: redact(candidate.title),
             errors: errors.slice(0, 10).map(redact),
           });
-        else findings.push(record);
+        else {
+          findings.push(record);
+          if (result.verification.verdict === "confirmed") traced++;
+        }
       }
       findings.sort((left, right) =>
         left.fingerprint < right.fingerprint ? -1 : 1,
@@ -2293,11 +2338,10 @@ export class GraphEngine {
         verified: verified.length,
         unverified: candidates.length - verified.length,
         counts: {
-          confirmed: findings.filter((item) => item.verdict === "confirmed")
-            .length,
           needs_validation: findings.filter(
             (item) => item.verdict === "needs_validation",
           ).length,
+          traced,
           rejected: findings.filter((item) => item.verdict === "rejected")
             .length,
           invalid: invalid.length,

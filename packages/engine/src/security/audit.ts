@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import type {
-  ProjectPolicy,
-  ProviderConfig,
-  Usage,
+import {
+  isApiKind,
+  type ProjectPolicy,
+  type ProviderConfig,
+  type Usage,
 } from "@graph-engineering/contracts";
 import { assertProvider, containsSecret } from "../policy.js";
 import {
@@ -47,6 +49,22 @@ export function vendoredPath(name: string): string {
   return `${VENDOR_DIR}${name}`;
 }
 
+/**
+ * Refuses unless every vendored file in `dir` matches its pinned digest.
+ * It hashes on every call, so an audit checks the pins before anything paid.
+ */
+export function assertVendoredPins(dir = VENDOR_DIR): void {
+  for (const [name, expected] of Object.entries(VENDORED_SHA256)) {
+    const actual = createHash("sha256")
+      .update(readFileSync(path.join(dir, name)))
+      .digest("hex");
+    if (actual !== expected)
+      throw new Error(
+        `Vendored Cloudflare audit file ${name} does not match its pinned digest; restore it from commit ${CLOUDFLARE_AUDIT_COMMIT}`,
+      );
+  }
+}
+
 interface CloudflareValidator {
   validateDocument(findings: unknown, schema: unknown): string[];
 }
@@ -56,15 +74,7 @@ let loaded: { schema: unknown; validator: CloudflareValidator } | undefined;
 // when run as a script (require.main === module), so requiring it is safe.
 function cloudflareContract() {
   if (loaded) return loaded;
-  for (const [name, expected] of Object.entries(VENDORED_SHA256)) {
-    const actual = createHash("sha256")
-      .update(readFileSync(vendoredPath(name)))
-      .digest("hex");
-    if (actual !== expected)
-      throw new Error(
-        `Vendored Cloudflare audit file ${name} does not match its pinned digest; restore it from commit ${CLOUDFLARE_AUDIT_COMMIT}`,
-      );
-  }
+  assertVendoredPins();
   const schema: unknown = JSON.parse(
     readFileSync(vendoredPath("report-schema.json"), "utf8"),
   );
@@ -388,6 +398,15 @@ export interface VerifyCallInput extends AuditCallInput {
   candidate: AuditCandidate;
 }
 
+/**
+ * An audit call refused before anything was sent: the provider's kind or
+ * policy, a potential secret for a cloud auditor, or the context budget.
+ * Its reservation can be given back; any other failure may have been sent.
+ */
+export class AuditNotSentError extends Error {
+  override name = "AuditNotSentError";
+}
+
 // The reviewer's restrictions: an API or local provider the policy allows,
 // no potential secret sent to a cloud provider, and the context budget.
 async function auditCall<T>(
@@ -403,11 +422,15 @@ async function auditCall<T>(
   providerFetch: ProviderFetch,
 ): Promise<{ result: T; model: string; usage: Usage }> {
   const { provider, policy } = input;
-  if (!["openai", "anthropic", "local"].includes(provider.kind))
-    throw new Error(
+  if (!isApiKind(provider.kind) && provider.kind !== "local")
+    throw new AuditNotSentError(
       `Security auditor ${provider.id} must be an API or local provider; installed agents cannot audit`,
     );
-  assertProvider(provider, policy);
+  try {
+    assertProvider(provider, policy);
+  } catch (error) {
+    throw new AuditNotSentError((error as Error).message, { cause: error });
+  }
   const user = JSON.stringify(payload);
   // Each raw string, not the JSON text: escaping can hide a secret's shape.
   const strings = (value: unknown): string[] =>
@@ -419,7 +442,7 @@ async function auditCall<T>(
           ? Object.values(value).flatMap(strings)
           : [];
   if (provider.kind !== "local" && strings(payload).some(containsSecret))
-    throw new Error(
+    throw new AuditNotSentError(
       `Security ${role} input contains a potential secret; a cloud auditor cannot receive it`,
     );
   const ceiling = Math.min(
@@ -431,8 +454,8 @@ async function auditCall<T>(
       256 >
     ceiling
   )
-    throw new Error(
-      "The change is too large for the auditor's context budget; audit a smaller change or raise the reviewer's budget",
+    throw new AuditNotSentError(
+      "The change is too large for the auditor's context budget; audit a smaller change or raise the auditor's budget",
     );
   const { text, result } = await callStructuredProvider(
     {
@@ -505,18 +528,28 @@ export function candidateFingerprint(candidate: AuditCandidate): string {
   return `graph-audit:${candidate.attack_class}:${digest}`;
 }
 
-/** A finding record in Cloudflare's report schema, or why it is not one. */
+/**
+ * A finding record in Cloudflare's report schema. Never `confirmed`: the
+ * method reserves that for a demonstrated finding, and the audit executes
+ * nothing.
+ */
 export type AuditRecord = Record<string, unknown> & {
-  verdict: "confirmed" | "needs_validation" | "rejected";
+  verdict: "needs_validation" | "rejected";
   fingerprint: string;
 };
+
+/** The blocker a statically traced finding carries until it is demonstrated. */
+export const STATIC_TRACE_BLOCKER =
+  "Not executed: the verifier traced this path statically, and Cloudflare's method reports a finding as confirmed only once it has been demonstrated.";
 
 /**
  * Builds the report-schema record from a candidate (the hunter's claim) and
  * its verification (the verifier's verdict and evidence). Every cited file
- * must be one the audited change touched. A confirmed record's reproduction
- * is the verifier's static trace: nothing is executed, which its observed
- * result says.
+ * must be one the audited change touched. A verifier's "confirmed" is a
+ * static trace, since nothing is executed, so it is reported as
+ * needs_validation: the full entrypoint-to-sink trace, its evidence, and a
+ * local validation plan made of the verifier's reproduction and the result
+ * it expects.
  */
 export function auditRecord(
   candidate: AuditCandidate,
@@ -562,25 +595,29 @@ export function auditRecord(
   let record: AuditRecord;
   if (verification.verdict === "confirmed") {
     const reproduction = verification.reproduction;
+    const local = reproduction
+      ? [
+          "Nothing was executed; demonstrate the traced path in a local test.",
+          `Attacker: ${reproduction.attacker_perspective}`,
+          ...(reproduction.payloads.length
+            ? [`Payloads: ${reproduction.payloads.join("; ")}`]
+            : []),
+          ...(reproduction.instructions.length
+            ? [`Steps: ${reproduction.instructions.join(" ")}`]
+            : []),
+          `Expected result: ${reproduction.expected_result}`,
+        ].join("\n")
+      : (verification.validation_plan ??
+        "Nothing was executed; exercise the traced path from its entrypoint to its sink in a local test and observe whether the sink is reached.");
     record = {
-      verdict: "confirmed",
+      verdict: "needs_validation",
       ...common,
-      root_cause: verification.root_cause ?? "",
-      intended_behavior: verification.intended_behavior ?? "",
-      trace: verification.trace,
+      claimed_root_cause:
+        verification.root_cause || candidate.claimed_root_cause,
+      trace,
       evidence,
-      conditions: verification.conditions,
-      execution: {
-        attacker_perspective: reproduction?.attacker_perspective ?? "",
-        payloads: reproduction?.payloads ?? [],
-        instructions: reproduction?.instructions ?? [],
-        observed_result: reproduction?.expected_result
-          ? `Not executed; the verifier traced it statically and expects: ${reproduction.expected_result}`
-          : "",
-      },
-      remediation: { strategy: verification.remediation ?? "" },
-      severity: verification.severity ?? undefined,
-      confidence: verification.confidence,
+      blockers: [STATIC_TRACE_BLOCKER],
+      validation_plan: { local },
     };
   } else if (verification.verdict === "needs_validation") {
     record = {
