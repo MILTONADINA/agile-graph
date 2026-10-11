@@ -75,11 +75,11 @@ GE is a local-first "AI agile team" engine.
 
 > **Update, end of 2026-10-10:**
 >
-> - Round 4 is already stacked on `dev` as one PR, #148. Don't do the per-branch rebase steps; wait for its CI, then merge it through the merge gate.
+> - Round 4 is already stacked on `dev` as one PR, #148. Wait for its CI, then merge it through the merge gate.
 > - Round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `fork/dev` and ignore any local `fix/round5-*` branches.
 
 - **Rounds 1, 2 and 3:** merged into `fork/dev` (round 3 as #144). To see the tip: `git log --oneline -5 fork/dev`.
-- **Round 4:** finished, reviewed and repaired, then pushed to the fork with no PRs yet. Each branch has a build commit and a review-fix commit, and they were built on the round-3 branch before it merged. Each branch must be rebased onto `fork/dev`, then stacked, as described in section 5.
+- **Round 4:** one PR, #148, already stacked on `dev`. Merge it through the merge gate below.
 
 ### The merge gate
 
@@ -116,22 +116,15 @@ Use it for every merge. It's written for PR 144; for another PR, replace 144 wit
 
 **If a review thread is open:** fix the problem, push, reply on the thread, resolve it, then wait for CI again.
 
-### Round 4
+### What round 4 contains
 
-Round 4 was built on top of the round-3 branch. List its branches with `git branch --list 'feat/round4-*'`:
+PR #148 holds the five round-4 changes, each as a build commit and a review-fix commit:
 
-- `feat/round4-jev-laya-in-runs-20261010`: makes Jev questions exportable only when all their content is exportable; adds a `decisionMaxCostUsd` daily cap; adds the `insights-context` report.
-- `feat/round4-approval-expiry-20261010`: `approvalTtlHours`, a re-check before publish, and the policy hash in receipts.
-- `feat/round4-mcp-integrity-20261010`: MCP tool-definition hashes, OWASP MCP Top 10 tags and a token-passthrough rule.
-- `feat/round4-run-provenance-20261010`: `run-provenance`, an unsigned in-toto statement.
-- `feat/round4-mutation-feedback-20261010`: `mutationRounds`, which feeds surviving mutants back to the tester.
-
-**When a branch is finished:** it has its own commit, its targeted tests pass, typecheck is clean and lint has 0 errors.
-
-- To see its commits: `git log --oneline fix/round3-any-ai-onboarding-20261010..<branch>`
-- To see its test files: `git diff --name-only fork/dev...<branch> -- 'packages/*/tests/*'`
-
-**If a branch isn't finished:** either finish it on that branch, or leave it out of the stack and say so in the PR.
+- Jev questions exportable only when all their content is; a `decisionMaxCostUsd` daily cap; the `insights-context` report.
+- `approvalTtlHours`, a re-check before publish, and the policy hash in receipts.
+- MCP tool-definition hashes, OWASP MCP Top 10 tags and a token-passthrough rule.
+- `run-provenance`, an unsigned in-toto statement.
+- `mutationRounds`, which feeds surviving mutants back to the tester.
 
 ## 4. Owner decisions already made
 
@@ -142,23 +135,9 @@ Round 4 was built on top of the round-3 branch. List its branches with `git bran
 
 ## 5. Next steps, in order
 
-1. Round 3 is already merged.
-2. For each finished round-4 branch, starting with the first one listed:
-   1. Rebase it, keeping only its own two commits. The first branch goes onto `fork/dev`; each later branch goes onto the branch before it:
-      `git rebase --onto <fork/dev or previous branch> fork/fix/round3-any-ai-onboarding-20261010 <branch>`
-   2. Run its targeted tests (section 6).
-3. Push each branch:
-   `git push fork <branch> --force-with-lease`
-4. Open one PR per branch into `dev`, filling in `.github/pull_request_template.md`:
-   `gh pr create --repo MILTONADINA/graph-engineering --base dev --head <branch> --title "..." --body-file <file>`
-5. Cancel CI on every PR except the top one:
-   - list the runs: `gh run list --repo MILTONADINA/graph-engineering --branch <lower branch>`
-   - cancel each: `gh run cancel <id> --repo MILTONADINA/graph-engineering`
-
-   Then merge the top PR through the merge gate and close the lower PRs.
-
-6. Make the `decisionMaxCostUsd` change (section 4), then run `graph-engine insights-context` (added in round 4) to measure the context savings.
-7. Do the owner's feedback issues first, ahead of the research ideas. Read each issue with `gh issue view <n> --repo MILTONADINA/graph-engineering`. Each item below is its own PR, through the merge gate:
+1. Merge #148 through the merge gate in section 3. Rounds 1 to 3 are already merged.
+2. Make the `decisionMaxCostUsd` change (section 4), then run `graph-engine insights-context` (added in round 4) to measure the context savings.
+3. Do the owner's feedback issues first, ahead of the research ideas. Read each issue with `gh issue view <n> --repo MILTONADINA/graph-engineering`. Each item below is its own PR, through the merge gate:
    1. **Issue 147, blind retry.**
       - Attempt n+1 must include the previous attempt's error, exit code, timeout flag and log tail, plus an instruction to change approach.
       - If the same failure signature occurs twice, stop and escalate; never make a third identical attempt.
@@ -171,7 +150,7 @@ Round 4 was built on top of the round-3 branch. List its branches with `git bran
    3. **Actionable feedback.**
       - The local difficulty log puts almost everything under `unknown` (185 entries on 2026-10-10). Classify difficulties into specific catalog kinds, so `unknown` becomes rare and each report says what to change.
       - Keep the reports free of private data: no paths, code, prompts or error text.
-8. More rounds:
+4. More rounds:
    - Read `.graph/local/research/link-research-2026-10-10.md` one range at a time, and never commit it.
    - Build only the ideas Jev scored at 0.5 or above, one PR per idea, each through the merge gate.
    - When an idea has an open design question, ask Laya and Jev with design text only (no source, keys, private memory or `.graph/local` content), and record the question, the answers and the option you chose in the PR.
