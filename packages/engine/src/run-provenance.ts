@@ -5,7 +5,6 @@ import path from "node:path";
 import { z } from "zod";
 import type {
   ProjectPolicy,
-  ProviderConfig,
   RunEvent,
   RunRecord,
 } from "@graph-engineering/contracts";
@@ -159,13 +158,15 @@ function modelName(model: unknown): string | null {
  * Builds the statement from a run's stored record and events. Refuses a run
  * a person has not accepted, so a statement always describes a result some
  * person took. `policy` is the project's current policy: its decision mode
- * is reported only when its hash still matches the plan's.
+ * is reported only when its hash still matches the plan's. Each worker's and
+ * reviewer's provider kind comes from the run's own dispatch and review
+ * events, never from provider settings that may have changed since; a run
+ * recorded before events carried it reports none.
  */
 export function buildRunProvenance(input: {
   run: RunRecord;
   events: readonly RunEvent[];
   changed: ChangedFiles;
-  providers: readonly ProviderConfig[];
   policy: ProjectPolicy | null;
 }): RunProvenance {
   const { run, events, changed } = input;
@@ -201,7 +202,6 @@ export function buildRunProvenance(input: {
         }
       : null;
 
-  const kinds = new Map(input.providers.map((p) => [p.id, p.kind]));
   const identities = new Map<
     string,
     NonNullable<RunProvenance["predicate"]["workers"][number]["executable"]>
@@ -232,22 +232,33 @@ export function buildRunProvenance(input: {
   const addWorker = (
     role: "worker" | "reviewer",
     providerId: string | null,
+    kind: unknown,
     model: unknown,
   ) => {
     if (!providerId || workers.has(`${role}\0${providerId}`)) return;
     workers.set(`${role}\0${providerId}`, {
       role,
       providerId,
-      kind: kinds.get(providerId) ?? null,
+      kind: text(kind),
       model: modelName(model),
       executable: identities.get(providerId) ?? null,
     });
   };
   for (const event of events)
     if (event.type === "worker.dispatched")
-      addWorker("worker", text(event.data.provider), event.data.model);
+      addWorker(
+        "worker",
+        text(event.data.provider),
+        event.data.kind,
+        event.data.model,
+      );
     else if (event.type === "review.completed" && event.data.by !== "person")
-      addWorker("reviewer", text(event.data.providerId), event.data.model);
+      addWorker(
+        "reviewer",
+        text(event.data.providerId),
+        event.data.kind,
+        event.data.model,
+      );
 
   const evidence = runEvidence(events);
   const gates: RunProvenance["predicate"]["gates"] = [];
@@ -534,7 +545,6 @@ export async function writeRunProvenance(input: {
   dataDir: string;
   run: RunRecord;
   events: readonly RunEvent[];
-  providers: readonly ProviderConfig[];
   policy: ProjectPolicy | null;
 }): Promise<RunProvenance> {
   const changed = input.run.commit

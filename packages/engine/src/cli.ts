@@ -1839,7 +1839,7 @@ cli
     const dataDir = projectDataDir(project.projectId);
     const { run, events } = readRunReceipt(dataDir, project.projectId, runId);
     // The statement written at acceptance is the run's provenance; rebuild
-    // from the current policy and providers only when none was written.
+    // from the run's events and the current policy only when none was written.
     const storedFile = runProvenanceFile(dataDir, run.id);
     const stored = existsSync(storedFile)
       ? runProvenanceSchema.parse(JSON.parse(readFileSync(storedFile, "utf8")))
@@ -1857,7 +1857,6 @@ cli
           run.completion?.humanAcceptance === "accepted"
             ? await changedFileDigests(root(), run.baseCommit, run.commit)
             : { files: [], removed: [] },
-        providers: await loadProviders(dataDir),
         policy: project.policy,
       });
     if (!options.out) return print(statement);

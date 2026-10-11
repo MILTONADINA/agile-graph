@@ -121,6 +121,7 @@ function receipt(overrides: Partial<RunRecord> = {}): {
     }),
     event("worker.dispatched", {
       provider: "coder",
+      kind: "local",
       model: "/Users/someone/models/toy-model.gguf",
       attempt: 1,
     }),
@@ -130,6 +131,7 @@ function receipt(overrides: Partial<RunRecord> = {}): {
     }),
     event("review.completed", {
       providerId: "reviewer",
+      kind: "local",
       model: "review-model",
       passed: true,
       verdict: "approve",
@@ -148,16 +150,6 @@ function receipt(overrides: Partial<RunRecord> = {}): {
   return { run, events };
 }
 
-const providers = [
-  {
-    id: "coder",
-    kind: "local" as const,
-    model: "toy-model",
-    endpoint: "http://127.0.0.1:1/private",
-    apiKeyEnv: "TOY_API_KEY",
-  },
-  { id: "reviewer", kind: "local" as const, model: "review-model" },
-];
 const changed = {
   files: [{ path: "src/b.ts", sha256: "f".repeat(64) }],
   removed: ["src/old.ts"],
@@ -170,7 +162,6 @@ describe("run provenance statement", () => {
       run,
       events,
       changed,
-      providers,
       policy: DEFAULT_POLICY,
     });
     expect(runProvenanceSchema.parse(statement)).toEqual(statement);
@@ -235,6 +226,27 @@ describe("run provenance statement", () => {
     ).toThrow();
   });
 
+  it("takes each provider's kind from the run's events and reports none when an event did not record it", () => {
+    const { run, events } = receipt();
+    const unrecorded = events.map((event) =>
+      event.type === "review.completed"
+        ? { ...event, data: { ...event.data, kind: undefined } }
+        : event,
+    );
+    const statement = buildRunProvenance({
+      run,
+      events: unrecorded,
+      changed,
+      policy: DEFAULT_POLICY,
+    });
+    expect(
+      statement.predicate.workers.map(({ role, kind }) => [role, kind]),
+    ).toEqual([
+      ["worker", "local"],
+      ["reviewer", null],
+    ]);
+  });
+
   it("leaves prompts, notes, check output, secrets, paths and user identity out of the statement", () => {
     const { run, events } = receipt();
     const text = JSON.stringify(
@@ -242,7 +254,6 @@ describe("run provenance statement", () => {
         run,
         events,
         changed,
-        providers,
         policy: DEFAULT_POLICY,
       }),
     );
@@ -255,8 +266,6 @@ describe("run provenance statement", () => {
       "someone",
       "printed",
       "Prompt said",
-      "TOY_API_KEY",
-      "127.0.0.1",
       run.pullRequest!,
       os.homedir(),
     ])
@@ -282,7 +291,6 @@ describe("run provenance statement", () => {
         run,
         events,
         changed,
-        providers,
         policy: DEFAULT_POLICY,
       });
       expect(statement.predicate.workers[0]!.model).toBe(expected);
@@ -301,7 +309,6 @@ describe("run provenance statement", () => {
           run,
           events,
           changed,
-          providers,
           policy: DEFAULT_POLICY,
         }),
       ).toThrow("only for a run a person accepted");
@@ -314,7 +321,6 @@ describe("run provenance statement", () => {
       run,
       events,
       changed,
-      providers,
       policy: { ...DEFAULT_POLICY, maxWorkers: 7 },
     });
     expect(statement.predicate.decisionMode).toBeNull();
@@ -326,7 +332,6 @@ describe("run provenance statement", () => {
       run,
       events,
       changed: { files: [], removed: [] },
-      providers,
       policy: DEFAULT_POLICY,
     });
     expect(statement.subject).toEqual([
@@ -390,7 +395,6 @@ describe("run provenance from a real run", () => {
       run,
       events,
       changed,
-      providers,
       policy: DEFAULT_POLICY,
     });
     expect(statement.subject).toEqual([
@@ -432,7 +436,6 @@ describe("run provenance from a real run", () => {
         run,
         events,
         changed: byCount,
-        providers,
         policy: DEFAULT_POLICY,
       }).predicate.filesTruncated,
     ).toBe(true);
@@ -546,6 +549,16 @@ describe("run provenance from a real run", () => {
     );
     expect(result.status).toBe("succeeded");
     expect(result.commit).toMatch(/^[a-f0-9]{40}$/);
+    // The provider is reconfigured as a cloud one before the person accepts:
+    // the statement still says how the run actually ran.
+    await configureProvider(data, {
+      id: "local",
+      kind: "openai",
+      model: "fixture",
+      endpoint: "https://api.example.test/v1",
+      inputCostPerMillion: 1,
+      outputCostPerMillion: 1,
+    });
     await engine.recordAcceptance(result.id, {
       accepted: true,
       note: "Looks right",
@@ -554,6 +567,9 @@ describe("run provenance from a real run", () => {
       await readFile(runProvenanceFile(data, result.id), "utf8"),
     );
     expect(runProvenanceSchema.parse(written)).toEqual(written);
+    expect(written.predicate.workers).toMatchObject([
+      { role: "worker", providerId: "local", kind: "local" },
+    ]);
     expect(written.subject).toEqual([
       { name: "git+commit", digest: { gitCommit: result.commit } },
       {
