@@ -43,7 +43,7 @@
   "github": {
     "repository": "MILTONADINA/graph-engineering",
     "baseBranch": "dev",
-    "remote": "fork"
+    "remote": "origin"
   },
   "security": {
     "liveTargets": [
