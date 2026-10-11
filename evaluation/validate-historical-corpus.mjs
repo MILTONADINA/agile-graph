@@ -7,17 +7,12 @@ import { parseArgs } from "node:util";
 import ts from "typescript";
 import { validateCorpus, exportTask, hash } from "./corpus-history.mjs";
 import { verifyHistoricalDecisionBudget } from "./replays/unmetered-decision-budget/verify.mjs";
-import { verifyHistoricalNpm } from "./replays/portable-npm-spawn/verify.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const adapters = Object.freeze({
   "unmetered-decision-budget": {
     verify: verifyHistoricalDecisionBudget,
     expectedBaselineFailure: "capped-unmetered-0",
-  },
-  "portable-npm-spawn": {
-    verify: verifyHistoricalNpm,
-    expectedBaselineFailure: "windows-lifecycle-spaces",
   },
 });
 
@@ -109,9 +104,9 @@ export async function validateHistoricalFixtures(
     actualChildProcessesFromHistoricalCode: 0,
     promotionEligible: false,
     limitations: [
-      "Two retrospectively selected historical defects with controlled dependency/process adapters, not a representative benchmark.",
+      "One retrospectively selected historical defect with a controlled dependency adapter, not a representative benchmark.",
       "Only exact pinned history is executed. Node vm instrumentation is not a security sandbox; no worker patch input is accepted.",
-      "No baseline/candidate models, independent partner labels, held-out observations, native Windows result, or cost-saving claim.",
+      "No baseline/candidate models, independent labels, held-out observations, or cost-saving claim.",
     ],
   };
 }

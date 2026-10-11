@@ -128,10 +128,7 @@ describe("live target configuration", () => {
     expect(project.policy.promotedCategories).toEqual([]);
     expect(project.policy.maxCostUsd).toBe(0);
     const targets = project.security?.liveTargets ?? [];
-    expect(targets.map(({ id }) => id)).toEqual([
-      "juice-shop",
-      "template-express",
-    ]);
+    expect(targets.map(({ id }) => id)).toEqual(["juice-shop"]);
     for (const entry of targets) {
       expect(entry.authorizedBy).toBe("Milton Adina (owner)");
       expect(entry.authorizedOn).toBe("2026-09-27");
@@ -140,13 +137,12 @@ describe("live target configuration", () => {
     expect(targets[0]!.image).toMatch(
       /^bkimminich\/juice-shop@sha256:[a-f0-9]{64}$/,
     );
-    expect(targets[1]!.image).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it("refuses a target that is not authorized, including a URL", () => {
     const project = config([target]) as ProjectConfig;
     expect(liveTarget(project, "juice-shop")).toBe(target);
-    for (const id of ["template-express", "https://juice-shop.example", ""])
+    for (const id of ["toy-express", "https://juice-shop.example", ""])
       expect(() => liveTarget(project, id)).toThrow(
         /Live scan refused: .* is not an authorized live target \(authorized: juice-shop\)/,
       );
@@ -267,7 +263,7 @@ describe("ZAP reports", () => {
           tool: "zap",
           rule: "10038 Content Security Policy (CSP) Header Not Set",
           path: "/",
-          target: "template-express",
+          target: "toy-express",
         },
         {
           fingerprint: "e".repeat(32),
@@ -287,7 +283,7 @@ describe("ZAP reports", () => {
       fingerprint: string;
     }[];
     expect(
-      entries.filter(({ target }) => target === "template-express"),
+      entries.filter(({ target }) => target === "toy-express"),
     ).toHaveLength(1);
     expect(
       entries.some(({ fingerprint }) => fingerprint === "e".repeat(32)),
@@ -634,7 +630,9 @@ describe("live scan orchestration", () => {
     const docker = fakeDocker({ missing: [local.image] });
     await expect(
       runLiveScan({ target: local, run: docker.run }),
-    ).rejects.toThrow("npm run live-target:build");
+    ).rejects.toThrow(
+      "build the target's image here first, then record its new image ID in security.liveTargets",
+    );
     expect(docker.calls.some((argv) => argv[0] === "run")).toBe(false);
   });
 });
@@ -643,11 +641,11 @@ describe("live scans stay a person's advisory tool", () => {
   it("names authorized targets in the plan but never makes a live tool runnable", () => {
     const plan = selectSecurityTools({
       files: ["src/app.ts"],
-      authorizedTargets: ["juice-shop", "template-express"],
+      authorizedTargets: ["juice-shop", "toy-express"],
       configuredTools: ["burp"],
     });
     const zap = plan.selected.find(({ tool }) => tool.id === "zap")!;
-    expect(zap.reason).toContain("juice-shop, template-express");
+    expect(zap.reason).toContain("juice-shop, toy-express");
     expect(zap.tool.runWith).toBe(
       "graph-engine security-live-scan <target-id>",
     );

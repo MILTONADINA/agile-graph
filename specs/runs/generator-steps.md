@@ -27,7 +27,7 @@ worker's patch.
   content hash binds them. A generator-only plan needs no worker provider.
   - Test: packages/engine/tests/cli.test.ts :: shows the frozen generator registration in plan-approve
   - Test: packages/engine/tests/generator-contract.test.ts :: compares every frozen field independently of JSON object key order
-  - Test: packages/engine/tests/planning.test.ts :: counts model workers but not generator or template steps
+  - Test: packages/engine/tests/planning.test.ts :: counts model workers but not generator steps
 - AC3: A generator runs only in a disposable offline, read-only-root container
   with a writable workspace view, no forwarded credentials, no shell
   interpolation, a locally present pinned image and bounded resources/time.
@@ -72,7 +72,6 @@ worker's patch.
   - Test: packages/engine/tests/generator-contract.test.ts :: requires distinct IDs and a timeout no greater than policy
   - Test: packages/engine/tests/generator.test.ts :: uses the pinned offline sandbox and captures a scoped proposal without changing the workspace
   - Test: packages/engine/tests/generator.test.ts :: enforces registered output limits %#
-  - Test: packages/engine/tests/dag.test.ts :: stops a step that ignores its signal at the step's time limit
 - AC9: Before start/resume reservation, dispatch and each patch application,
   every generator still needing dispatch or application must have a live
   registration with the same ID, revision and canonical fields as the plan's

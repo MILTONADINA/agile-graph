@@ -10,7 +10,6 @@ import {
   applyRepair,
   DagReconciliationError,
   runDag,
-  untilAborted,
   validateDag,
   writeScope,
   type DagCheckpoint,
@@ -737,9 +736,12 @@ describe("step time limits", () => {
         workerProviderKind: () => "claude",
         saveCheckpoint: async () => {},
         generate: async (_current, state) => {
-          const pending = untilAborted(
-            new Promise<WorkerResult>(() => {}),
-            state.signal,
+          const pending = new Promise<WorkerResult>((_resolve, reject) =>
+            state.signal.addEventListener(
+              "abort",
+              () => reject(state.signal.reason),
+              { once: true },
+            ),
           );
           controller.abort(new Error("operator cancelled"));
           return pending;
@@ -749,7 +751,7 @@ describe("step time limits", () => {
     await expect(access(path.join(workspace, "tester.txt"))).rejects.toThrow();
   });
 
-  it("keeps API, local, unknown, template and generator deadlines finite with an installed override", async () => {
+  it("keeps API, local, unknown and generator deadlines finite with an installed override", async () => {
     const workspace = await fixture();
     const timeout = vi.spyOn(AbortSignal, "timeout");
     const lookup = vi.fn((current: ExecutionStep) =>
@@ -767,17 +769,10 @@ describe("step time limits", () => {
         step("local", ["api"]),
         step("unknown", ["local"]),
         {
-          id: "template",
-          kind: "template",
-          objective: "Render",
-          dependsOn: ["unknown"],
-          templateId: "toy",
-        },
-        {
           id: "generator",
           kind: "generator",
           objective: "Generate",
-          dependsOn: ["template"],
+          dependsOn: ["unknown"],
           generatorId: "toy",
         },
       ],
@@ -791,7 +786,7 @@ describe("step time limits", () => {
       "unknown",
     ]);
     expect(timeout.mock.calls).toEqual(
-      Array.from({ length: 5 }, () => [DEFAULT_POLICY.timeoutSeconds * 1000]),
+      Array.from({ length: 4 }, () => [DEFAULT_POLICY.timeoutSeconds * 1000]),
     );
   });
 
@@ -816,21 +811,6 @@ describe("step time limits", () => {
     });
     expect(timeout.mock.calls).toEqual([[3000]]);
   });
-
-  it("stops a step that ignores its signal at the step's time limit", async () => {
-    const never = new Promise<string>(() => {});
-    await expect(
-      untilAborted(never, AbortSignal.timeout(20)),
-    ).rejects.toMatchObject({ name: "TimeoutError" });
-    await expect(
-      untilAborted(Promise.resolve("done"), AbortSignal.timeout(1000)),
-    ).resolves.toBe("done");
-    const cancelled = new AbortController();
-    cancelled.abort(new Error("cancelled"));
-    await expect(untilAborted(never, cancelled.signal)).rejects.toThrow(
-      "cancelled",
-    );
-  });
 });
 
 describe("generator step validation", () => {
@@ -848,28 +828,13 @@ describe("generator step validation", () => {
     expect(() =>
       validateDag([{ ...generator, generatorId: undefined }]),
     ).toThrow("requires a generatorId");
-    for (const field of [
-      { providerId: "local" },
-      { templateId: "backend.api" },
-      { inputs: { argv: ["different"] } },
-      { effort: "high" },
-    ])
+    for (const field of [{ providerId: "local" }, { effort: "high" }])
       expect(() => validateDag([{ ...generator, ...field }])).toThrow(
-        "cannot set providerId, templateId, inputs or effort",
+        "cannot set providerId or effort",
       );
     expect(() =>
       validateDag([{ ...step("worker"), generatorId: "toy-client" }]),
     ).toThrow("Worker step worker cannot set generatorId");
-    expect(() =>
-      validateDag([
-        {
-          ...generator,
-          kind: "template",
-          generatorId: "toy-client",
-          templateId: "backend.api",
-        },
-      ]),
-    ).toThrow("Template step generate-client cannot set generatorId");
   });
 });
 

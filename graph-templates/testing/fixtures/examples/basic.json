@@ -1,1 +1,0 @@
-{ "inputs": {}, "expectedOutputs": { "files": ["tests/fixtures/factories.ts"], "exports": ["buildFixture", "buildUserFixture"] } }

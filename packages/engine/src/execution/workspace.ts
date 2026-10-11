@@ -20,11 +20,6 @@ import {
   safePath,
   wholeRepository,
 } from "../policy.js";
-import {
-  awsDescriptorForSecretScan,
-  isAwsDescriptorPath,
-  verifyAwsDescriptorDockerfile,
-} from "../template-runtime-aws.js";
 
 /** Files committed to the repository's index, without untracked ones. */
 export async function trackedFiles(root: string): Promise<string[]> {
@@ -233,23 +228,7 @@ export async function prepareProposal(
         );
       content = content.replace(change.before, () => change.after);
     }
-    let scannerContent = content;
-    let scannerBaseline = baselines.get(change.path)!;
-    if (
-      isAwsDescriptorPath(change.path) &&
-      !isAllowedPath(change.path, policy, true)
-    ) {
-      await verifyAwsDescriptorDockerfile(
-        workspace,
-        change.path,
-        content,
-        policy,
-      );
-      scannerContent = awsDescriptorForSecretScan(content);
-      // Generated descriptors are still scanned whole.
-      scannerBaseline = "";
-    }
-    if (introducesSecret(scannerBaseline, scannerContent))
+    if (introducesSecret(baselines.get(change.path)!, content))
       throw new Error(`Patch includes a potential secret in ${change.path}`);
     staged.set(change.path, { absolute, content });
   }

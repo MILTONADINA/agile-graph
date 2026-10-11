@@ -1,1 +1,0 @@
-file-exists → `app.ts` contains `/api/<tableName>` → `npm run build`. If the mount check fails but the route file exists, the `modify` step in `generate.md` was skipped — re-apply it, don't regenerate the route file.

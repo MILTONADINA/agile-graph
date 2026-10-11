@@ -10,20 +10,28 @@ Task category, complexity, and risk are explicitly proposed classifications.
 | ------------------------------------ | ------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `zero-api-budget`                    | Configuration validation / localized        | `6d7d67d`       | Existing guarded replay; independent labels and paired measurements missing                                                                                                                        |
 | `unmetered-decision-budget`          | Spend control / localized                   | `545e230`       | Isolated candidate verifier; measured worker outcomes still missing                                                                                                                                |
-| `cloud-graph-export`                 | Privacy boundary / multi-file               | `fd7081d`       | [Isolated known-history replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-09-25.json); no paired model calls                                                                      |
+| `cloud-graph-export`                 | Privacy boundary / multi-file               | `fd7081d`       | [Isolated known-history replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-10-11.json); no paired model calls                                                                      |
 | `retry-state-visibility`             | State consistency / localized               | `5703aba`       | [Pinned historical replay](../evaluation/retry-visibility-runtime/fixture-validation.json) plus opt-in arbitrary-source diagnostic; candidate-directed RPC is not independent algorithm provenance |
 | `verifier-infrastructure-stop`       | Failure classification / system integration | `06e1689`       | [Isolated service/virtual-setup replay](../evaluation/infrastructure-runtime/fixture-validation.json); no held-out runs                                                                            |
 | `linux-private-verification-mount`   | Container permissions / system integration  | `fc56768`       | Isolated candidate verifier plus native Linux private-mount permission proof                                                                                                                       |
-| `portable-npm-spawn`                 | Windows process launch / multi-file         | `b6a878d`       | Isolated verifier covers both callers; native Windows launch and current generated-app smoke passed; no arbitrary candidate run                                                                    |
-| `clean-workspace-dependency-order`   | Build/CI / multi-file                       | `b135c37`       | Inert candidate guard plus fresh offline historical typecheck/test acceptance                                                                                                                      |
-| `distinct-template-node-invocations` | Graph-schema validation / multi-file        | `a07076c`       | [Isolated full-module replay](../evaluation/template-invocation-runtime/fixture-validation.json); no paired model calls                                                                            |
+| `portable-npm-spawn`                 | Windows process launch / multi-file         | `b6a878d`       | Replay retired on 2026-10-11 with the code it exercised; the record stays in the pinned corpus                                                                                                     |
+| `clean-workspace-dependency-order`   | Build/CI / multi-file                       | `b135c37`       | Replay retired on 2026-10-11 with the code it exercised; the record stays in the pinned corpus                                                                                                     |
+| `distinct-template-node-invocations` | Graph-schema validation / multi-file        | `a07076c`       | Replay retired on 2026-10-11 with the code it exercised; the record stays in the pinned corpus                                                                                                     |
 
 The earlier [cloud-graph receipt](../evaluation/isolated-cloud-graph-fixture-validation.json)
 and the [2026-09-23 replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-09-23.json)
 remain unchanged and pin the root dependency locks used for those runs. The
 2026-09-25 replay repeats both historical arms against the host lock after the
-ESLint dev dependencies were added; it is still a zero-model-call fixture
-check, not a new measured worker result.
+ESLint dev dependencies were added, and the 2026-10-11 replay repeats them again
+after the app generator workspace was removed; each is still a zero-model-call
+fixture check, not a new measured worker result.
+
+On 2026-10-11 the app generator, the template kit and the reference app were
+removed from the repository, and with them the replays of the three tasks whose
+subject was that code: `portable-npm-spawn`, `clean-workspace-dependency-order`
+and `distinct-template-node-invocations`. The corpus manifest is unchanged, so
+its pinned `manifestSha256` and every other task's evidence stay valid; those
+three records are historical and are no longer replayed.
 
 Each manifest case records full base/repair commit IDs, exact paths, Git blob
 IDs, regular-file modes, SHA256 source hashes, objective, acceptance criteria,
@@ -49,16 +57,12 @@ through its allowed RPC interface. Its receipt explicitly sets
 ## Validate the additional historical fixtures
 
 The [fixture runner](../evaluation/validate-historical-corpus.mjs) executes the
-recorded baseline and repair for two tasks against independent behavioral checks:
+recorded baseline and repair for one task against independent behavioral checks:
 
 - Unmetered routing: the baseline wrongly dispatches at three explicit budget
   ceilings; the repair abstains with an audit reason. Three uncapped/local/offline
   control scenarios also pass on the repair. All provider responses are in-memory
   fixtures; no Jev/Laya request or model observation is produced.
-- Portable npm spawning: four Windows-path/fallback cases fail on the baseline
-  and pass on the repair; the POSIX control passes. The adapter captures the
-  actual script's executable and argv before any process starts. It does not
-  run npm, tar, generated-app builds, or native Windows APIs.
 
 ```sh
 node --test evaluation/validate-historical-corpus.test.mjs
@@ -67,8 +71,8 @@ node evaluation/validate-historical-corpus.mjs \
   --output /private/new-historical-fixture-receipt.json
 ```
 
-`--task unmetered-decision-budget` or `--task portable-npm-spawn` selects one;
-otherwise both run. The reviewed manifest pin is mandatory. The runner accepts
+`--task unmetered-decision-budget` selects it, and it is also the default.
+The reviewed manifest pin is mandatory. The runner accepts
 only its fixed adapter registry and exact hash-verified Git source; **there is
 no worker-patch input**. Node's `vm` provides instrumentation, not a security
 sandbox. Do not use these adapters to execute arbitrary generated code on the
@@ -136,63 +140,6 @@ depth, not a substitute for the container/process boundary. Provisioning and
 trusting the reviewed image remain operator responsibilities. See the
 [guest runtime](../evaluation/guest-runtime/README.md) for protocol and limits.
 
-## Verify isolated portable npm callers
-
-The same runner also accepts `--task portable-npm-spawn`. Supply a JSON source
-map with both `create-graph-app/scripts/check-pack-contents.js` and
-`create-graph-app/scripts/smoke-generated-apps.js`; the recorded repair's added
-`create-graph-app/scripts/npm-command.js` helper is optional. No other paths are
-accepted. Each source is limited to 100,000 UTF-8 bytes, the combined sources to
-200,000 bytes, and the entire escaped request to 256 KiB before Docker starts.
-
-```sh
-node evaluation/isolated-candidate.mjs \
-  --expected-sha256 REVIEWED_MANIFEST_SHA256 \
-  --task portable-npm-spawn --validate-history \
-  --output /private/new-portable-fixture-receipt.json
-```
-
-Sixteen host-owned witnesses cover Windows CLI lookup, paths with spaces,
-missing-CLI refusal, Linux/macOS controls, and frontend/backend/full-stack smoke
-command sequences. Both callers must exhibit their known Windows baseline
-failure, and every repaired witness must pass. The guest's CommonJS loader
-exposes only simulated path/filesystem/process interfaces and an inert generator.
-Actual command/argv/options and exit requests are copied into controller-owned
-traces; returned success markers are not evidence. Check-pack intentionally stops
-at its first command. Smoke traces cover install/build/test order and options,
-but do not actually install, generate, pack or build applications.
-
-Proxy constructors are unavailable in this supported guest API slice. Accessor
-arguments are refused and primitive fields are copied before recording, preventing
-prototype serialization and descriptor tricks from rewriting the observed call.
-This is bounded simulated behavior, not complete Node compatibility.
-
-The separate `GRAPH_ENGINE_NATIVE_NPM_TESTS=1` Windows-only test checks the
-exact trusted historical callers' captured `npm`/`npm.cmd` executables against
-native launch errors, the recorded helper against real `npm --version`, and
-Node/CLI paths and argv containing spaces or shell punctuation. It executes no
-generated candidate and does not supply native Windows generated-app build
-acceptance. It must run on Windows and is provisioned in that CI job; the Mac's
-default suite explicitly skips it. The same required Windows platform job now
-also runs the current `create-graph-app/scripts/smoke-generated-apps.js` on
-native Windows. That separate check generates frontend, backend and full-stack
-projects, installs each project's dependencies, and runs its build and tests.
-It is a current-scaffolder integration check, not execution of an arbitrary
-candidate or a re-run of the exact historical scripts. Its first native CI
-attempt installed and built the frontend, but Vitest could not reload a test
-through the hosted runner's `RUNNER~1` temporary-path alias. Setting
-`TEMP`/`TMP`/`TMPDIR` to the runner's canonical temp directory then made the
-native Windows platform job pass in fork
-[run 35844198661](https://github.com/MILTONADINA/graph-engineering/actions/runs/35844198661).
-The run as a whole failed separately when Ubuntu's root `npm ci` timed out
-fetching an ONNX Runtime archive before its generated-app test; a bounded
-install retry was added for that job. The Windows smoke does not turn the
-historical arbitrary-candidate or model-evidence gates green.
-
-The original corpus remains immutable: its readiness fields describe the pinned
-intake snapshot, while this workflow and the current executable registry
-describe the subsequently added tooling.
-
 ## Verify isolated private-mount candidates
 
 The isolated runner accepts `--task linux-private-verification-mount` with exactly
@@ -225,40 +172,6 @@ actual root/non-owner `EACCES`, owner read access, zero capabilities, and unchan
 host modes. Candidate commands never execute natively. This check is configured
 in Linux CI and passed on commit `e27a29d` in run `35807582602`; the Mac explicitly
 skips it. Neither fixture measures model performance or authorizes promotion.
-
-## Inspect candidate build ordering
-
-The [structural build-order guard](../evaluation/candidate-build-order.mjs)
-accepts exactly the historical root `package.json`. It parses strict, bounded
-JSON and a restricted npm-run/`&&` grammar as inert data; it never executes
-candidate scripts. Only `typecheck`, `test` and an optional `build:dependencies`
-helper may change. Unrelated fields, lifecycle hooks, dependencies and shell
-expressions are refused. Each expanded entrypoint starts with no generated
-artifacts and must build both prerequisite workspaces before downstream checks.
-
-The exact historical baseline fails these ordering witnesses, while the recorded
-repair and an equivalent inline fix pass. These are structural checks only:
-the report explicitly sets `fullBuildVerified: false`. The separate
-[clean-build verifier](../evaluation/build-order-runtime/README.md) establishes
-actual compiler/test outcomes in fresh, pinned, offline historical workspaces.
-It translates guarded operations to fixed argv against unchanged workspace
-code; candidate root script strings never execute. No model calls, independent
-labels or promotion evidence are produced by either verifier.
-
-```sh
-node --test evaluation/candidate-build-order.test.mjs
-node evaluation/build-order-runtime/provision.mjs
-GRAPH_ENGINE_BUILD_ORDER_DOCKER_TESTS=1 node --test evaluation/verify-build-order.test.mjs
-```
-
-Provisioning may access the npm registry explicitly; verification has no network
-or host mounts. Both baseline entrypoints fail with the expected missing
-`create-graph-app` entrypoint, while both projected repair entrypoints succeed.
-The [recorded receipt](../evaluation/build-order-runtime/fixture-validation.json)
-retains exact source, dependency and runtime identities, including ten legacy
-lock entries without integrity fields. The installed-tree hash records their
-actual bytes; it does not replace absent upstream attestations. Two original
-opt-in historical engine tests remain skipped, not counted as passing.
 
 ## Inspect and freeze provenance
 

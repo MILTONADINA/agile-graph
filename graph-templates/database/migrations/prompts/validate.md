@@ -1,1 +1,0 @@
-In the approved offline fixture, generate actual SQL, compile, migrate twice, verify history hashes, demonstrate failed transaction rollback and unchanged-schema generation. Do not equate README presence, generation success or failure rollback with a reversible/down migration lifecycle.

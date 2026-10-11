@@ -245,7 +245,6 @@ it("logs every MCP call with the SHA-256 of its canonical JSON arguments and nev
     { name: "context_get", arguments: { query: `add ${canary}` } },
     { name: "symbol_search", arguments: { query: canary } },
     { name: "graph_neighbors", arguments: { symbolId: canary, depth: 1 } },
-    { name: "template_list", arguments: {} },
     { name: "run_list", arguments: { limit: 5 } },
     { name: "run_status", arguments: { runId: canary } },
     {
@@ -313,7 +312,7 @@ it("refuses a state-changing MCP call when the call log cannot be written, witho
     expect(text(refused)).not.toContain("/private/log/path");
     expect(saved).not.toHaveBeenCalled();
     const read = await client.callTool({
-      name: "template_list",
+      name: "run_list",
       arguments: {},
     });
     expect(read.isError).not.toBe(true);
@@ -335,14 +334,14 @@ it("reads the call log with readMcpCalls, newest first and filtered by tool, and
   });
   const names = (await client.listTools()).tools.map((tool) => tool.name);
   expect(names.filter((name) => /log|audit|call/i.test(name))).toEqual([]);
-  await client.callTool({ name: "template_list", arguments: {} });
+  await client.callTool({ name: "symbol_search", arguments: { query: "add" } });
   await client.callTool({ name: "run_list", arguments: {} });
-  await client.callTool({ name: "template_list", arguments: {} });
+  await client.callTool({ name: "symbol_search", arguments: { query: "add" } });
   const all = readMcpCalls(data, config.projectId, { limit: 10 });
   expect(all.map((entry) => entry.tool)).toEqual([
-    "template_list",
+    "symbol_search",
     "run_list",
-    "template_list",
+    "symbol_search",
   ]);
   expect(
     readMcpCalls(data, config.projectId, { limit: 1, tool: "run_list" }),
@@ -386,7 +385,6 @@ it("enables individual tools with allowTools, keeps allowRun and allowRunStatus 
     "graph_neighbors",
     "memory_propose",
     "symbol_search",
-    "template_list",
   ];
   const names = async (options: McpServerOptions) =>
     (await (await connect(options)).listTools()).tools
@@ -663,11 +661,11 @@ it("hashes each exposed tool's name, description and input schema exactly as too
   expect(
     mcpToolListingSha256({ ...tool, description: `${tool.description} ` }),
   ).not.toBe(hashes.symbol_search);
-  await client.callTool({ name: "template_list", arguments: {} });
+  await client.callTool({ name: "run_list", arguments: {} });
   const [entry] = engine.store.mcpCalls({ limit: 1 });
   expect(entry).toMatchObject({
-    tool: "template_list",
-    definitionSha256: hashes.template_list,
+    tool: "run_list",
+    definitionSha256: hashes.run_list,
   });
 });
 

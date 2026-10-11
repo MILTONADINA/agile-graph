@@ -1,1 +1,0 @@
-To validate a different request part (e.g. headers), add a new `validateX` export following the same `schema.safeParse(...) → next(new APIError(...))` pattern — don't change the signature of the existing three, generated routes call them positionally.

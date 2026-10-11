@@ -4874,7 +4874,10 @@ describe("a cloud client's plan when its run starts", () => {
   // working set leaves .graph/project.json out of the source snapshot, so a
   // reviewer configured there after planning changes neither the plan's
   // policy hash nor its snapshot.
-  async function allowingCloud(configure?: (config: ProjectConfig) => void) {
+  async function allowingCloud(
+    configure?: (config: ProjectConfig) => void,
+    generator?: EngineDependencies["generator"],
+  ) {
     const { root, config, data } = await fixture((value) => {
       value.policy.providers = ["local", "reviewer", "tester", "cloud"];
       value.policy.inference = "allowlisted";
@@ -4898,6 +4901,7 @@ describe("a cloud client's plan when its run starts", () => {
     const engine = await open(root, {
       worker,
       review: approvingReviewer(reviewed),
+      generator,
     });
     // What MCP plan_create does for a cloud-backed client.
     const planned = await engine.createPlan({
@@ -4951,22 +4955,19 @@ describe("a cloud client's plan when its run starts", () => {
   });
 
   it("refuses a plan stored before plans recorded their author while its roles straddle the export boundary", async () => {
-    const { root, config, engine, worker, reviewed } = await allowingCloud();
-    // A plan of template steps alone that a cloud-backed client wrote
-    // before template steps counted as local was stored with no side, as a
+    const { root, config, engine, worker, reviewed } = await allowingCloud(
+      (value) => {
+        value.generators = [generatorRegistration()];
+      },
+      async () => generated(),
+    );
+    // A plan of non-worker steps alone that a cloud-backed client wrote
+    // before such steps counted as local was stored with no side, as a
     // person's plan is, and before plans recorded their author.
     const current = await engine.createPlan({
-      objective: "Document the API",
-      acceptance: ["docs/API.md lists the routes"],
-      steps: [
-        {
-          id: "api-docs",
-          kind: "template",
-          objective: "Document the API",
-          dependsOn: [],
-          templateId: "documentation.api",
-        },
-      ],
+      objective: "Regenerate first",
+      acceptance: ["first is 3"],
+      steps: [generatorStep()],
     });
     expect(current.cloudAuthored).toBe(false);
     expect(current.exportSide).toBeUndefined();
@@ -4977,13 +4978,13 @@ describe("a cloud client's plan when its run starts", () => {
     delete legacy.cloudAuthored;
     engine.store.savePlan(legacy);
     // Its author cannot be told, so a cloud reviewer, which would receive
-    // what the local template wrote, refuses it.
+    // what the local generator wrote, refuses it.
     await writeJson(path.join(root, PROJECT_FILE), {
       ...config,
       review: { providerId: "cloud" },
     });
     await expect(engine.start(legacy.id)).rejects.toThrow(
-      "This plan was stored before plans recorded whether a cloud-backed client wrote them, and it runs template step api-docs locally and the reviewer (cloud) on non-local providers",
+      "This plan was stored before plans recorded whether a cloud-backed client wrote them, and it runs generator step generate locally and the reviewer (cloud) on non-local providers",
     );
     expect(engine.store.runs()).toHaveLength(0);
     expect(worker).not.toHaveBeenCalled();

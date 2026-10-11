@@ -5,6 +5,10 @@ Implementation, automated validation, real-model evidence, and partner review
 are separate outcomes. Synthetic tests are never counted as production
 calibration evidence.
 
+> **2026-10-11:** the app generator (`create-graph-app`), the template kit
+> (`graph-templates`), the reference app and the engine's template runtime
+> were removed from the repository. Entries about them below are history.
+
 Work is stacked in focused commits on the owner's fork, on feature branches.
 No direct pushes to `main`, no AI co-author trailers, and no upstream updates.
 The owner authorized review and merge of the implementation into
@@ -686,9 +690,8 @@ is not all a prerequisite for normal local or MCP-assisted engineering:
 See [the Mac runbook](mac-local-runbook.md),
 [native capability report](installed-workers.md), and [evaluation gates](decisions.md).
 
-The planned catalog and remaining implementation boundaries are explicit in the
-[template inventory](dag-and-template-runtime.md#remaining-catalog-inventory)
-and [context lifecycle](context-lifecycle.md). Static TS/JS, Python, Go, Java, C# and Rust resolution
+The remaining implementation boundaries are explicit in
+[dependency scheduling](dag-runtime.md) and [context lifecycle](context-lifecycle.md). Static TS/JS, Python, Go, Java, C# and Rust resolution
 does not cover arbitrary dynamic dispatch, external installed packages, or
 full configured Rust builds. [Typed memory assertions](memory-assertions.md)
 require reviewed canonical claims; they do not infer general semantic truth

@@ -276,7 +276,6 @@ export class ContextEngine {
         snapshotId,
         excludedPaths: policy.excludedPaths,
         exportPaths: policy.exportPaths,
-        allowPublicTemplateLedger: policy.allowPublicTemplateLedger,
         workingSet: policy.workingSet,
       }),
     );

@@ -1,1 +1,0 @@
-{ "packages": [], "services": [], "templates": [{ "id": "backend.error-handler", "relationship": "requires" }] }

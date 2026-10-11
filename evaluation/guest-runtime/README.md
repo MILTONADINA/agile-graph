@@ -2,9 +2,8 @@
 
 This fixture evaluates arbitrary source edits **inside a QuickJS WebAssembly
 guest**, without restricting edits to an AST repair region. It supports the
-reviewed `unmetered-decision-budget` TypeScript dependency/API slice and the
-`portable-npm-spawn` CommonJS callers/helper, and the
-`linux-private-verification-mount` Docker TypeScript interface, and the
+reviewed `unmetered-decision-budget` TypeScript dependency/API slice, the
+`linux-private-verification-mount` Docker TypeScript interface and the
 `cloud-graph-export` graph-query/MCP-handler interface, not general Node applications.
 It never executes candidate JavaScript in Node, runs a model, opens a provider
 connection, launches a requested process, or supplies acceptance judgments.
@@ -37,8 +36,8 @@ GRAPH_ENGINE_GUEST_RUNTIME_TESTS=1 GRAPH_ENGINE_GUEST_HISTORY_TESTS=1 \
 ```
 
 The history tests verify source SHA256 identities and run both revisions
-against all registered external host witnesses (15 unmetered, 16 portable, 10 mount
-and 19 cloud graph scenarios per revision). They never fetch history.
+against all registered external host witnesses (15 unmetered, 10 mount and 19
+cloud graph scenarios per revision). They never fetch history.
 Default tests perform host-refusal and protocol/preflight checks; Docker tests are explicitly
 skipped unless enabled. An enabled test fails if the image/history is missing.
 
@@ -201,7 +200,7 @@ guest memory. Returned verification results are additional consistency checks,
 never substitutes for those traces. Descriptor-based argument copies, unavailable
 Proxy constructors and sticky capability refusals protect the recorded values.
 The mount slice permits at most 512 capability operations for its bounded
-16-file scenario; the other slices retain their 128-operation ceiling.
+16-file scenario; the unmetered decision slice retains the 128-operation ceiling.
 
 These checks reproduce invocation behavior only. The separate
 `GRAPH_ENGINE_NATIVE_MOUNT_TESTS=1 node --test evaluation/native-mount.test.mjs`
@@ -213,69 +212,11 @@ it without changing permissions or restoring capabilities. It never executes
 candidate argv or source on the host. macOS and Windows default tests explicitly
 skip this native Linux proof.
 
-### Portable npm caller protocol
-
-The second task uses the same envelope with `taskId: "portable-npm-spawn"`.
-`files` must contain both `create-graph-app/scripts/check-pack-contents.js` and
-`create-graph-app/scripts/smoke-generated-apps.js`; the repair's
-`create-graph-app/scripts/npm-command.js` helper is optional. Each source is at
-most 100,000 bytes and their aggregate at most 200,000 bytes. The serialized
-JSON still must fit the 256 KiB input cap, including escaping and the scenario.
-
-`scenario` contains only `input`, with exactly `entrypoint`, `platform`,
-`execPath`, `env`, `existing`, `tmpDir`, and `scriptArgs`, as supplied by the
-external portable case registry. No actual host environment is forwarded.
-Completed `observations` has exactly:
-
-```json
-{
-  "calls": [
-    {
-      "executable": "npm",
-      "args": ["test"],
-      "cwd": "/virtual/app",
-      "encoding": null,
-      "stdio": "inherit",
-      "env": { "NEXT_TELEMETRY_DISABLED": "1" },
-      "shell": false
-    }
-  ],
-  "error": null,
-  "exitCode": null
-}
-```
-
-CommonJS compilation and module caches are guest-only. Fixed virtual modules
-provide pure `path` operations, `fs.existsSync` over the supplied string list,
-`fs.mkdtempSync` returning the supplied virtual directory, a virtual `os.tmpdir`,
-and inert `Registry.load`/`generate`. The unused historical `node:zlib` import
-is an empty guest module. Unknown imports and real filesystem operations fail
-closed, even when caught. A helper import fails if its source is absent.
-
-`execFileSync` never executes a process. It copies bounded primitive arguments
-and declared options into a controller-owned trace. Data-property descriptors
-are required: accessors, inherited options, nonprimitive coercion and unknown
-option keys are unsupported. The guest's `Proxy` constructor is removed before
-candidate code runs, preventing descriptor/get-trap disagreement. Prototype serialization/iterator changes and
-post-call mutations cannot rewrite the copied observations. `shell: true` is
-recorded, not executed; the external witnesses reject it. Console output is
-inert, and attempted `process.exit`/`exitCode` writes are independently recorded.
-
-The pack caller stops at its first captured command with the fixed
-`GRAPH_CANDIDATE_INVOCATION_CAPTURED` exception. Smoke commands return an inert
-empty string. Only that exception and a normalized missing-npm-CLI error are
-reported; other guest exceptions use the generic candidate-error envelope.
-This slice does **not** test tar contents, real npm invocation, actual generation,
-dependency installation, application builds, native Windows APIs or filesystem
-case sensitivity. It tests both callers' command construction against controlled
-Windows/Linux/Darwin inputs, with outside-guest observations and outside-container
-acceptance comparisons.
-
 ## Limits and deliberate exclusions
 
 Internal controls: 3-second monotonic execution deadline, 10,000 interrupt
 checks (not an exact instruction count), 1,000 promise jobs, 128 capability
-calls, 32 fetch requests or process-call observations, 32 KiB total trace, 512 KiB guest stack and
+calls, 32 fetch requests, 32 KiB total trace, 512 KiB guest stack and
 an **advisory** 64 MiB guest memory limit. Source parsing/transpilation and the
 controller itself remain subject to the outer container limits. Output is at
 most 64 KiB; all guest errors exposed on rejection are generic.
@@ -300,10 +241,11 @@ module as an in-process host sandbox or reuse a runtime after failure.
 
 An actual fixture probe also observed replacement of nonwritable,
 nonconfigurable **data** properties in this pinned guest. Guest `Object.freeze`
-is consequently not an authority boundary. The portable Proxy guard uses a
-nonconfigurable **accessor**, with an actual redefinition/recovery regression;
-request/command observations remain in the separate controller regardless of
-guest object mutation.
+is consequently not an authority boundary. The mount and cloud graph Proxy
+guards use a nonconfigurable **accessor**; regressions cover the unavailable
+constructor in both slices and an actual redefinition attempt in the cloud graph
+slice. Request/command observations remain in the separate controller regardless
+of guest object mutation.
 
 The MIT-licensed pinned [core and synchronous variant](https://github.com/justjake/quickjs-emscripten/blob/v0.32.0/packages/quickjs-emscripten-core/README.md)
 support ordinary promises without Asyncify. All guest handles are disposed;

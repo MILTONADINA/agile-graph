@@ -62,19 +62,12 @@ jobs:
         run: node --test scripts/local-engine-env.test.mjs
       - name: Labelling and paired-run collection (synthetic fixtures only)
         run: node --test scripts/labelling.test.mjs
-      - run: npm ci --prefix graph-templates/tools/validate-templates
-      - run: npm test --prefix graph-templates/tools/validate-templates
-      - name: Template manifest and registry consistency
-        run: node graph-templates/tools/validate-templates/index.js .
       - name: Evaluation protocol and intake checks
-        run: node --test evaluation/candidate-cases.test.mjs evaluation/candidate-portable.test.mjs evaluation/candidate-mount.test.mjs evaluation/native-mount.test.mjs evaluation/candidate-build-order.test.mjs evaluation/verify-build-order.test.mjs evaluation/isolated-candidate.test.mjs evaluation/calibration-corpus.test.mjs evaluation/corpus-history.test.mjs evaluation/historical-receipt-pins.test.mjs evaluation/candidate-template-invocations.test.mjs evaluation/verify-template-invocations.test.mjs evaluation/candidate-retry-visibility.test.mjs evaluation/verify-retry-visibility.test.mjs evaluation/candidate-cloud-graph.test.mjs evaluation/candidate-verifier-infrastructure.test.mjs evaluation/candidate-verifier-setup.test.mjs evaluation/verify-verifier-infrastructure.test.mjs
+        run: node --test evaluation/candidate-cases.test.mjs evaluation/candidate-mount.test.mjs evaluation/native-mount.test.mjs evaluation/isolated-candidate.test.mjs evaluation/calibration-corpus.test.mjs evaluation/corpus-history.test.mjs evaluation/historical-receipt-pins.test.mjs evaluation/candidate-retry-visibility.test.mjs evaluation/verify-retry-visibility.test.mjs evaluation/candidate-cloud-graph.test.mjs evaluation/candidate-verifier-infrastructure.test.mjs evaluation/candidate-verifier-setup.test.mjs evaluation/verify-verifier-infrastructure.test.mjs
       - name: Paired local context packet checks (no model call)
         run: node --test evaluation/live-paired-qwen-context.test.mjs
-      - run: npm ci --prefix graph-templates/tools/validate-graph
       - name: Sealed collection bookkeeping
         run: node --test evaluation/sealed/tests/*.test.mjs
-      - run: npm test --prefix graph-templates/tools/validate-graph
-      - run: npm run pack:check -w create-graph-app
       - name: Docker execution integration
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
@@ -103,29 +96,6 @@ jobs:
         run: node --test evaluation/native-mount.test.mjs
         env:
           GRAPH_ENGINE_NATIVE_MOUNT_TESTS: "1"
-      - name: Native Windows historical npm launch
-        if: runner.os == 'Windows'
-        run: node --test evaluation/native-portable.test.mjs
-        env:
-          GRAPH_ENGINE_NATIVE_NPM_TESTS: "1"
-      - name: Native Windows generated-app install, build and test
-        if: runner.os == 'Windows'
-        timeout-minutes: 20
-        run: node create-graph-app/scripts/smoke-generated-apps.js
-        env:
-          # Hosted Windows' default TEMP may use an 8.3 alias (RUNNER~1),
-          # while Vite resolves the long path and then misses its own test file.
-          TEMP: ${{ runner.temp }}
-          TMP: ${{ runner.temp }}
-          TMPDIR: ${{ runner.temp }}
-      - name: Historical clean-workspace build proof
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          node evaluation/build-order-runtime/provision.mjs
-          node --test evaluation/verify-build-order.test.mjs
-        env:
-          GRAPH_ENGINE_HISTORY_TESTS: "1"
-          GRAPH_ENGINE_BUILD_ORDER_DOCKER_TESTS: "1"
       - name: Snapshot-only Go compiler bindings
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
@@ -167,91 +137,11 @@ jobs:
           npm test -w @graph-engineering/engine -- --run tests/context-dart-runtime.test.ts
         env:
           GRAPH_ENGINE_DART_DOCKER_TESTS: "1"
-      - name: Generated backend template integration
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -t graph-backend-template-test:local packages/engine/tests/fixtures/backend-runtime
-          docker pull node:24-bookworm-slim
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-backend.test.ts tests/template-runtime-crud.test.ts tests/template-runtime-devops.test.ts tests/template-runtime-search.test.ts tests/template-runtime-webhooks.test.ts tests/template-runtime.test.ts
-        env:
-          GRAPH_ENGINE_BACKEND_DOCKER_TESTS: "1"
-          GRAPH_ENGINE_DOCKER_TESTS: "1"
-      - name: Generated testing templates and isolated PostgreSQL
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -t graph-testing-template-test:local packages/engine/tests/fixtures/testing-runtime
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-testing.test.ts
-        env:
-          GRAPH_ENGINE_TESTING_DOCKER_TESTS: "1"
-      - name: Generated authentication with isolated PostgreSQL races
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -f packages/engine/tests/fixtures/auth-db-runtime/Dockerfile -t graph-auth-template-db-test:local packages/engine/tests/fixtures
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-auth.test.ts tests/template-runtime-oauth.test.ts tests/template-runtime-session.test.ts tests/template-runtime-roles.test.ts tests/template-runtime-permissions.test.ts
-        env:
-          GRAPH_ENGINE_BACKEND_DOCKER_TESTS: "1"
-          GRAPH_ENGINE_AUTH_POSTGRES_TESTS: "1"
-      - name: Generated database lifecycle with isolated PostgreSQL
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -t graph-database-template-test:local packages/engine/tests/fixtures/database-runtime
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-database.test.ts tests/template-runtime-search.test.ts
-        env:
-          GRAPH_ENGINE_DATABASE_DOCKER_TESTS: "1"
-      - name: Generated storage authorization and SDK signing
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -t graph-storage-template-test:local packages/engine/tests/fixtures/storage-runtime
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-storage.test.ts
-        env:
-          GRAPH_ENGINE_STORAGE_DOCKER_TESTS: "1"
-      - name: Generated Express scaffold and compiled server
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -t graph-project-template-test:local packages/engine/tests/fixtures/project-runtime
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-project.test.ts
-        env:
-          GRAPH_ENGINE_PROJECT_DOCKER_TESTS: "1"
-      - name: Generated frontend build and browser integration
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -t graph-frontend-template-test:local packages/engine/tests/fixtures/frontend-runtime
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-frontend.test.ts
-        env:
-          GRAPH_ENGINE_FRONTEND_DOCKER_TESTS: "1"
-          # Installs the generated Vite app from the registry, then typechecks, tests and builds it.
-          GRAPH_ENGINE_VITE_BUILD_TESTS: "1"
-      - name: Generated full-stack authentication with real PostgreSQL and Chromium
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: |
-          docker build -f packages/engine/tests/fixtures/fullstack-runtime/Dockerfile -t graph-fullstack-template-test:local packages/engine/tests/fixtures
-          npm test -w @graph-engineering/engine -- --run tests/template-runtime-fullstack.test.ts
-        env:
-          GRAPH_ENGINE_FULLSTACK_DOCKER_TESTS: "1"
       - name: Platform dashboard browser integration
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e:fixture -w @graph-engineering/dashboard
-
-  generated-apps:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 24
-          cache: npm
-      - name: Install workspace dependencies with one bounded retry
-        run: |
-          # Root npm ci includes onnxruntime-node, whose native archive fetch
-          # runs in postinstall and is outside npm's ordinary fetch retry.
-          npm ci || { sleep 5; npm ci; }
-      - run: npm run build -w create-graph-app
-      - run: node create-graph-app/scripts/smoke-generated-apps.js
 
   sidecar:
     runs-on: ubuntu-24.04
@@ -300,13 +190,6 @@ jobs:
         run: |
           # The root postinstall native archive fetch is outside npm's retry.
           npm ci || { sleep 5; npm ci; }
-      - name: Historical distinct-template invocation replay
-        run: |
-          node evaluation/template-invocation-runtime/provision.mjs
-          node --test evaluation/candidate-template-invocations.test.mjs evaluation/verify-template-invocations.test.mjs
-        env:
-          GRAPH_ENGINE_TEMPLATE_GUEST_TESTS: "1"
-          GRAPH_ENGINE_HISTORY_TESTS: "1"
       - name: Historical retry-state replay
         run: |
           node evaluation/retry-visibility-runtime/provision.mjs

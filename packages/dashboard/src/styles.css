@@ -1551,10 +1551,6 @@ input::placeholder {
   align-items: start;
   gap: 22px;
 }
-.runs-layout > div:first-child {
-  display: grid;
-  gap: 20px;
-}
 .run-option {
   width: 100%;
   padding: 17px 20px;
@@ -1722,44 +1718,6 @@ input::placeholder {
 }
 .run-detail > .inline-hint {
   padding: 0 23px 23px;
-}
-.template-panel .inline-hint {
-  padding: 0 23px 23px;
-}
-.template-panel .notice {
-  margin: 0 17px 17px;
-}
-.template-details {
-  padding: 0 20px 20px;
-  color: #9aac84;
-  font-size: 10px;
-}
-.template-details summary {
-  cursor: pointer;
-}
-.template-list {
-  margin-top: 15px;
-  max-height: 320px;
-  overflow: auto;
-}
-.template-list > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 0;
-  border-top: 1px solid #e9efdf;
-}
-.template-list strong {
-  display: block;
-  font-size: 10px;
-  font-weight: 500;
-  color: #8da572;
-}
-.template-list .small {
-  display: block;
-  font-size: 8px;
-  margin-top: 4px;
 }
 .category-filter select {
   background: #fcfef7;
@@ -1936,8 +1894,6 @@ input::placeholder {
 .run-usage span,
 .timeline-header time,
 .event-details,
-.template-details,
-.template-list strong,
 .decision-table-header,
 .decision-selection,
 .confidence,
@@ -2381,9 +2337,6 @@ input::placeholder {
   .form-row {
     grid-template-columns: 1fr;
     gap: 0;
-  }
-  .runs-layout > div:first-child {
-    gap: 15px;
   }
   .run-list {
     max-height: 330px;

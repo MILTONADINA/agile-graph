@@ -11,6 +11,10 @@ another project.
 
 ## Start here — state on 2026-10-01
 
+> **2026-10-11:** the app generator (`create-graph-app`), the template kit
+> (`graph-templates`), the reference app and the engine's template runtime
+> were removed from the repository. Entries about them below are history.
+
 On 2026-09-30 the owner moved this work from Claude Code to Codex. The
 sections after this one are the history up to that point. Where they
 disagree with this section, this section wins.
@@ -1206,15 +1210,12 @@ fixture's bytes (`0fe5088`).
 The [completion checklist](completion-checklist.md) is the detailed history.
 Read it chronologically: its historical 48-node/seven-planned table and early
 "Vite on a separate branch" paragraph are superseded by later merges. The
-catalog at this snapshot is **53 implemented, three planned**; every implemented fine
-node has an audited deterministic renderer. The planned API filtering, pagination
-and sorting IDs duplicate existing capabilities rather than representing
-three missing implementations.
+template catalog that snapshot describes was removed on 2026-10-11.
 
 ## What this system is
 
-Graph Engineering is a local-first context and engineering platform layered on
-the existing template ecosystem. The shared project policy and stores support:
+Graph Engineering is a local-first context and engineering platform. The
+shared project policy and stores support:
 
 1. Repository syntax/limited static graph, SQLite full-text search, optional
    offline Jina embeddings, structural summaries, and reviewed memory.
@@ -1247,10 +1248,8 @@ the existing template ecosystem. The shared project policy and stores support:
 
 Useful starting points: [README](../README.md), [platform](platform.md),
 [decision control](decisions.md), [context lifecycle](context-lifecycle.md),
-[template/DAG runtime](dag-and-template-runtime.md), and
-[installed-worker limits](installed-workers.md). The coarse `create-graph-app`
-scaffolder and the fine-node `graph-templates` registry have intentionally
-different contracts; do not merge their schemas casually.
+[dependency scheduling](dag-runtime.md), and
+[installed-worker limits](installed-workers.md).
 
 ## Owner requirements and intended end state
 
@@ -1394,7 +1393,7 @@ or independent-evaluation claim is established.
 | 7   | Batched typed decisions                         | Implemented with an observed two-question, one-forward-pass Laya call; not autonomously promoted.                                                                                                                                                                                                                                                                                                  |
 | 8   | Context/tool/test/retry/stop/memory controllers | Integrated with deterministic floors, bounded actions, and shadow defaults; model scores cannot skip safety gates.                                                                                                                                                                                                                                                                                 |
 | 9   | Summaries and safe reuse                        | Content-addressed summaries and exact cache reuse exist; cached proposals still require fresh checks.                                                                                                                                                                                                                                                                                              |
-| 10  | DAG and fine templates                          | Validated scheduling and 53 audited implemented nodes; three planned alias IDs unavailable. AWS ECS Express Mode work is an **offline descriptor**, not a deployment or AWS spend.                                                                                                                                                                                                                 |
+| 10  | DAG scheduling                                  | Validated scheduling, generator steps and combined-result repair. The template catalog was removed on 2026-10-11.                                                                                                                                                                                                                                                                                  |
 | 11  | Memory and semantic graph                       | Bounded TS/JS, Python, Go, Java, C#, and Rust declaration evidence exists, with explicit heuristic/unsupported fallbacks. It is not a whole-program runtime call graph.                                                                                                                                                                                                                            |
 | 12  | Native clients and cost controls                | Claude Max managed proposal tested; Codex managed proposals disabled because the installed binary lacks restricted read roots; Cursor SDK proposal adapter mocked but not live-key-tested. Jev metering needs operator price/cap. MCP use is independent of these managed-worker paths.                                                                                                            |
 | 13  | Calibration, held-out evidence, promotion       | Extensive synthetic/retrospective fixtures, sealed bookkeeping, signed inspection and analysis-only projections exist. **Not complete as a real held-out or promotion capability:** source/review/key/witness governance (now the owner's keys and Rekor), protected provenance, measured paired outcomes/costs, and grant admission (PR-5) remain. This is the principal promotion gap.           |

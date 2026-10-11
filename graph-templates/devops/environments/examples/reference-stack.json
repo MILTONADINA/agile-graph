@@ -1,7 +1,0 @@
-{
-  "inputs": {},
-  "expectedOutputs": {
-    "files": [".env.example", "docs/ENVIRONMENT.md"],
-    "variableCount": 11
-  }
-}

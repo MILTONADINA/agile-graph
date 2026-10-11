@@ -1,5 +1,0 @@
-{
-  "entityName": "Product",
-  "tableName": "products",
-  "searchFields": ["name", "description"]
-}

@@ -26,16 +26,11 @@ Start with [working as an AI agile team](agile-team.md), then the
 | [Scaling](scaling.md)                                 | Working sets and limits for large repositories                         |
 | [Context lifecycle](context-lifecycle.md)             | Indexing, summaries, cache, backup and restore                         |
 
-## Templates
+## Plans and scheduling
 
-| Guide                                                                                           | What it covers                                       |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [Dependency scheduling and templates](dag-and-template-runtime.md)                              | Multi-step plans and the audited catalog             |
-| [Authentication and authorization](authentication-runtime.md)                                   | Password, JWT, session, OAuth, roles and permissions |
-| [Database](database-runtime.md), [storage](storage-runtime.md), [frontend](frontend-runtime.md) | The other audited runtimes                           |
-| [Full-stack smoke](fullstack-runtime.md)                                                        | A generated app composed from several templates      |
-| [Public template artifacts](public-template-artifacts.md)                                       | What templates may write to public files             |
-| [Publishing create-graph-app](publishing-cli.md)                                                | Release reference for the coarse scaffolder          |
+| Guide                                   | What it covers                                          |
+| --------------------------------------- | ------------------------------------------------------- |
+| [Dependency scheduling](dag-runtime.md) | Multi-step plans, deadlines, generator steps and repair |
 
 ## Decisions and evidence
 

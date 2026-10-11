@@ -5,7 +5,6 @@ const platformChecks = [
   "platform (ubuntu-24.04-arm)",
   "platform (macos-15)",
   "platform (windows-2025)",
-  "generated-apps",
   "sidecar",
 ];
 

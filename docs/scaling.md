@@ -46,9 +46,6 @@ a working set:
 - indexing, retrieval and context packets cover only those paths;
 - workers may read and write only those paths, enforced by the same path
   check as `excludedPaths`, which still applies inside the working set;
-- `.graph/CONTEXT.md` stays readable, as before;
-- template steps whose target directory is outside the working set are
-  refused;
 - required checks and security scans still run on the whole repository,
   because a change inside the working set can break code outside it. The
   run workspace copies, verifies, fingerprints and publishes the whole

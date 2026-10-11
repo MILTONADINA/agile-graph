@@ -39,13 +39,6 @@ export const dockerAvailable = (project: ProjectResponse) =>
     ? project.capabilities.docker
     : project.capabilities.docker.available;
 
-export interface TemplateSummary {
-  id: string;
-  name: string;
-  source: string;
-  status: string;
-}
-
 export interface InstalledWorkerCapability {
   kind: "codex" | "claude" | "cursor";
   executable: string;

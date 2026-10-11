@@ -1,1 +1,0 @@
-Validate bounded JSON fixtures against literal known pgTable exports. Serialize data without evaluating it. Propose the guarded seed runner and package script; no host insert, build or install. Preserve secret screening and the separate explicitly acknowledged isolated target.

@@ -1,1 +1,0 @@
-Do not overwrite custom Docker/Compose/ignore files implicitly. Propose an explicit reviewed migration; preserve Node 24 validation, build-context secret exclusions, install-hook suppression and nonroot production-only runtime. Identical deterministic rerenders are idempotent. Changing image overrides or exposing ports beyond loopback requires explicit operator review.

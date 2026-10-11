@@ -1,8 +1,0 @@
-{
-  "inputs": {
-    "nodeVersion": "24",
-    "mainBranch": "dev",
-    "includeMigrations": false
-  },
-  "expectedOutputs": { "files": [".github/workflows/ci.yml"] }
-}

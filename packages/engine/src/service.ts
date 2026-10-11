@@ -203,16 +203,11 @@ import {
 } from "./verification-selection.js";
 import { parseSpec, planFromSpec, SPECS_DIR } from "./specs.js";
 import {
-  renderTemplateProposal,
-  templateRuntimeCapability,
-} from "./templates.js";
-import {
   applyRepair,
   checkpointPaths,
   parseDagCheckpoint,
   runDag,
   validateDag,
-  untilAborted,
   writeScope,
   DagReconciliationError,
   DAG_REPAIR_STEP,
@@ -1499,12 +1494,6 @@ export class GraphEngine {
     if (input.steps) {
       const validated = validateDag(input.steps).steps;
       if (validated.every((step) => step.kind !== "worker")) {
-        for (const step of validated)
-          if (
-            step.kind === "template" &&
-            !templateRuntimeCapability(step.templateId!).executable
-          )
-            throw new Error(`Template ${step.templateId} is not executable`);
         const generators = this.frozenGenerators(validated);
         const plan: ExecutionPlan = {
           version: "1.0.0",
@@ -1522,8 +1511,8 @@ export class GraphEngine {
           ...(input.spec ? { spec: input.spec } : {}),
           cloudAuthored: input.cloudAuthored === true,
         };
-        // Template steps run locally, so a cloud-backed client's plan of
-        // template steps alone keeps the reviewer local too.
+        // Generator steps run locally, so a cloud-backed client's plan of
+        // generator steps alone keeps the reviewer local too.
         if (input.cloudAuthored) {
           const side = await this.assertOneSideOfExport(plan);
           if (side) plan.exportSide = side;
@@ -1660,11 +1649,7 @@ export class GraphEngine {
         if (!worker)
           throw new Error(`Step ${step.id} uses an unavailable worker`);
         assertProvider(worker, this.config.policy, step.effort);
-      } else if (
-        step.kind === "template" &&
-        !templateRuntimeCapability(step.templateId!).executable
-      )
-        throw new Error(`Template ${step.templateId} is not executable`);
+      }
     }
     if (input.cloudAuthored) {
       // Stored with the plan, so recovery keeps an escalating step there,
@@ -1679,12 +1664,13 @@ export class GraphEngine {
   }
   /**
    * Refuses a plan whose model roles straddle the export boundary. A local
-   * worker, tester or template step may read files the export policy keeps from cloud
-   * models and write them under exported paths, where a later cloud step or
-   * a cloud reviewer receives them. Path filters cannot tell such a copy
-   * from the project's own source, so a plan a cloud-backed client wrote
-   * keeps every role on one side; a person's own plan may mix them.
-   * Returns that side, or nothing when the plan runs no model or template.
+   * worker, tester or generator step may read files the export policy keeps
+   * from cloud models and write them under exported paths, where a later
+   * cloud step or a cloud reviewer receives them. Path filters cannot tell
+   * such a copy from the project's own source, so a plan a cloud-backed
+   * client wrote keeps every role on one side; a person's own plan may mix
+   * them. Returns that side, or nothing when the plan runs no model or
+   * generator.
    */
   private async assertOneSideOfExport(
     plan: ExecutionPlan,
@@ -1699,7 +1685,7 @@ export class GraphEngine {
     const remote = roles.filter((entry) => !entry.local);
     if (local.length && remote.length)
       throw new Error(
-        `A cloud-backed client can create a plan only when its worker steps, the configured tester and the configured reviewer all run locally or all run on non-local providers, and template steps count as local: a local model or template may read files the export policy keeps from cloud models and write them where a cloud model receives them. This plan runs ${local.map((entry) => entry.role).join(", ")} locally and ${remote.map((entry) => entry.role).join(", ")} on non-local providers. Choose providers on one side, or have a person create the plan with graph-engine plan.`,
+        `A cloud-backed client can create a plan only when its worker steps, the configured tester and the configured reviewer all run locally or all run on non-local providers, and generator steps count as local: a local model or generator may read files the export policy keeps from cloud models and write them where a cloud model receives them. This plan runs ${local.map((entry) => entry.role).join(", ")} locally and ${remote.map((entry) => entry.role).join(", ")} on non-local providers. Choose providers on one side, or have a person create the plan with graph-engine plan.`,
       );
     return local.length ? "local" : remote.length ? "non-local" : undefined;
   }
@@ -1725,7 +1711,7 @@ export class GraphEngine {
       if (plan.cloudAuthored !== undefined) return;
       // A plan stored before plans recorded who wrote them may be a
       // cloud-backed client's that the one-side check at planning let
-      // through: one of template steps alone got no side before template
+      // through: one of non-worker steps alone got no side before such
       // steps counted as local. Its author cannot be told, so it runs
       // only while its roles are all on one side.
       const roles = modelRoles(plan, await this.providers(), reviewerId);
@@ -1733,7 +1719,7 @@ export class GraphEngine {
       const remote = roles.filter((entry) => !entry.local);
       if (local.length && remote.length)
         throw new Error(
-          `This plan was stored before plans recorded whether a cloud-backed client wrote them, and it runs ${local.map((entry) => entry.role).join(", ")} locally and ${remote.map((entry) => entry.role).join(", ")} on non-local providers: a local model or template may read files the export policy keeps from cloud models and write them where a cloud model receives them. Create a fresh plan, which records its author, or configure providers on one side.`,
+          `This plan was stored before plans recorded whether a cloud-backed client wrote them, and it runs ${local.map((entry) => entry.role).join(", ")} locally and ${remote.map((entry) => entry.role).join(", ")} on non-local providers: a local model or generator may read files the export policy keeps from cloud models and write them where a cloud model receives them. Create a fresh plan, which records its author, or configure providers on one side.`,
         );
       return;
     }
@@ -3914,25 +3900,6 @@ export class GraphEngine {
               );
               return result;
             }
-            if (step.kind === "template") {
-              const { targetDirectory, ...inputs } = step.inputs ?? {};
-              if (
-                targetDirectory !== undefined &&
-                typeof targetDirectory !== "string"
-              )
-                throw new Error("Template targetDirectory must be a string");
-              return untilAborted(
-                renderTemplateProposal({
-                  templateId: step.templateId!,
-                  instanceId: step.id,
-                  inputs,
-                  targetDirectory,
-                  workspace,
-                  policy: this.config.policy,
-                }),
-                state.signal,
-              );
-            }
             const provider = (await this.providers()).find(
               (provider) => provider.id === step.providerId,
             );
@@ -4985,9 +4952,9 @@ export function modelRoles(
 ): { role: string; local: boolean }[] {
   const roles: { role: string; local: boolean }[] = [];
   for (const step of plan.steps) {
-    // Non-worker steps execute on this machine. In particular, a template or
-    // future generator may read files the export policy keeps from cloud
-    // models; treating an unfamiliar non-worker kind as local fails closed.
+    // Non-worker steps execute on this machine. In particular, a generator
+    // may read files the export policy keeps from cloud models; treating an
+    // unfamiliar non-worker kind as local fails closed.
     if (step.kind !== "worker") {
       roles.push({ role: `${step.kind} step ${step.id}`, local: true });
       continue;

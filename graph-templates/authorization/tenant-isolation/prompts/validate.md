@@ -1,1 +1,0 @@
-file-exists (both files) → exports [requireTenant, withTenantScope] → `npm run build`. Additionally, for every table marked `tenantScoped: true` in `database.schema.json`, grep its `backend.repository`-generated file for `withTenantScope` — its absence is a security finding, escalate it, don't just note it.

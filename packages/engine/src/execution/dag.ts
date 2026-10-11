@@ -112,14 +112,12 @@ export class DagReconciliationError extends Error {
 const stepSchema = z
   .object({
     id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/),
-    kind: z.enum(["worker", "template", "generator"]),
+    kind: z.enum(["worker", "generator"]),
     objective: z.string().min(1).max(32000),
     dependsOn: z.array(z.string()).max(100),
     providerId: z.string().min(1).optional(),
     effort: z.string().min(1).optional(),
-    templateId: z.string().min(1).optional(),
     generatorId: z.string().min(1).optional(),
-    inputs: z.record(z.unknown()).optional(),
     // `!pattern` entries exclude from the positive entries; a list of only
     // exclusions would otherwise read as "everything else".
     writes: z
@@ -209,23 +207,14 @@ export function validateDag(input: ExecutionStep[]): ValidatedDag {
       throw new Error(`Step ID ${DAG_REPAIR_STEP} is reserved`);
     if (step.kind === "worker" && !step.providerId)
       throw new Error(`Worker step ${step.id} requires a providerId`);
-    if (step.kind === "template" && !step.templateId)
-      throw new Error(`Template step ${step.id} requires a templateId`);
-    if (step.kind !== "generator" && step.generatorId !== undefined)
-      throw new Error(
-        `${step.kind === "worker" ? "Worker" : "Template"} step ${step.id} cannot set generatorId`,
-      );
+    if (step.kind === "worker" && step.generatorId !== undefined)
+      throw new Error(`Worker step ${step.id} cannot set generatorId`);
     if (step.kind === "generator") {
       if (!step.generatorId)
         throw new Error(`Generator step ${step.id} requires a generatorId`);
-      if (
-        step.providerId !== undefined ||
-        step.templateId !== undefined ||
-        step.inputs !== undefined ||
-        step.effort !== undefined
-      )
+      if (step.providerId !== undefined || step.effort !== undefined)
         throw new Error(
-          `Generator step ${step.id} cannot set providerId, templateId, inputs or effort`,
+          `Generator step ${step.id} cannot set providerId or effort`,
         );
     }
     if (new Set(step.dependsOn).size !== step.dependsOn.length)
@@ -461,7 +450,6 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       ready.map(async (step) => {
         await event("dag.step.started", step.id, {
           providerId: step.providerId ?? null,
-          templateId: step.templateId ?? null,
         });
         // Each step's generation has its own policy timeout, so a long plan
         // is not bounded by a single step's allowance.
@@ -750,24 +738,5 @@ async function rollBack(
   await context.event("dag.step.rolled_back", pending.stepId, {
     error: reason,
     paths: pending.paths,
-  });
-}
-
-/**
- * Settles with `work`, or rejects as soon as `signal` aborts, so a step that
- * does not observe its signal (such as a template render) still stops at its
- * time limit. The abandoned work's result is discarded.
- */
-export function untilAborted<T>(
-  work: Promise<T>,
-  signal: AbortSignal,
-): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason);
-  return new Promise<T>((resolve, reject) => {
-    const stop = () => reject(signal.reason);
-    signal.addEventListener("abort", stop, { once: true });
-    work
-      .then(resolve, reject)
-      .finally(() => signal.removeEventListener("abort", stop));
   });
 }

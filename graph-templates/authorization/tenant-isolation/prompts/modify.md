@@ -1,1 +1,0 @@
-Rarely needs modification. If `tenantId` should come from somewhere other than the JWT claim (e.g. a subdomain), change `requireTenant`'s extraction logic only — `withTenantScope`'s signature should stay stable since generated repositories call it positionally.

@@ -1,7 +1,0 @@
-{
-  "inputs": { "defaultPageSize": 20 },
-  "expectedOutputs": {
-    "files": ["lib/tables/useQueryTable.ts", "components/DataTable.tsx"],
-    "exports": ["useQueryTable", "DataTable"]
-  }
-}

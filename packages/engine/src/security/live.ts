@@ -204,7 +204,7 @@ async function imageId(
   if (result.code !== 0) {
     if (image.startsWith("sha256:"))
       throw new Error(
-        `Live scan refused: the local image ${image} is not on this machine; build the target (npm run live-target:build for template-express) and record the new image ID in security.liveTargets`,
+        `Live scan refused: the local image ${image} is not on this machine; build the target's image here first, then record its new image ID in security.liveTargets`,
       );
     const pull = await run("docker", ["pull", image], {
       timeoutMs: 30 * 60_000,

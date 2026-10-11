@@ -5,11 +5,7 @@ import type {
   RunRecord,
 } from "@graph-engineering/contracts";
 import type { Api } from "./api";
-import {
-  dockerAvailable,
-  type ProjectResponse,
-  type TemplateSummary,
-} from "./types";
+import { dockerAvailable, type ProjectResponse } from "./types";
 import {
   Badge,
   Button,
@@ -130,10 +126,6 @@ export function RunsPage({
   active: boolean;
 }) {
   const runs = useResource<RunRecord[]>(api, active ? "/api/runs" : null);
-  const templates = useResource<TemplateSummary[]>(
-    api,
-    active ? "/api/templates" : null,
-  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detail = useResource<{ run: RunRecord; events: RunEvent[] }>(
     api,
@@ -391,11 +383,9 @@ export function RunsPage({
                       <div>
                         <strong>{step.objective}</strong>
                         <p>
-                          {step.kind === "template"
-                            ? step.templateId
-                            : step.kind === "generator"
-                              ? `Generator ${step.generatorId}`
-                              : (step.providerId ?? "Policy-selected worker")}
+                          {step.kind === "generator"
+                            ? `Generator ${step.generatorId}`
+                            : (step.providerId ?? "Policy-selected worker")}
                           {step.effort ? ` · ${step.effort} effort` : ""}
                         </p>
                         {step.dependsOn.length > 0 && (
@@ -442,79 +432,43 @@ export function RunsPage({
         </div>
       )}
       <div className="runs-layout">
-        <div>
-          <div className="panel run-list">
-            <div className="panel-heading">
-              <h2>Run history</h2>
+        <div className="panel run-list">
+          <div className="panel-heading">
+            <h2>Run history</h2>
+            <button
+              className="icon-button"
+              onClick={runs.reload}
+              aria-label="Refresh runs"
+            >
+              <Icon name="refresh" size={16} />
+            </button>
+          </div>
+          {runs.loading && !runs.data ? (
+            <Loading label="Loading runs…" />
+          ) : orderedRuns.length ? (
+            orderedRuns.map((record) => (
               <button
-                className="icon-button"
-                onClick={runs.reload}
-                aria-label="Refresh runs"
+                className={`run-option ${record.id === selectedId && !creating ? "selected" : ""}`}
+                key={record.id}
+                onClick={() => {
+                  setSelectedId(record.id);
+                  setCreating(false);
+                }}
               >
-                <Icon name="refresh" size={16} />
-              </button>
-            </div>
-            {runs.loading && !runs.data ? (
-              <Loading label="Loading runs…" />
-            ) : orderedRuns.length ? (
-              orderedRuns.map((record) => (
-                <button
-                  className={`run-option ${record.id === selectedId && !creating ? "selected" : ""}`}
-                  key={record.id}
-                  onClick={() => {
-                    setSelectedId(record.id);
-                    setCreating(false);
-                  }}
-                >
-                  <div>
-                    <strong>{record.plan.objective}</strong>
-                    <Status value={record.status} />
-                  </div>
-                  <span className="small muted">
-                    {date(record.createdAt)} · {shortId(record.id)}
-                  </span>
-                </button>
-              ))
-            ) : (
-              <EmptyState icon="run" title="No runs yet">
-                Create a plan to begin your first managed task.
-              </EmptyState>
-            )}
-          </div>
-          <div className="panel template-panel">
-            <div className="panel-heading">
-              <h2>Workflow library</h2>
-              <Badge>{templates.data?.length ?? "—"}</Badge>
-            </div>
-            <ErrorNotice message={templates.error} retry={templates.reload} />
-            {templates.loading ? (
-              <Loading label="Loading templates…" />
-            ) : templates.data?.length ? (
-              <details className="template-details">
-                <summary>
-                  {templates.data.length} registered template
-                  {templates.data.length === 1 ? "" : "s"}
-                </summary>
-                <div className="template-list">
-                  {templates.data.map((template) => (
-                    <div key={template.id}>
-                      <div>
-                        <strong>{template.name}</strong>
-                        <span className="small muted break-word">
-                          {template.source}
-                        </span>
-                      </div>
-                      <Status value={template.status} />
-                    </div>
-                  ))}
+                <div>
+                  <strong>{record.plan.objective}</strong>
+                  <Status value={record.status} />
                 </div>
-              </details>
-            ) : (
-              <p className="inline-hint">
-                No workflow templates are registered.
-              </p>
-            )}
-          </div>
+                <span className="small muted">
+                  {date(record.createdAt)} · {shortId(record.id)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <EmptyState icon="run" title="No runs yet">
+              Create a plan to begin your first managed task.
+            </EmptyState>
+          )}
         </div>
         <div className="panel run-detail">
           <ErrorNotice message={detail.error} retry={detail.reload} />

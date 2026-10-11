@@ -97,7 +97,7 @@ Use it for every merge. It's written for PR 144; for another PR, replace 144 wit
    ```
 
 4. Merge only when all of these hold:
-   - all 9 checks show `pass`;
+   - all 8 checks show `pass`;
    - there are 0 unresolved threads;
    - `mergeStateStatus` is `CLEAN`.
 

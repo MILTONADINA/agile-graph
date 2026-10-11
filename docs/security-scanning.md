@@ -337,23 +337,11 @@ content.
 
 ### This repository's targets
 
-| ID                 | Image                                                                                                    | Why                                                                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `juice-shop`       | `bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e` (20.2.0) | OWASP's intentionally vulnerable reference application; a scan that finds nothing here is broken |
-| `template-express` | A local image ID built by `npm run live-target:build`                                                    | The Express app the graph's own templates generate, tested as its users would run it             |
+| ID           | Image                                                                                                    | Why                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `juice-shop` | `bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e` (20.2.0) | OWASP's intentionally vulnerable reference application; a scan that finds nothing here is broken |
 
-The owner authorized both on 2026-09-27. `template-express` is the
-`project.node-express` scaffold composed with `backend.error-handler`, the
-simplest template-built backend: it needs no database or other service.
-`npm run live-target:build` (after building the engine) renders the two
-templates into a private build context, installs the dependency versions
-reviewed in `packages/engine/tests/fixtures/project-runtime/package-lock.json`,
-and builds
-[`infra/live-targets/template-express/Dockerfile`](../infra/live-targets/template-express/Dockerfile)
-from a digest-pinned Node image. The image is not published to a registry,
-so its entry records the local image ID, which differs on each machine and
-after each rebuild: record the ID the script prints to authorize a new
-build. Until then the scan refuses the target with that instruction.
+The owner authorized it on 2026-09-27.
 
 With Docker running, `GRAPH_ENGINE_LIVE_SCAN_TESTS=1 npm test -w
 @graph-engineering/engine -- tests/security-live.test.ts` scans Juice Shop

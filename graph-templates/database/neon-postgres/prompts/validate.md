@@ -1,1 +1,0 @@
-Check declared files/exports and helper/package edits. Compile inside the approved sandbox. Test URL guards and generic errors without cloud credentials, then use the isolated PostgreSQL fixture for runtime evidence. Do not describe offline PostgreSQL as a successful hosted Neon deployment.

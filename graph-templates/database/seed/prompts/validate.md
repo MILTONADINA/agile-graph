@@ -1,1 +1,0 @@
-Strictly compile in the approved container. Test missing/production/remote target refusal, no application URL fallback, nonempty target refusal, duplicate execution refusal, concurrent operation refusal, transactional rollback and generic nonsecret logs against isolated PostgreSQL. A string-presence check is not runtime evidence.

@@ -76,8 +76,6 @@ export interface ProjectPolicy {
    * outside that pattern; nothing here ever re-includes a path.
    */
   excludedPaths: string[];
-  /** Explicit opt-in for the public root template ledger; never private engine state. */
-  allowPublicTemplateLedger?: boolean;
   /**
    * Repository-relative directories or files the graph indexes, reads and
    * writes. Absent means the whole repository; required checks and security
@@ -438,14 +436,12 @@ export interface MemoryRecord {
 }
 export interface ExecutionStep {
   id: string;
-  kind: "worker" | "template" | "generator";
+  kind: "worker" | "generator";
   objective: string;
   dependsOn: string[];
   providerId?: string;
   effort?: string;
-  templateId?: string;
   generatorId?: string;
-  inputs?: Record<string, unknown>;
   /**
    * Glob patterns (like exportPaths) limiting the files this step may write,
    * for example a tester limited to test files. A `!pattern` entry excludes
@@ -771,7 +767,6 @@ export const policySchema = {
     allowedHosts: strings,
     exportPaths: { type: "array", items: globEntry, uniqueItems: true },
     excludedPaths: strings,
-    allowPublicTemplateLedger: { type: "boolean" },
     workingSet: {
       type: "array",
       minItems: 1,

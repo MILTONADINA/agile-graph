@@ -2,27 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { dependencyResolutionSha256 } from "./isolated-candidate.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const fixtures = [
-  {
-    receipt: "template-invocation-runtime/fixture-validation.json",
-    verifiers: [
-      "verify-template-invocations.mjs",
-      "candidate-template-invocations.mjs",
-      "template-invocation-runtime/history.mjs",
-      "run.mjs",
-      "isolated-candidate.mjs",
-      "corpus-history.mjs",
-    ],
-    runtime: "template-invocation-runtime",
-    runtimeFiles: [
-      "build-ajv.mjs",
-      "executor.mjs",
-      "fixture.js",
-      "package-lock.json",
-    ],
-  },
   {
     receipt: "infrastructure-runtime/fixture-validation.json",
     verifiers: [
@@ -32,8 +15,6 @@ const fixtures = [
       "infrastructure-runtime/history.mjs",
       "infrastructure-runtime/provision.mjs",
       "infrastructure-runtime/Dockerfile",
-      "verify-template-invocations.mjs",
-      "candidate-template-invocations.mjs",
       "run.mjs",
       "isolated-candidate.mjs",
       "corpus-history.mjs",
@@ -92,7 +73,7 @@ test("checked-in cloud-graph replay pins match reviewed host source", async () =
   const receipt = JSON.parse(
     await readFile(
       new URL(
-        "isolated-cloud-graph-fixture-validation-2026-09-25.json",
+        "isolated-cloud-graph-fixture-validation-2026-10-11.json",
         import.meta.url,
       ),
       "utf8",
@@ -108,11 +89,14 @@ test("checked-in cloud-graph replay pins match reviewed host source", async () =
     receiptSha256: "receipt.mjs",
     historyHelperSha256: "corpus-history.mjs",
     oracleSha256: "candidate-cases.mjs",
-    portableOracleSha256: "candidate-portable.mjs",
     mountOracleSha256: "candidate-mount.mjs",
     cloudGraphOracleSha256: "candidate-cloud-graph.mjs",
-    hostDependencyLockSha256: "../package-lock.json",
   };
+  // The host's third-party dependencies, not the lockfile's bytes: a release
+  // that only changes this repository's own package versions keeps the pin.
+  const resolutions = dependencyResolutionSha256(
+    await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+  );
   for (const arm of ["base", "repair"]) {
     const run = receipt.results[arm];
     assert.equal(run.allCompleted, true);
@@ -123,6 +107,11 @@ test("checked-in cloud-graph replay pins match reviewed host source", async () =
         sha256(await readFile(new URL(filename, import.meta.url))),
         `${arm} cloud-graph host pin is stale: ${filename}`,
       );
+    assert.equal(
+      run.hostDependencyResolutionSha256,
+      resolutions,
+      `${arm} cloud-graph host dependency pin is stale`,
+    );
   }
 });
 

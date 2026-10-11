@@ -75,8 +75,8 @@ close an existing project edit those three fields there yourself (setting
 `inference` back to `"local"` or `network` to `"deny"` refuses cloud clients
 again). Changing the policy voids existing plans.
 
-Both kinds get `context_get`, `symbol_search`, `graph_neighbors`,
-`template_list` and `memory_propose`; a memory proposal stays private until it
+Both kinds get `context_get`, `symbol_search`, `graph_neighbors` and
+`memory_propose`; a memory proposal stays private until it
 is accepted outside the server. The other tools are off until the operator
 turns them on, never an agent:
 

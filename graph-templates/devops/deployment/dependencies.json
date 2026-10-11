@@ -1,9 +1,0 @@
-{
-  "packages": [],
-  "services": [],
-  "templates": [
-    { "id": "devops.docker", "relationship": "requires" },
-    { "id": "devops.github-actions", "relationship": "requires" },
-    { "id": "devops.aws", "relationship": "requires" }
-  ]
-}

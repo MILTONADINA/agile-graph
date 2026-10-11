@@ -1,5 +1,11 @@
 # Security baseline review, 2026-10-10
 
+> **Update, 2026-10-11:** the app generator, template kit and reference app
+> were removed from the repository, together with the engine's template
+> runtime and the evaluation replays of that code. The 49 baseline entries for
+> the removed files and code went with them, taking the baseline from 259 to
+> 210 entries. No entry was added and no other entry changed.
+
 The committed baseline (`.graph/security-baseline.json`, last updated
 2026-09-27) was missing 66 findings from a full `security-scan`. The owner
 approved triaging all 66: review each finding, fix any real issue and accept
@@ -147,16 +153,12 @@ else, taking the baseline from 211 to 259 entries.
 
 ## Files semgrep could not fully scan
 
-semgrep reported `PartialParsing` for these 15 files, so parts of them were
-not analysed. A baseline does not cover an unscanned file. The run gate
+semgrep reported `PartialParsing` for 15 files, so parts of them were not
+analysed. Five of them were in the template kit removed on 2026-10-11; these
+are the ten that remain. A baseline does not cover an unscanned file. The run gate
 fails only when a run's worker writes one of them, and a person must then
 review that file.
 
-- `graph-templates/authentication/password/files/Authentication.ts`
-- `graph-templates/authentication/password/files/authenticationRoutes.ts`
-- `graph-templates/authentication/session/tests/session.test.ts`
-- `graph-templates/project/vite-react/files/vite.config.ts`
-- `graph-templates/storage/delete/files/deleteFile.method.ts`
 - `packages/dashboard/src/ContextPage.test.tsx`
 - `packages/engine/tests/context-dart-runtime.test.ts`
 - `packages/engine/tests/context-python.test.ts`
