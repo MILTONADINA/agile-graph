@@ -411,7 +411,7 @@ describe("D3 trust anchor reader (read-only)", () => {
         { operatorId: "owner", keyId: "a", publicKeySha256: "2".repeat(64) },
       ],
       issuerKeys: [
-        { issuerId: "kevin", keyId: "i", publicKeySha256: "3".repeat(64) },
+        { issuerId: "issuer", keyId: "i", publicKeySha256: "3".repeat(64) },
       ],
       witnessId: "witness",
       controllers: { witness: "none", custody: "none", modelIdentity: "none" },

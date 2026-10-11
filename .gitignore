@@ -1,0 +1,32 @@
+# Dependencies, build output and packed tarballs
+node_modules/
+dist/
+coverage/
+*.tgz
+
+# Temporary engine copies made by scripts/dist-freshness.test.mjs.
+packages/engine/.dist-freshness-*/
+
+# Browser and Python test artifacts
+test-results/
+.playwright/
+playwright-report/
+__pycache__/
+*.py[cod]
+.venv/
+
+# Private local state and environment files, never committed
+.graph/local/
+.graph/workspaces/
+.graph/cache/
+.env
+.env.local
+
+# Per-user AI client configuration
+.codex/config.toml
+.cursor/mcp.json
+.mcp.json
+
+# Logs and operating-system files
+*.log
+.DS_Store
