@@ -1,7 +1,28 @@
 {
   "name": "@graph-engineering/engine",
   "version": "0.1.0",
-  "private": true,
+  "description": "An AI agile team for your repository: test-first AI workers in isolated Git worktrees, behind the checks, code review and security scans you approve.",
+  "keywords": [
+    "graph-engineering",
+    "ai-agents",
+    "agile",
+    "mcp",
+    "code-review",
+    "security-scanning",
+    "developer-tools",
+    "cli"
+  ],
+  "homepage": "https://github.com/MILTONADINA/graph-engineering/tree/dev/packages/engine#readme",
+  "bugs": {
+    "url": "https://github.com/MILTONADINA/graph-engineering/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MILTONADINA/graph-engineering.git",
+    "directory": "packages/engine"
+  },
+  "license": "MIT",
+  "author": "Milton Adina",
   "type": "module",
   "bin": {
     "graph-engine": "dist/cli.js"
@@ -12,17 +33,32 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/build-source.json",
+    "dashboard",
+    "scanner",
+    "security/dart-analyzer-seccomp.json",
+    "vendor/cloudflare-security-audit",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/write-build-source.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "prepack": "node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@cursor/sdk": "1.0.32",
     "@fastify/static": "10.1.4",
     "@graph-engineering/contracts": "0.1.0",
-    "@huggingface/transformers": "4.3.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "better-sqlite3": "13.0.3",
     "commander": "^14.0.0",
@@ -36,7 +72,21 @@
     "web-tree-sitter": "0.25.10",
     "zod": "^3.25.76"
   },
+  "peerDependencies": {
+    "@cursor/sdk": "^1.0.32",
+    "@huggingface/transformers": "^4.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@cursor/sdk": {
+      "optional": true
+    },
+    "@huggingface/transformers": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@cursor/sdk": "1.0.32",
+    "@huggingface/transformers": "4.3.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/picomatch": "^4.0.2"
   }

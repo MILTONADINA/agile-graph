@@ -9,6 +9,8 @@ export default tseslint.config(
       "**/dist/",
       ".graph/",
       ".serena/",
+      // The built dashboard the engine's prepack copies into its package.
+      "packages/engine/dashboard/",
       // Third-party files vendored unmodified; their bytes are sha256-pinned.
       "packages/engine/vendor/",
       // Frozen historical runtimes whose bytes are pinned by retained receipts.

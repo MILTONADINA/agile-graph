@@ -7,6 +7,11 @@ coverage/
 # Temporary engine copies made by scripts/dist-freshness.test.mjs.
 packages/engine/.dist-freshness-*/
 
+# The dashboard and scanner files packages/engine/scripts/prepack.mjs copies
+# into the engine package before it is packed.
+packages/engine/dashboard/
+packages/engine/scanner/
+
 # Browser and Python test artifacts
 test-results/
 .playwright/

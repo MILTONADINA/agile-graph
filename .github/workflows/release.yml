@@ -1,0 +1,63 @@
+name: Release
+
+# Publishes @graph-engineering/contracts and @graph-engineering/engine to npm
+# when the owner pushes a version tag. npm trusted publishing (OpenID Connect)
+# authenticates the job, so no npm token is stored, and npm records
+# provenance for each package. Required reviewers on the npm environment gate
+# every publish; see docs/publishing.md.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Only a commit that reached dev through a reviewed, green PR is
+      # released, whoever pushed the tag.
+      - name: The tag points at a commit on dev
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/dev
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11.16.0
+      - name: Install dependencies with one bounded retry
+        run: |
+          # The root postinstall native archive fetch is outside npm's retry.
+          npm ci || { sleep 5; npm ci; }
+      - run: npm run build
+      - name: Tag, package metadata and tarball contents
+        run: node --test scripts/npm-packages.test.mjs
+        env:
+          GRAPH_ENGINE_RELEASE_TAG: ${{ github.ref_name }}
+      - name: Install the packed tarballs and run the CLI
+        run: node scripts/npm-smoke.mjs
+      - name: Publish contracts, then the engine that depends on it
+        run: |
+          for workspace in packages/contracts packages/engine; do
+            name=$(node -p "require('./$workspace/package.json').name")
+            version=$(node -p "require('./$workspace/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+            else
+              npm publish --workspace "$workspace" --access public
+            fi
+          done

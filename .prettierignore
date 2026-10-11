@@ -5,5 +5,7 @@
 **/coverage/
 **/__pycache__/
 **/package-lock.json
+# The built dashboard the engine's prepack copies into its package.
+packages/engine/dashboard/
 # Vendored third-party files keep their published bytes (sha256-pinned).
 packages/engine/vendor/

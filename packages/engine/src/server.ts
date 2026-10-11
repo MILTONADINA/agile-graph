@@ -2,8 +2,6 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import type {
   ExecutionPlan,
@@ -22,6 +20,7 @@ import { MAX_PLAN_OBJECTIVE } from "./planning.js";
 import { projectOverview } from "./overview.js";
 import { summarizeOutcomes } from "./insights.js";
 import { discoverInstalledWorkers } from "./workers/installed.js";
+import { dashboardRoot, sourceCheckoutRoot } from "./package-layout.js";
 
 // Routes that serve the dashboard's static files carry this marker in their
 // route config. Every other matched route requires the local access token,
@@ -394,12 +393,10 @@ export function createServer(
     reply.raw.on("close", stop);
     if (closing) end();
   });
-  const dashboard =
-    options.dashboardRoot ??
-    path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../../dashboard/dist",
-    );
+  // An installed package serves the copy packed into it, never files from a
+  // sibling package; a checkout serves the dashboard workspace's build.
+  const checkout = sourceCheckoutRoot();
+  const dashboard = options.dashboardRoot ?? dashboardRoot();
   if (existsSync(dashboard)) {
     // Scope the marker to the routes @fastify/static registers here.
     app.register(async (scope) => {
@@ -415,8 +412,9 @@ export function createServer(
     });
   } else
     app.get("/", { config: { [PUBLIC_ASSET]: true } }, async () => ({
-      message:
-        "Build the dashboard with npm run build, then restart the server.",
+      message: checkout
+        ? "Build the dashboard with npm run build, then restart the server."
+        : "This installation has no dashboard files; reinstall @graph-engineering/engine.",
     }));
   return { app, token };
 }

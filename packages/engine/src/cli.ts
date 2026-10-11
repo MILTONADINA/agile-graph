@@ -99,7 +99,9 @@ import {
   OSV_DATABASE_HOST,
   updateOsvDatabase,
   writeBaselineFile,
+  scannerBuildHint,
 } from "./security/scan.js";
+import { ENGINE_VERSION } from "./package-layout.js";
 import {
   LIVE_BASELINE_FILE,
   liveBaselineFrom,
@@ -157,7 +159,7 @@ const cli = new Command()
   .name("graph-engine")
   .description("Local context, engineering memory, and controlled coding runs")
   .enablePositionalOptions()
-  .version("0.1.0")
+  .version(ENGINE_VERSION)
   .option("-C, --project <path>", "Project root", process.cwd());
 let activeCommand: string | undefined;
 // Before any command runs, compare this dist with the source beside it. A cloud
@@ -806,7 +808,7 @@ cli
   )
   .option(
     "--image <name>",
-    "Scanner image built from Graph Engineering's sidecars/security/Dockerfile",
+    "Scanner image; if it is missing, the error prints how to build it",
     "graph-security:local",
   )
   .option(
@@ -827,7 +829,7 @@ cli
       await checked("docker", ["image", "inspect", options.image]);
     } catch {
       throw new Error(
-        `Scanner image ${options.image} is not built; build it from sidecars/security/Dockerfile in the Graph Engineering repository`,
+        `Scanner image ${options.image} is not built; ${scannerBuildHint(options.image)}`,
       );
     }
     const database = await osvDatabase(await securityDataDir());
@@ -958,7 +960,7 @@ cli
   )
   .option(
     "--image <name>",
-    "Scanner image built from Graph Engineering's sidecars/security/Dockerfile",
+    "Scanner image; if it is missing, the error prints how to build it",
     "graph-security:local",
   )
   .action(async (options) => {
@@ -2402,17 +2404,6 @@ function noteFailedRun<T extends { status: RunStatus; error?: string | null }>(
   process.exitCode = runExitCode(run.status);
   return run;
 }
-const ENGINE_VERSION = (() => {
-  try {
-    return (
-      JSON.parse(
-        readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-      ) as { version: string }
-    ).version;
-  } catch {
-    return "unknown";
-  }
-})();
 function commandNames(): string[] {
   return cli.commands.map((command) => command.name());
 }

@@ -1,4 +1,4 @@
-# Qwen handover — 2026-10-10
+# Qwen handover — 2026-10-11
 
 You are a local model with a small context window, taking over Graph Engineering (GE). Do one step at a time and read only what each step needs. `AGENTS.md` holds the full rules; the ones below are the ones you are most likely to need.
 
@@ -18,7 +18,7 @@ You are a local model with a small context window, taking over Graph Engineering
 
 **Files you must not change**
 
-- Root `package-lock.json`: use `npm ci`, never `npm install`, and never stage this file.
+- Root `package-lock.json`: use `npm ci`, never `npm install`, and never stage this file. Its third-party resolutions are pinned, so any dependency change fails CI. Only the owner's release PR changes it, for a version bump.
 - The `evaluation/` harness.
 - `packages/engine/vendor/**`.
 - `.graph/security-baseline.json`.
@@ -73,13 +73,10 @@ GE is a local-first "AI agile team" engine.
 
 ## 3. State and how to merge
 
-> **Update, end of 2026-10-10:**
->
-> - Round 4 is already stacked on `dev` as one PR, #148. Wait for its CI, then merge it through the merge gate.
-> - Round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `origin/dev` and ignore any local `fix/round5-*` branches.
+> **Update, 2026-10-11:** round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `origin/dev` and ignore any local `fix/round5-*` branches.
 
-- **Rounds 1, 2 and 3:** merged into `dev` (round 3 as #144). To see the tip: `git log --oneline -5 origin/dev`.
-- **Round 4:** one PR, #148, already stacked on `dev`. Merge it through the merge gate below.
+- **Merged into `dev`:** rounds 1 to 4; the removal of the app generator, template kit and reference app; the owner-led, MIT-licensed project setup; the npm packaging; and the `decisionMaxCostUsd` cap. To see the tip: `git log --oneline -10 origin/dev`.
+- **Releases:** the engine and contracts packages are ready for npm, but publishing them is the owner's step ([publishing](publishing.md)). Never push a tag or publish.
 
 ### The merge gate
 
@@ -128,16 +125,16 @@ PR #148 holds the five round-4 changes, each as a build commit and a review-fix 
 
 ## 4. Owner decisions already made
 
-- **Jev decision cap.** Once the round-4 decisions branch has merged, open a small PR that adds `"decisionMaxCostUsd": 1` to the `policy` object in `.graph/project.json`. That is a $1/day cap for decisions only. Change nothing else in that file.
+- **Jev decision cap.** `"decisionMaxCostUsd": 1` in the `policy` object of `.graph/project.json` caps decisions at $1/day. Don't change it.
+- **License and ownership.** The project is the owner's, under the MIT license in `LICENSE`.
 - **Security baseline.** It was triaged and accepted in #137, including the `.claude/settings.json` Prettier hook.
 - **Declined.** No OSS Scanner enrollment and no Codex for now.
 - **Laya's option limit.** Laya's 48-token per-option limit is a limit in the model itself. Keep option labels under about 40 tokens.
 
 ## 5. Next steps, in order
 
-1. Merge #148 through the merge gate in section 3. Rounds 1 to 3 are already merged.
-2. Make the `decisionMaxCostUsd` change (section 4), then run `graph-engine insights-context` (added in round 4) to measure the context savings.
-3. Do the owner's feedback issues first, ahead of the research ideas. Read each issue with `gh issue view <n> --repo MILTONADINA/graph-engineering`. Each item below is its own PR, through the merge gate:
+1. Run `graph-engine insights-context` (added in round 4) to measure the context savings.
+2. Do the owner's feedback issues first, ahead of the research ideas. Read each issue with `gh issue view <n> --repo MILTONADINA/graph-engineering`. Each item below is its own PR, through the merge gate:
    1. **Issue 147, blind retry.**
       - Attempt n+1 must include the previous attempt's error, exit code, timeout flag and log tail, plus an instruction to change approach.
       - If the same failure signature occurs twice, stop and escalate; never make a third identical attempt.
@@ -150,7 +147,7 @@ PR #148 holds the five round-4 changes, each as a build commit and a review-fix 
    3. **Actionable feedback.**
       - The local difficulty log puts almost everything under `unknown` (185 entries on 2026-10-10). Classify difficulties into specific catalog kinds, so `unknown` becomes rare and each report says what to change.
       - Keep the reports free of private data: no paths, code, prompts or error text.
-4. More rounds:
+3. More rounds:
    - Read `.graph/local/research/link-research-2026-10-10.md` one range at a time, and never commit it.
    - Build only the ideas Jev scored at 0.5 or above, one PR per idea, each through the merge gate.
    - When an idea has an open design question, ask Laya and Jev with design text only (no source, keys, private memory or `.graph/local` content), and record the question, the answers and the option you chose in the PR.
