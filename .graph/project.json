@@ -31,6 +31,7 @@
     "maxTurns": 12,
     "timeoutSeconds": 600,
     "maxCostUsd": 0,
+    "decisionMaxCostUsd": 1,
     "decisionMode": "shadow",
     "promotedCategories": []
   },
