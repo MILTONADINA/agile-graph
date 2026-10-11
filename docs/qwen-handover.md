@@ -6,8 +6,8 @@ You are a local model with a small context window, taking over Graph Engineering
 
 **Git and PRs**
 
-- Push only to the `fork` remote, on feature branches, and open PRs into `dev`.
-- Never push to `main` or to the `origin` parent repository.
+- Push only to the `origin` remote, on feature branches, and open PRs into `dev`.
+- Never push to `main`.
 - Never merge with failing, pending or skipped checks, and never use admin or override flags.
 
 **Commits**
@@ -76,9 +76,9 @@ GE is a local-first "AI agile team" engine.
 > **Update, end of 2026-10-10:**
 >
 > - Round 4 is already stacked on `dev` as one PR, #148. Wait for its CI, then merge it through the merge gate.
-> - Round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `fork/dev` and ignore any local `fix/round5-*` branches.
+> - Round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `origin/dev` and ignore any local `fix/round5-*` branches.
 
-- **Rounds 1, 2 and 3:** merged into `fork/dev` (round 3 as #144). To see the tip: `git log --oneline -5 fork/dev`.
+- **Rounds 1, 2 and 3:** merged into `dev` (round 3 as #144). To see the tip: `git log --oneline -5 origin/dev`.
 - **Round 4:** one PR, #148, already stacked on `dev`. Merge it through the merge gate below.
 
 ### The merge gate

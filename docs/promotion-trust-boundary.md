@@ -41,7 +41,7 @@ Promotion is dead by construction, and is now also dead by test.
 The owner leads the project alone and has overridden the separation below:
 the owner holds every key role (approver D4, grant issuer D5 and evidence
 signer D7), and a public transparency log (Sigstore Rekor) is the witness
-(D6). Kevin holds no role. Keys are Ed25519, one per role, each kept as a
+(D6). No one else holds a role. Keys are Ed25519, one per role, each kept as a
 passphrase-encrypted file in the owner's per-user data directory and usable
 only when the owner types the passphrase at a terminal they started. A small
 owner-run helper, [`scripts/promotion-key.mjs`](promotion-keys.md), decrypts

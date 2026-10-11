@@ -36,7 +36,7 @@ owner's decisions of that day and who holds each role.
 
 ## Roles (owner decision, 2026-09-27)
 
-The owner leads the project alone and holds every role; Kevin holds none.
+The owner leads the project alone and holds every role.
 
 - **Approver (D4), grant issuer (D5) and evidence signer (D7): the owner**,
   with separate Ed25519 keys per role, each stored as a

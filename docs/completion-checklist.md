@@ -9,11 +9,9 @@ calibration evidence.
 > (`graph-templates`), the reference app and the engine's template runtime
 > were removed from the repository. Entries about them below are history.
 
-Work is stacked in focused commits on the owner's fork, on feature branches.
-No direct pushes to `main`, no AI co-author trailers, and no upstream updates.
-The owner authorized review and merge of the implementation into
-`MILTONADINA/graph-engineering:dev`; synchronization with
-`NdahayoKevin25/graph-engineering` is a separate later step.
+Work is stacked in focused commits on feature branches. No direct pushes to
+`main` and no AI co-author trailers. The owner authorized review and merge of
+the implementation into `MILTONADINA/graph-engineering:dev`.
 
 ## Active follow-on: default-enabled automatic feedback
 
@@ -288,10 +286,9 @@ branch, not part of that merged `dev` commit.
 The fork `main` still requires seven checks and one independent approval;
 `dev` requires nine checks and zero GitHub approvals under the owner's chosen
 author-review workflow. Both retain linear history, admin enforcement, and
-force-push/deletion protection. No commit was pushed to either `main` or the
-parent repository. Kevin's review of the resulting fork `dev` and any later
-upstream synchronization remain separate; the subsequent owner-reported
-acceptance of the UTF-8 real-task run is recorded below.
+force-push/deletion protection. No commit was pushed to `main`. The
+subsequent owner-reported acceptance of the UTF-8 real-task run is recorded
+below.
 
 Subsequent fork-only PRs [#4](https://github.com/MILTONADINA/graph-engineering/pull/4),
 [#5](https://github.com/MILTONADINA/graph-engineering/pull/5) and
@@ -324,9 +321,7 @@ the remaining reviewed implementation/documentation stack into the fork's
 `cf4245848cab24181b104d5cc3eb36f19a32a9f7`; its
 [post-merge CI run](https://github.com/MILTONADINA/graph-engineering/actions/runs/36030395799)
 passed all nine required jobs. This supersedes the earlier references to
-Vite/React and partner review/merge as pending implementation. Kevin's review
-of the integrated fork branch and any parent-repository sync are still later,
-separate actions.
+Vite/React and review/merge as pending implementation.
 
 The table is a historical implementation checkpoint before those merges. The
 dated updates and current-state paragraph supersede its older handoff wording.
@@ -352,12 +347,9 @@ dated updates and current-state paragraph supersede its older handoff wording.
 
 ## Final PR handoff update — 2026-09-24
 
-Kevin was invited as a collaborator on the owner's fork. The owner subsequently
-chose author review and merge into the fork's `dev` after the nine required
-checks, with zero required GitHub approvals on `dev`. Kevin will review the
-resulting `dev` branch before any later upstream synchronization. The branch's
-other protections remain in place. No `main`, upstream or `dev` commit was
-changed by the invitation.
+The owner chose author review and merge into `dev` after the nine required
+checks, with zero required GitHub approvals on `dev`. The branch's other
+protections remain in place.
 
 Jev is configured through an ignored, private key-source pointer and an opt-in
 launcher. The key itself remains in a private file and is not printed or
@@ -666,11 +658,9 @@ This is an implemented and tested development platform, not a claim of fourteen
 unqualified production approvals. The remaining work has different owners and
 is not all a prerequisite for normal local or MCP-assisted engineering:
 
-- Owner/partner actions: the feature PRs are merged into the fork's `dev` after
-  exact-tip and post-merge green CI. Kevin reviews that branch before any
-  separate upstream synchronization. The owner reported acceptance of the real
-  UTF-8 repair after review on 2026-09-24; no independent partner signature is
-  claimed. Jev is the
+- Owner actions: the feature PRs are merged into `dev` after exact-tip and
+  post-merge green CI. The owner reported acceptance of the real UTF-8 repair
+  after review on 2026-09-24; no independent signature is claimed. Jev is the
   only configured metered decision provider, but it remains disabled until an
   operator selects a numeric session cap and reviewed account-specific price.
 - Client integration evidence: the owner reports Cursor's separate project MCP

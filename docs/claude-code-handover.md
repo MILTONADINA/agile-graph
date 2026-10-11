@@ -5,7 +5,7 @@ workspace only**. It records the owner's requirements, the implemented state,
 the evidence limits, and the next actions for the coding agent working here,
 whether Codex or Claude Code; [`AGENTS.md`](../AGENTS.md) holds the rules
 both follow. Read it with the linked primary documents. It does not grant
-permission beyond the recorded fork-only workflow, authorize metered calls
+permission beyond the recorded workflow, authorize metered calls
 without a session cap, activate autonomous decision promotion, or touch
 another project.
 
@@ -922,10 +922,7 @@ led by test-first ordering for the tester.
 Still for the owner: accepting or rejecting pilot run `ee0166fc` (above),
 reviewing the draft security baseline in
 [#44](https://github.com/MILTONADINA/graph-engineering/pull/44), and the
-owner-gated items listed in the previous update. Aligning with Kevin's
-parent repository is prepared on the fork branch
-`align/kevin-templates-20260926` (the template kit only) for Kevin to
-review; nothing is pushed to the parent repository.
+owner-gated items listed in the previous update.
 
 ## Continuation update — 2026-09-26 (improvement loop, rounds 2–4)
 
@@ -985,10 +982,6 @@ Owner decisions on 2026-09-27, carried out on the owner's instruction:
 - the generated OAuth app verifies ID token signatures
   ([#58](https://github.com/MILTONADINA/graph-engineering/pull/58),
   `7a3072f`), after an adversarial review whose findings were fixed;
-- the template kit was proposed to Kevin's repository as
-  [NdahayoKevin25/graph-engineering#2](https://github.com/NdahayoKevin25/graph-engineering/pull/2)
-  from the fork branch `align/kevin-templates-20260926`; merging it is
-  Kevin's decision.
 
 Later on 2026-09-27, also on the owner's instruction:
 
@@ -1014,10 +1007,8 @@ update below records how the owner resolved who labels and holds keys.
 The owner decided the promotion trust-boundary questions on 2026-09-27 and
 then took every promotion role personally: the owner holds the approver
 (D4), grant-issuer (D5) and evidence-labeler (D7) keys, Sigstore's public
-Rekor log is the witness (D6), and Kevin holds no promotion role. The owner
-leads the project; Kevin's account is where the initial commit was pushed
-from. This changes promotion custody only: the fork-only Git rules, and
-never pushing to Kevin's parent repository, are unchanged. The trade-off
+Rekor log is the witness (D6). The owner leads the project alone. This
+changes promotion custody only; the Git rules are unchanged. The trade-off
 (no second person checks the evidence; a compromised laptop is detectable
 through the public log, not prevented) is in the
 [trust boundary's amendment](promotion-trust-boundary.md#owner-amendment-single-custodian-2026-09-27)
@@ -1187,11 +1178,9 @@ fixture's bytes (`0fe5088`).
 ## Where the work stands
 
 - Workspace: this checkout only; do not expand work into other project folders.
-- Owner's fork: `https://github.com/MILTONADINA/graph-engineering.git`
-  (`fork` remote). Kevin's parent repository is the `origin` remote. The only
-  authorized integration target so far is the **fork's `dev`** branch. Do not
-  push to either `main`, or to the parent repository. Parent synchronization is
-  a later, explicit partner step.
+- Repository: `https://github.com/MILTONADINA/graph-engineering.git` (the
+  `origin` remote), a standalone project the owner leads. The only authorized
+  integration target is its **`dev`** branch. Do not push to `main`.
 - The earlier `cf4245848cab24181b104d5cc3eb36f19a32a9f7` fork-`dev` state
   and `feat/sealed-evidence-continuation-20260924` feature branch are history:
   the latter was integrated by PR #16. Its integration tip and post-merge CI
@@ -1203,9 +1192,8 @@ fixture's bytes (`0fe5088`).
   unrelated workspaces, linked worktrees, and global agent configuration.
 - At this 2026-09-24 snapshot, fork `dev` had nine required checks and zero
   required GitHub approvals by the owner's explicit choice; recheck live rules
-  before future merges. Author review and green CI are **not** an
-  independent Kevin review. Kevin will inspect the integrated fork `dev`
-  before any later upstream synchronization.
+  before future merges. Author review and green CI are **not** independent
+  review or human acceptance.
 
 The [completion checklist](completion-checklist.md) is the detailed history.
 Read it chronologically: its historical 48-node/seven-planned table and early
@@ -1332,23 +1320,16 @@ instructions. Preserve the distinction between a **product goal**, an
    Failed attempts, unknown cost/usage, and incomplete tests must remain
    visible. No classifier confidence or successful test alone merges a PR or
    publishes artifacts.
-7. **Partner-owned Git history.** Milton is Kevin's project partner, not an
-   outside drive-by contributor; this does not assert an unagreed legal
-   ownership split. Work only in this repository and Milton's fork, on focused
-   feature branches with PRs into fork `dev`, green exact-tip CI, reviewed diff
-   and professional single-author commits. Never push to `main` or Kevin's
-   parent repo; Kevin reviews integrated fork `dev` before a separately agreed
-   upstream sync. No AI co-author trailer or unrelated-project identifier in
+7. **Owner-led Git history.** The owner leads the project alone. Work only
+   in this repository, on focused feature branches with PRs into `dev`, green
+   exact-tip CI, reviewed diff and professional single-author commits. Never
+   push to `main`. No AI co-author trailer or unrelated-project identifier in
    tracked docs, PRs, comments or public artifacts. Keep shared Serena/global
    config and other project work untouched.
-8. **Open-source release governance.** The intent is for Graph Engineering to
-   be open source, not merely a public fork. This checkout has an MIT
-   [license for `create-graph-app`](../create-graph-app/LICENSE) but no tracked
-   project-root `LICENSE`; do not infer that the package license covers the
-   whole repository. The owner and Kevin need to select and document the
-   project-wide license and attribution before representing the entire graph
-   platform as licensed open source. See [GitHub's repository licensing
-   guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
+8. **Open-source release governance.** Graph Engineering is open source under
+   the owner's MIT [license](../LICENSE). Third-party material keeps its own
+   license and is listed in [`NOTICE`](../NOTICE). Publishing to npm is a
+   separate owner step described in the [publishing guide](publishing.md).
 
 The initial AI integrations have **different roles and evidence**:
 
@@ -1384,7 +1365,7 @@ or independent-evaluation claim is established.
 
 | #   | Area                                            | Current status / remaining boundary                                                                                                                                                                                                                                                                                                                                                                |
 | --- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Partner review and integration                  | The implementation PR stack through #16 and docs PR #17 were merged into fork `dev`; their recorded CI passed. Kevin's review of integrated `dev`, and any parent sync, remain separate.                                                                                                                                                                                                           |
+| 1   | Review and integration                          | The implementation PR stack through #16 and docs PR #17 were merged into `dev`; their recorded CI passed.                                                                                                                                                                                                                                                                                          |
 | 2   | Git workflow and protection                     | Fork `main`/`dev` protection and the fork-only push guard are set; keep feature branches, PRs, linear history, and no direct protected-branch pushes.                                                                                                                                                                                                                                              |
 | 3   | Real workers and verification                   | Existing oMLX Qwen and offline verifier exercised. One Claude Max subscription-backed structured proposal succeeded. Metered API worker tests await provider-specific policy and budget.                                                                                                                                                                                                           |
 | 4   | Local Jina/Laya/Qwen                            | Offline Jina retrieval, pinned Laya on MPS, and the existing oMLX Qwen endpoint exercised. Do **not** install/download another Qwen.                                                                                                                                                                                                                                                               |
@@ -1616,13 +1597,12 @@ model. In particular:
    the live fork `dev` tip and open PRs. Start new work from the live fork
    `dev` tip, never from an older handover or feature branch. Preserve
    `.serena/` and every ignored private path; do not commit directly on `dev`.
-2. For subsequent changes, fetch/fast-forward the fork `dev`, then create a
-   focused `feat/`, `fix/`, or `chore/` branch. Push only to `fork`; PRs target
+2. For subsequent changes, fetch/fast-forward `dev`, then create a
+   focused `feat/`, `fix/`, or `chore/` branch. Push only to `origin`; PRs target
    `MILTONADINA/graph-engineering:dev`. The owner explicitly authorized the
    working agent to review the actual diff and exact-tip green CI, then merge
    PRs into fork `dev`; zero GitHub approvals are required there. This is
-   **author review**, not independent partner review or human acceptance.
-   Kevin's later review before parent sync is separate. No direct push to
+   **author review**, not independent review or human acceptance. No direct push to
    protected branches, no AI co-author trailers, no unrelated project
    identifiers in commits, tracked docs, PRs or public artifacts, and no
    cross-repository edits.
@@ -1671,11 +1651,10 @@ a Markdown formatting/link check, not the full engine suite.
 
 The remaining work separates into three authorities:
 
-| Who can act                          | What can be done now                                                                                                                                                                                                                                                                                              | What still needs outside evidence                                                                                             |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| The coding agent on the owner's fork | Finish bounded code-side trust interfaces, fail-closed adapters, adversarial tests, docs, local pilots, and PRs into `dev`.                                                                                                                                                                                       | The agent cannot self-create independent unseen tasks, reviews, signer custody, trustworthy bills or pre-run witness history. |
-| Owner/operator                       | Choose provider pricing and a numeric session cap when actually running metered Jev; provide human acceptance of real-task outcomes; hold every promotion key role (approver, issuer, labeler), choose and label held-out work, and settle the step-8 question for PR-5; agree with Kevin on the project license. | No per-user cap, repository-wide license or external service is implicitly selected by the current defaults.                  |
-| Kevin (parent repository)            | Inspect integrated fork `dev` and later coordinate any upstream sync. Kevin holds no promotion role.                                                                                                                                                                                                              | Author self-review or synthetic signed fixtures cannot substitute for the owner's signed evidence.                            |
+| Who can act      | What can be done now                                                                                                                                                                                                                                                         | What still needs outside evidence                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| The coding agent | Finish bounded code-side trust interfaces, fail-closed adapters, adversarial tests, docs, local pilots, and PRs into `dev`.                                                                                                                                                  | The agent cannot self-create independent unseen tasks, reviews, signer custody, trustworthy bills or pre-run witness history. |
+| Owner/operator   | Choose provider pricing and a numeric session cap when actually running metered Jev; provide human acceptance of real-task outcomes; hold every promotion key role (approver, issuer, labeler), choose and label held-out work, and and settle the step-8 question for PR-5. | No per-user cap, repository-wide license or external service is implicitly selected by the current defaults.                  |
 
 At any agent transition, start with a fresh status inspection and the linked
 primary documents, then continue with bounded code-side work under the stated

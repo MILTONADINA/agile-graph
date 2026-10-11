@@ -1,11 +1,10 @@
 # Local development handoff
 
-This checkout is configured for Milton's fork and local inference. Create a
-focused feature branch from the current fork `dev`; the older
+This checkout is configured for the owner's repository and local inference.
+Create a focused feature branch from the current `dev`; the older
 `feat/engineering-platform` branch is historical, not a continuation target.
 Never work directly on `main` or protected `dev`. When ready, PR review and
-merges target `MILTONADINA/graph-engineering:dev`; synchronization with Kevin's
-repository is a separate later partner action. Commits use the configured
+merges target `MILTONADINA/graph-engineering:dev`. Commits use the configured
 human identity, without AI co-author trailers.
 
 ## Initial AI integrations
@@ -39,7 +38,7 @@ the prior build is available; inspect state rather than repeating passed work.
 ```sh
 npm ci
 npm run build
-npm run setup:git -- --push-remote fork
+npm run setup:git -- --push-remote origin
 npm run graph:local -- policy
 npm run graph:local -- providers
 npm run graph:local -- capabilities

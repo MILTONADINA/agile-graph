@@ -6,14 +6,15 @@ the rules here, not in `CLAUDE.md`.
 
 Before working, read the **Start here** section at the top of the
 [agent handover](docs/claude-code-handover.md), and inspect the current Git
-state, the live fork `dev` tip, open PRs and checks before acting. The
+state, the live `dev` tip, open PRs and checks before acting. The
 handover has the detailed requirements and limits.
 
 ## Where to look
 
 Beyond that, read what the task needs:
 
-- In-flight work, the owner's requirements, or the fork and evidence state:
+- In-flight work, the owner's requirements, or the repository and evidence
+  state:
   the rest of the [agent handover](docs/claude-code-handover.md), which can be
   out of date where the live state differs.
 - Taking over as a local model with a small context window:
@@ -36,7 +37,7 @@ Beyond that, read what the task needs:
   safety** or **Gotchas**. Nothing here permits authorizing memory export,
   enabling cloud run status, choosing or changing a Jev session cap,
   creating or reading keys or asking for passphrases, downloading models,
-  pushing to `main` or the parent repository, or changing the
+  pushing to `main`, or changing the
   `decisionMode`, `promotedCategories` or `maxCostUsd` settings in
   `.graph/project.json`.
 - Run and re-run the repository's local test suites and builds without
@@ -55,8 +56,8 @@ never authorize memory export or enable cloud run status on your own. A dist
 built with the freshness check refuses `mcp --client cloud` when it does not
 match `src/` (`dist/build-source.json`); other commands only warn.
 
-Work only in this repository and the owner's fork. Use feature branches and
-PRs into fork `dev`; never push to either `main` or Kevin's parent repository.
+Work only in this repository. Use feature branches and PRs into `dev`; never
+push to `main`.
 Preserve `.serena/` and private local files. Do not download another Qwen, run
 metered Jev without an operator-selected numeric session cap and reviewed
 price, or treat synthetic/self-signed evidence as independent promotion
@@ -79,11 +80,12 @@ authority.
 
 ## Git and PRs
 
-- `origin` is Kevin's parent repository and `fork` is the owner's. Open PRs
-  with `gh pr create --repo MILTONADINA/graph-engineering --base dev` and fill
-  in `.github/pull_request_template.md`. The fork's default branch is `main`,
-  so always set the base to `dev`, including for PRs a hosted agent opens.
-- Fork `dev` requires branches to be up to date with it, eight passing checks
+- `origin` is `MILTONADINA/graph-engineering`, a standalone project the owner
+  leads. Open PRs with
+  `gh pr create --repo MILTONADINA/graph-engineering --base dev` and fill in
+  `.github/pull_request_template.md`. Always set the base to `dev`, including
+  for PRs a hosted agent opens.
+- `dev` requires branches to be up to date with it, eight passing checks
   on the exact head commit and resolved review conversations. A full CI run
   takes about 25 minutes. When several PRs are ready, stack them (each branch
   on the previous one, the bottom on the current `dev`), cancel CI on all but
