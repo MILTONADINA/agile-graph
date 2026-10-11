@@ -466,4 +466,36 @@ describe("mutation feedback to the tester", () => {
     // started, and the first was given only the time that was left.
     expect(started).toEqual([{ argv: ["test"], timeout: 1 }]);
   }, 60000);
+
+  it("gives each mutant only the time left before the shared deadline", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.mutationRounds = 1;
+      config.policy.verificationTimeoutSeconds = 4;
+    });
+    const { verify: inner } = sandbox();
+    const mutantTimeouts: (number | null | undefined)[] = [];
+    let baseline = true;
+    const verify: typeof inner = async (...args) => {
+      if (args[5]) {
+        if (baseline) {
+          // The baseline uses half of the shared budget.
+          baseline = false;
+          await new Promise((done) => setTimeout(done, 2000));
+        } else mutantTimeouts.push(args[2].verificationTimeoutSeconds);
+      }
+      return inner(...args);
+    };
+    const { run, analyses } = await runWith(root, verify, () =>
+      tests("test('weak', () => {});\n"),
+    );
+    expect(run.status).toBe("succeeded");
+    expect(analyses.map((event) => event.data)).toMatchObject([
+      { status: "analyzed", mutants: 4 },
+    ]);
+    expect(mutantTimeouts).toHaveLength(4);
+    for (const timeout of mutantTimeouts) {
+      expect(timeout).toBeGreaterThanOrEqual(1);
+      expect(timeout).toBeLessThanOrEqual(2);
+    }
+  }, 60000);
 });

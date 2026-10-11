@@ -83,8 +83,10 @@ tester and the answers are only recorded.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: records an analysis error and accepts the tester's proposal when the sandbox throws
 - AC8: A mutant counts as killed only when a check returns a failing result on it; a run that returns no failing result is inconclusive and left out of the score.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: counts a mutant whose sandbox run returned no failing result as inconclusive, not killed
-- AC9: Once the analysis has used one check timeout, no further mutant starts and the round is recorded as `time-budget` with unrun mutants left out of the score.
+- AC9: Once the analysis has used one check timeout, no further baseline check or mutant starts and the round is recorded as `time-budget` with unrun mutants left out of the score; every check, baseline or mutant, gets only the time left before that shared deadline.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: starts no mutant once the analysis has used the check timeout
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: starts no further baseline check once the check timeout is used, and bounds each by the time left
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: gives each mutant only the time left before the shared deadline
 
 ## Security considerations
 

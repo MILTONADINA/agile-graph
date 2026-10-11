@@ -148,7 +148,17 @@ function modelName(model: unknown): string | null {
     } catch {
       return null;
     }
-    return segment ? decodeURIComponent(segment) : null;
+    if (!segment) return null;
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      return null;
+    }
+    // An encoded separator decodes back into a path: keep its base name.
+    return /[/\\]/.test(decoded)
+      ? path.posix.basename(decoded.replace(/\\/g, "/")) || null
+      : decoded;
   }
   if (!/[/\\]/.test(name)) return name;
   return path.posix.basename(name.replace(/\\/g, "/")) || null;

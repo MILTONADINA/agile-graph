@@ -89,23 +89,23 @@ export async function analyzeMutants(options: {
       options.signal,
       { added, replaced: [...replaced, ...mutated] },
     );
+  // Every check, baseline or mutant, may use only the time left before the
+  // shared deadline, never a fresh full timeout.
+  const remaining = (): ProjectPolicy =>
+    deadline === Infinity
+      ? options.policy
+      : {
+          ...options.policy,
+          verificationTimeoutSeconds: Math.max(
+            1,
+            Math.ceil((deadline - now()) / 1000),
+          ),
+        };
   // The sandbox stops at a check's first failure, so each runs on its own.
-  // Baseline checks share the analysis deadline too: none starts once it has
-  // passed, and each may use only the time that is left.
   const passing: ProjectConfig["verification"] = [];
   for (const check of options.checks) {
     if (now() >= deadline) break;
-    const policy =
-      deadline !== Infinity
-        ? {
-            ...options.policy,
-            verificationTimeoutSeconds: Math.max(
-              1,
-              Math.ceil((deadline - now()) / 1000),
-            ),
-          }
-        : options.policy;
-    const [result] = await run([check], [], policy);
+    const [result] = await run([check], [], remaining());
     if (result?.code === 0) passing.push(check);
   }
   const mutants: Mutant[] = [];
@@ -152,9 +152,11 @@ export async function analyzeMutants(options: {
     if (options.signal?.aborted) throw new Error("Run cancelled");
     if (now() >= deadline) break;
     ran++;
-    const results = await run(passing, [
-      { path: mutant.path, content: mutant.content },
-    ]);
+    const results = await run(
+      passing,
+      [{ path: mutant.path, content: mutant.content }],
+      remaining(),
+    );
     // Killed only by a check's own failing result; a run that returned
     // fewer results with none failing has no verdict and is not scored.
     if (results.some((result) => result.code !== 0)) killed++;

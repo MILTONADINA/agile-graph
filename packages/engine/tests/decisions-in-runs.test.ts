@@ -333,6 +333,41 @@ describe("decision-only cost cap", () => {
     await budget.reserve({ callId: "d4", provider: "jev", amountUsd: 0.004 });
     expect(store.usage("decisions-2026-10-11").costUsd).toBeCloseTo(0.004);
   });
+  it("settles an unpriced call under no cap on the ledger of the day it was sent", async () => {
+    const store = new RunStore(
+      await tempDir("graph-decision-cap-"),
+      "project-cap",
+    );
+    stores.push(store);
+    let clock = Date.parse("2026-10-10T23:59:59Z");
+    const budget = decisionLedgerBudget({
+      store,
+      policy: () => ({ maxCostUsd: 0, decisionMaxCostUsd: null }),
+      ownerId: "plan-unit",
+      nowMs: () => clock,
+    });
+    await budget.reserve({ callId: "d1", provider: "jev", amountUsd: null });
+    // The response arrives after midnight.
+    clock = Date.parse("2026-10-11T00:00:02Z");
+    await budget.settle({
+      callId: "d1",
+      provider: "jev",
+      model: "jev-unit",
+      questionCount: 1,
+      inputTokens: 10,
+      outputTokens: 1,
+      reportedCostUsd: 0.003,
+      estimatedCostUsd: null,
+      chargedUsd: 0.003,
+      reservedUsd: null,
+      priceVersion: null,
+      costUnknown: false,
+      outcome: "completed",
+    });
+    expect(store.usage("decisions-2026-10-10").costUsd).toBeCloseTo(0.003);
+    expect(store.usage("decisions-2026-10-11").costUsd ?? 0).toBe(0);
+  });
+
   it("keeps decisions on the run's ledger under maxCostUsd when no decision cap is set", async () => {
     const store = new RunStore(
       await tempDir("graph-decision-cap-"),

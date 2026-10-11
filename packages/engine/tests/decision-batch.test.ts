@@ -423,6 +423,38 @@ describe("independent question batching", () => {
 });
 
 describe("decision accounting reservations", () => {
+  it("binds an unpriced call under no cap to its ledger before sending it", async () => {
+    const order: string[] = [];
+    const reserve = vi.fn(async () => {
+      order.push("reserve");
+    });
+    const settle = vi.fn(async () => {
+      order.push("settle");
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        order.push("fetch");
+        return response({
+          workflow: { choice: "safe", confidence: 0.7 },
+          effort: { choice: "high", confidence: 0.7 },
+        });
+      }),
+    );
+    const input = options();
+    const { pricing: _pricing, ...unpriced } = hosted();
+    input.providers = [unpriced];
+    input.policy.maxCostUsd = null;
+    input.budget = { reserve, settle };
+    await decideBatch(input);
+    // Settling then uses the ledger chosen at dispatch, even after midnight.
+    expect(order).toEqual(["reserve", "fetch", "settle"]);
+    expect(reserve.mock.calls[0]?.[0]).toMatchObject({
+      provider: "jev",
+      amountUsd: null,
+    });
+  });
+
   it("reserves a reviewed token bound and settles from returned billable usage", async () => {
     const order: string[] = [];
     const reserve = vi.fn(async () => {

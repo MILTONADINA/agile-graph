@@ -280,6 +280,11 @@ describe("run provenance statement", () => {
       ["http://10.0.0.5:8080/v1/models/qwen.gguf", "qwen.gguf"],
       ["http://localhost:11434", null],
       ["plain-model", "plain-model"],
+      // A malformed escape is unreportable; an encoded path keeps only its
+      // base name.
+      ["https://models.example/%", null],
+      ["https://models.example/%2Fhome%2Fsomeone%2Fq.gguf", "q.gguf"],
+      ["https://models.example/C%3A%5CUsers%5Csomeone%5Cw.gguf", "w.gguf"],
     ] as const;
     for (const [model, expected] of models) {
       const { run, events } = receipt();
