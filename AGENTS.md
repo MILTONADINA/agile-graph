@@ -20,6 +20,8 @@ Beyond that, read what the task needs:
 - Taking over as a local model with a small context window:
   [docs/qwen-handover.md](docs/qwen-handover.md).
 - Commands, configuration and policy: [docs/platform.md](docs/platform.md).
+- The npm packages and how the owner releases them:
+  [docs/publishing.md](docs/publishing.md).
 - Connecting an AI client to the project MCP server:
   [docs/mcp-clients.md](docs/mcp-clients.md).
 - Scan tools, baselines and the security gate:
@@ -37,7 +39,7 @@ Beyond that, read what the task needs:
   safety** or **Gotchas**. Nothing here permits authorizing memory export,
   enabling cloud run status, choosing or changing a Jev session cap,
   creating or reading keys or asking for passphrases, downloading models,
-  pushing to `main`, or changing the
+  pushing to `main`, pushing tags, publishing to npm, or changing the
   `decisionMode`, `promotedCategories` or `maxCostUsd` settings in
   `.graph/project.json`.
 - Run and re-run the repository's local test suites and builds without
@@ -117,10 +119,12 @@ authority.
   environment without Docker can't run.
 - ESLint (`eslint.config.mjs`) must stay error-free. Existing warnings are
   known cleanup, some in hash-pinned files; never run `eslint --fix` broadly.
-- Byte changes to hash-pinned files fail CI, including root
-  `package-lock.json` and the evaluation harness (see
-  `evaluation/historical-receipt-pins.test.mjs` and
-  `evaluation/validate-fixtures.test.mjs`). CI job names are pinned by
+- Byte changes to hash-pinned files fail CI, including the evaluation
+  harness (see `evaluation/historical-receipt-pins.test.mjs` and
+  `evaluation/validate-fixtures.test.mjs`). The root `package-lock.json` is
+  pinned by its third-party resolutions: any added, removed or changed
+  dependency fails CI, while a release's version bump of this repository's
+  own packages does not. CI job names are pinned by
   `scripts/branch-protection-policy.mjs`.
 
 ## Gotchas

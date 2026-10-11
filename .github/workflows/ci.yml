@@ -62,6 +62,11 @@ jobs:
         run: node --test scripts/local-engine-env.test.mjs
       - name: Labelling and paired-run collection (synthetic fixtures only)
         run: node --test scripts/labelling.test.mjs
+      - name: npm packages and the installed CLI
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: |
+          node --test scripts/npm-packages.test.mjs
+          node scripts/npm-smoke.mjs
       - name: Evaluation protocol and intake checks
         run: node --test evaluation/candidate-cases.test.mjs evaluation/candidate-mount.test.mjs evaluation/native-mount.test.mjs evaluation/isolated-candidate.test.mjs evaluation/calibration-corpus.test.mjs evaluation/corpus-history.test.mjs evaluation/historical-receipt-pins.test.mjs evaluation/candidate-retry-visibility.test.mjs evaluation/verify-retry-visibility.test.mjs evaluation/candidate-cloud-graph.test.mjs evaluation/candidate-verifier-infrastructure.test.mjs evaluation/candidate-verifier-setup.test.mjs evaluation/verify-verifier-infrastructure.test.mjs
       - name: Paired local context packet checks (no model call)

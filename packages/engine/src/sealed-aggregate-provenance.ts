@@ -3,6 +3,8 @@
 // Returned counts and digests are private collection metadata, not cloud/MCP
 // export material, even though no raw private oracle or verdict bytes escape.
 import { createHash, createPublicKey, verify } from "node:crypto";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { types } from "node:util";
 import { z } from "zod";
 import { reviewTrustSchema } from "./evaluation-attestations.js";
@@ -25,6 +27,7 @@ import {
   freezeJson,
   hashJson,
 } from "./sealed-collection-schema.js";
+import { sourceCheckoutRoot } from "./package-layout.js";
 
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);
 const artifactRole = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,400}$/);
@@ -2461,6 +2464,21 @@ async function checkRepositoryV2Verdict(
   }
 }
 
+/**
+ * A call-bound oracle's helper module from the repository's evaluation
+ * harness, which an installed package does not include.
+ */
+function evaluationModule(name: string): string {
+  const checkout = sourceCheckoutRoot();
+  if (!checkout)
+    throw new Error(
+      "Checking call-bound evidence needs a Graph Engineering source checkout; an installed package does not include the evaluation harness",
+    );
+  return pathToFileURL(
+    path.join(checkout, "evaluation", "sealed", "worker-runtime", name),
+  ).href;
+}
+
 /** Re-derive, in the private collector, the bytes a call-bound oracle saw. */
 async function checkCallBoundOriginals(
   inspection: CohortInspection,
@@ -2468,24 +2486,9 @@ async function checkCallBoundOriginals(
   readReference?: OriginalEvidence["readReference"],
 ) {
   const [packetModule, proposalModule, requestModule] = await Promise.all([
-    import(
-      new URL(
-        "../../../evaluation/sealed/worker-runtime/packet.mjs",
-        import.meta.url,
-      ).href
-    ),
-    import(
-      new URL(
-        "../../../evaluation/sealed/worker-runtime/proposal.mjs",
-        import.meta.url,
-      ).href
-    ),
-    import(
-      new URL(
-        "../../../evaluation/sealed/worker-runtime/model-request.mjs",
-        import.meta.url,
-      ).href
-    ),
+    import(evaluationModule("packet.mjs")),
+    import(evaluationModule("proposal.mjs")),
+    import(evaluationModule("model-request.mjs")),
   ]);
   if (
     typeof packetModule.inspectPublicPacket !== "function" ||

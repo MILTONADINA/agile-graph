@@ -232,7 +232,10 @@ describe("dashboard API access token", () => {
   });
 
   it("rejects every registered API route without the token, however the path is spelled", async () => {
-    const { app } = await open();
+    // A dashboard that was never built, whatever this checkout has built.
+    const parent = await mkdtemp(path.join(os.tmpdir(), "graph-ui-"));
+    cleanups.push(() => rm(parent, { recursive: true, force: true }));
+    const { app } = await open({ dashboardRoot: path.join(parent, "unbuilt") });
     await expectEveryApiRouteGuarded(app);
     // The no-dashboard hint is the only public route.
     const hint = await app.inject({ url: "/", headers: anonymous });

@@ -22,6 +22,7 @@ import {
 import { isDockerfile } from "./files.js";
 import { redact, redactTail } from "../policy.js";
 import { agentConfigFindings } from "./agent-config.js";
+import { scannerBuildContext } from "../package-layout.js";
 
 export interface SecurityFinding {
   tool: string;
@@ -950,10 +951,18 @@ export async function scannerImageId(
     if (daemon.code !== 0)
       throw new Error("Docker is not running; start it and retry");
     throw new Error(
-      `Security scanner image ${image} is not built; build it from sidecars/security/Dockerfile in the Graph Engineering repository`,
+      `Security scanner image ${image} is not built; ${scannerBuildHint(image)}`,
     );
   }
   return id;
+}
+
+/**
+ * How to build the scanner image: from the Dockerfile an installed engine
+ * ships, or from the repository's sidecar in a source checkout.
+ */
+export function scannerBuildHint(image: string): string {
+  return `build it with: docker build -t ${image} ${JSON.stringify(scannerBuildContext())}`;
 }
 
 function assertBaseline(

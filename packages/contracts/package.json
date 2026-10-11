@@ -1,7 +1,24 @@
 {
   "name": "@graph-engineering/contracts",
   "version": "0.1.0",
-  "private": true,
+  "description": "Versioned schemas shared by the Graph Engineering engine: project policy, context, execution plans, runs and decisions.",
+  "keywords": [
+    "graph-engineering",
+    "schemas",
+    "contracts",
+    "ai-agents"
+  ],
+  "homepage": "https://github.com/MILTONADINA/graph-engineering/tree/dev/packages/contracts#readme",
+  "bugs": {
+    "url": "https://github.com/MILTONADINA/graph-engineering/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MILTONADINA/graph-engineering.git",
+    "directory": "packages/contracts"
+  },
+  "license": "MIT",
+  "author": "Milton Adina",
   "type": "module",
   "exports": {
     ".": {
@@ -9,10 +26,21 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build"
   },
   "dependencies": {
     "ajv": "^8.17.1",
