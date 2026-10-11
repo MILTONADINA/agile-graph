@@ -1421,56 +1421,40 @@ it("refuses a cloud client's plan whose workers, tester and reviewer are not all
     // A cloud reviewer receives the diff a local worker wrote.
     await configure({ review: { providerId: "remote" } });
     expect(await refused(single("qwen"))).toContain("the reviewer (remote)");
-    // A template step runs locally and reads files the export policy keeps
-    // from cloud models (documentation.api reads api.schema.json and writes
-    // docs/API.md), so it counts as a local role, even in a plan that runs
-    // no worker.
-    const template = {
-      id: "api-docs",
-      kind: "template",
-      objective: "Document the API",
+    // A generator step runs locally and may read files the export policy
+    // keeps from cloud models, so it counts as a local role, even in a plan
+    // that runs no worker.
+    const generator = {
+      id: "generate",
+      kind: "generator",
+      objective: "Generate the client",
       dependsOn: [],
-      templateId: "documentation.api",
+      generatorId: "toy-client",
     };
-    const templateOnly = await refused({
-      objective: "Document the API",
-      acceptance: ["docs/API.md lists the routes"],
-      steps: [template],
-    });
-    expect(templateOnly).toContain("template step api-docs");
-    expect(templateOnly).toContain("the reviewer (remote)");
     const generatorOnly = await refused({
       objective: "Generate a toy client",
       acceptance: ["src/generated/client.ts exists"],
-      steps: [
-        {
-          id: "generate",
-          kind: "generator",
-          objective: "Generate the client",
-          dependsOn: [],
-          generatorId: "toy-client",
-        },
-      ],
+      steps: [generator],
     });
     expect(generatorOnly).toContain("generator step generate");
     expect(generatorOnly).toContain("the reviewer (remote)");
     await configure({});
-    const templateThenCloud = await refused({
-      objective: "Document the API",
-      acceptance: ["docs/API.md lists the routes"],
+    const generatorThenCloud = await refused({
+      objective: "Generate a toy client",
+      acceptance: ["src/generated/client.ts exists"],
       steps: [
-        template,
+        generator,
         {
           id: "polish",
           kind: "worker",
-          objective: "Tidy docs/API.md",
-          dependsOn: ["api-docs"],
+          objective: "Tidy src/generated/client.ts",
+          dependsOn: ["generate"],
           providerId: "remote",
         },
       ],
     });
-    expect(templateThenCloud).toContain("template step api-docs");
-    expect(templateThenCloud).toContain("step polish (remote)");
+    expect(generatorThenCloud).toContain("generator step generate");
+    expect(generatorThenCloud).toContain("step polish (remote)");
     // All on one side is accepted, and the plan records that side, so a
     // step that escalates stays on it.
     const planOf = (response: Awaited<ReturnType<Client["callTool"]>>) => {
@@ -1492,13 +1476,13 @@ it("refuses a cloud client's plan whose workers, tester and reviewer are not all
       review: { providerId: "qwen" },
     });
     expect((await accepted(single("qwen"))).exportSide).toBe("local");
-    // A plan of template steps alone, with a local reviewer, is local.
+    // A plan of generator steps alone, with a local reviewer, is local.
     expect(
       (
         await accepted({
-          objective: "Document the API",
-          acceptance: ["docs/API.md lists the routes"],
-          steps: [template],
+          objective: "Generate a toy client",
+          acceptance: ["src/generated/client.ts exists"],
+          steps: [generator],
         })
       ).exportSide,
     ).toBe("local");

@@ -44,18 +44,17 @@ function liveProtection(branch) {
   };
 }
 
-test("branch protection profiles retain the exact seven and nine CI checks", () => {
+test("branch protection profiles retain the exact six and eight CI checks", () => {
   assert.deepEqual(requiredChecks.main, [
     "platform (ubuntu-24.04)",
     "platform (ubuntu-24.04-arm)",
     "platform (macos-15)",
     "platform (windows-2025)",
-    "generated-apps",
     "sidecar",
     "sealed-oracle",
   ]);
   assert.deepEqual(requiredChecks.dev, [
-    ...requiredChecks.main.slice(0, 6),
+    ...requiredChecks.main.slice(0, 5),
     "historical-replays",
     "sealed-public-intake",
     "sealed-oracle",

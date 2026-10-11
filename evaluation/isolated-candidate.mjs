@@ -105,7 +105,34 @@ export function localDockerEndpoint(endpoint) {
   return endpoint;
 }
 
-async function resolveLocalDockerEndpoint() {
+/**
+ * The host's third-party dependency resolutions: where each installed package
+ * sits in the root lockfile, with its version, source and integrity. It
+ * leaves out the root manifest and this repository's own workspace packages,
+ * whose versions change with each release, and install-scope flags such as
+ * dev or optional, which change no installed bytes.
+ */
+export function dependencyResolutionSha256(lockText) {
+  const { packages } = JSON.parse(lockText);
+  return hash(
+    JSON.stringify(
+      Object.entries(packages)
+        .filter(
+          ([key, entry]) =>
+            key !== "" && !key.startsWith("packages/") && !entry.link,
+        )
+        .map(([key, { version, resolved, integrity }]) => [
+          key,
+          version ?? null,
+          resolved ?? null,
+          integrity ?? null,
+        ])
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    ),
+  );
+}
+
+export async function resolveLocalDockerEndpoint() {
   const context = process.env.DOCKER_CONTEXT;
   if (!context && process.env.DOCKER_HOST)
     return localDockerEndpoint(process.env.DOCKER_HOST);
@@ -307,6 +334,9 @@ export async function verifyCandidate({
     hostDependencyLockSha256: hash(
       await readFile(new URL("../package-lock.json", import.meta.url)),
     ),
+    hostDependencyResolutionSha256: dependencyResolutionSha256(
+      await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+    ),
     hostRuntime: {
       node: process.version,
       platform: process.platform,
@@ -315,9 +345,6 @@ export async function verifyCandidate({
     },
     oracleSha256: hash(
       await readFile(new URL("candidate-cases.mjs", import.meta.url)),
-    ),
-    portableOracleSha256: hash(
-      await readFile(new URL("candidate-portable.mjs", import.meta.url)),
     ),
     mountOracleSha256: hash(
       await readFile(new URL("candidate-mount.mjs", import.meta.url)),

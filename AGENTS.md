@@ -83,7 +83,7 @@ authority.
   with `gh pr create --repo MILTONADINA/graph-engineering --base dev` and fill
   in `.github/pull_request_template.md`. The fork's default branch is `main`,
   so always set the base to `dev`, including for PRs a hosted agent opens.
-- Fork `dev` requires branches to be up to date with it, nine passing checks
+- Fork `dev` requires branches to be up to date with it, eight passing checks
   on the exact head commit and resolved review conversations. A full CI run
   takes about 25 minutes. When several PRs are ready, stack them (each branch
   on the previous one, the bottom on the current `dev`), cancel CI on all but
@@ -107,11 +107,10 @@ authority.
   editing its source.
 - `npm run check` is not CI. CI also runs `npm run format:check` and
   `npm run lint` first, the `node --test` suites in `scripts/` and
-  `evaluation/`, the `graph-templates/tools/*` packages (`npm ci --prefix`
-  first) and `python -m unittest discover -s sidecars/laya -p 'test_*.py'`;
+  `evaluation/` and `python -m unittest discover -s sidecars/laya -p 'test_*.py'`;
   see `.github/workflows/ci.yml`. `format:check` covers only the paths listed
-  in `package.json`, not `graph-templates/`, `create-graph-app/`, `AGENTS.md`
-  or `CLAUDE.md`; don't run Prettier over excluded paths.
+  in `package.json`, not `AGENTS.md` or `CLAUDE.md`; don't run Prettier over
+  excluded paths.
 - GitHub CI is the authority for Docker and native checks, which an
   environment without Docker can't run.
 - ESLint (`eslint.config.mjs`) must stay error-free. Existing warnings are

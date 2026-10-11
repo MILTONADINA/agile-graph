@@ -5,15 +5,15 @@ import { readFile, lstat, writeFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import path from "node:path";
+import ts from "typescript";
 import { validateCorpus, exportTask } from "./corpus-history.mjs";
-import { templateJson } from "./candidate-template-invocations.mjs";
 import { runCommand } from "./run.mjs";
 import {
   guestEnvelope,
   parseGuestJson,
   localDockerEndpoint,
+  resolveLocalDockerEndpoint,
 } from "./isolated-candidate.mjs";
-import { templateDockerEndpoint } from "./verify-template-invocations.mjs";
 import {
   infrastructureCandidateCase,
   validateInfrastructureCandidateFiles,
@@ -33,6 +33,60 @@ import {
 export { pinnedInfrastructureCandidate } from "./infrastructure-runtime/history.mjs";
 export const INFRA_IMAGE = "graph-infrastructure-control-guest:local";
 const root = fileURLToPath(new URL("../", import.meta.url));
+
+// Candidate JSON stays inert: bounded size, depth and node count, no duplicate
+// or prototype keys, and only finite numbers and well-formed Unicode.
+function candidateJson(text, maxBytes = 100_000) {
+  if (
+    !Number.isInteger(maxBytes) ||
+    maxBytes < 1 ||
+    maxBytes > 512 * 1024 ||
+    typeof text !== "string" ||
+    !text.isWellFormed() ||
+    Buffer.byteLength(text) > maxBytes
+  )
+    throw new Error("Invalid or oversized candidate JSON");
+  const value = JSON.parse(text);
+  const syntax = ts.parseJsonText("candidate.json", text);
+  let nodes = 0;
+  const visit = (node, depth = 0) => {
+    if (++nodes > 10000 || depth > 40)
+      throw new Error("Candidate JSON complexity limit");
+    if (ts.isObjectLiteralExpression(node)) {
+      const keys = new Set();
+      for (const property of node.properties) {
+        if (
+          !ts.isPropertyAssignment(property) ||
+          !ts.isStringLiteral(property.name)
+        )
+          throw new Error("Invalid candidate JSON property");
+        const key = property.name.text;
+        if (
+          keys.has(key) ||
+          ["__proto__", "constructor", "prototype"].includes(key)
+        )
+          throw new Error("Duplicate or unsafe candidate JSON property");
+        keys.add(key);
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, depth + 1));
+  };
+  visit(syntax);
+  const finite = (item) => {
+    if (typeof item === "number" && !Number.isFinite(item))
+      throw new Error("Nonfinite candidate JSON");
+    if (typeof item === "string" && !item.isWellFormed())
+      throw new Error("Invalid Unicode in candidate JSON");
+    if (item && typeof item === "object")
+      for (const [key, child] of Object.entries(item)) {
+        if (!key.isWellFormed())
+          throw new Error("Invalid Unicode in candidate JSON key");
+        finite(child);
+      }
+  };
+  finite(value);
+  return value;
+}
 const sameKeys = (value, keys) =>
   value &&
   typeof value === "object" &&
@@ -81,7 +135,7 @@ export function infrastructureCommand(image, name, endpoint, describe = false) {
   ];
 }
 export async function infrastructureImage() {
-  const endpoint = await templateDockerEndpoint();
+  const endpoint = await resolveLocalDockerEndpoint();
   const result = await runCommand(
     [
       "docker",
@@ -305,8 +359,6 @@ export async function verifyInfrastructureCandidate(files) {
     "infrastructure-runtime/history.mjs",
     "infrastructure-runtime/provision.mjs",
     "infrastructure-runtime/Dockerfile",
-    "verify-template-invocations.mjs",
-    "candidate-template-invocations.mjs",
     "run.mjs",
     "isolated-candidate.mjs",
     "corpus-history.mjs",
@@ -432,7 +484,7 @@ async function main() {
     if (!info.isFile() || info.isSymbolicLink() || info.size > 512 * 1024)
       throw new Error("Candidate must be a bounded regular non-symlink file");
     receipt = await verifyInfrastructureCandidate(
-      templateJson(await readFile(values.candidate, "utf8"), 512 * 1024),
+      candidateJson(await readFile(values.candidate, "utf8"), 512 * 1024),
     );
   }
   await writeFile(

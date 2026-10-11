@@ -1,1 +1,0 @@
-Preserve existing schema tables and user edits. Do not replace the driver, weaken TLS, introduce credential fallbacks or silently merge divergent helper bindings. The audited renderer handles exact repeats; changes to existing custom connection/schema code need explicit reconciliation and tests.

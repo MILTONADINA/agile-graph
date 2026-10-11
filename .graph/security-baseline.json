@@ -8,52 +8,16 @@
       "path": ".claude/settings.json"
     },
     {
-      "fingerprint": "a1036945c40e23ad959dd92498905616",
-      "tool": "semgrep",
-      "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
-      "path": "create-graph-app/src/configuration/loader.ts"
-    },
-    {
-      "fingerprint": "496818006feca707ebc837088ee86695",
-      "tool": "semgrep",
-      "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
-      "path": "create-graph-app/src/registry/loader.ts"
-    },
-    {
-      "fingerprint": "3f0a42854cc001b1deccefd6aec9cfbe",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.incomplete-sanitization",
-      "path": "evaluation/candidate-build-order.test.mjs"
-    },
-    {
-      "fingerprint": "75e4e7eae3b893079a54e34132084e41",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.incomplete-sanitization",
-      "path": "evaluation/candidate-build-order.test.mjs"
-    },
-    {
       "fingerprint": "b3636dacae323fa6d2dcf95cf84d218d",
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.incomplete-sanitization",
       "path": "evaluation/candidate-cases.test.mjs"
     },
     {
-      "fingerprint": "c41df138784451def6c0600146cc8ae3",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.incomplete-sanitization",
-      "path": "evaluation/candidate-portable.test.mjs"
-    },
-    {
       "fingerprint": "7e2167b965a41adec772450f8d0d65e7",
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
       "path": "evaluation/guest-runtime/cloud-graph.mjs"
-    },
-    {
-      "fingerprint": "57fe316e0ff9e529c930aeedb929480d",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
-      "path": "evaluation/guest-runtime/executor.mjs"
     },
     {
       "fingerprint": "e83757173703ad5afa9c1aac41080f84",
@@ -120,180 +84,6 @@
       "tool": "gitleaks",
       "rule": "generic-api-key",
       "path": "evaluation/sealed/tests/worker-sandbox.test.mjs"
-    },
-    {
-      "fingerprint": "3072a84e696891eb84b786580b3487aa",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
-      "path": "graph-templates/authentication/session/tests/session.test.ts"
-    },
-    {
-      "fingerprint": "027902311eb985e02a2e87e212544e9f",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-redos",
-      "path": "graph-templates/frontend/dashboards/files/Dashboard.tsx"
-    },
-    {
-      "fingerprint": "b8b20d0f2f375d7bfe75f3ae262aa2e6",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/generate-registry/index.js"
-    },
-    {
-      "fingerprint": "cdc551af10166399d8580e81cfa98c4e",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/generate-registry/index.js"
-    },
-    {
-      "fingerprint": "cdc551af10166399d8580e81cfa98c4e#2",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/generate-registry/index.js"
-    },
-    {
-      "fingerprint": "c80b0c5e963e6dd7d0d274efe2fbfa7c",
-      "tool": "semgrep",
-      "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
-      "path": "graph-templates/tools/validate-graph/test/frontend-agent-example.test.js"
-    },
-    {
-      "fingerprint": "5339cefd1e9f5a5eb0a4fe7ff1e48807",
-      "tool": "semgrep",
-      "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
-      "path": "graph-templates/tools/validate-graph/validate.js"
-    },
-    {
-      "fingerprint": "1f8885a6f891fea9227c3f92b3ea1be6",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "42d2148f6e8ba68cba16ea1d278f7ea7",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "42d2148f6e8ba68cba16ea1d278f7ea7#2",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "42d2148f6e8ba68cba16ea1d278f7ea7#3",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "6609b494fe920cfc383b4dcc1bcc1149",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "699388bc5d2d3dc1bc816faedd8d5e1b",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "7f9573a84908d41f8fcc11fadf9b68b2",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "a9a3dfa599528c30fdb48d0566bd98c4",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "f591b11f7583a6f99fcd3a507fd3467b",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "f5d0343e34f3ced798ed66833708bba4",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-fs-filename",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "0754816d35e411be7e103fe5bfba89f6",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "2b8ae1575f743cff7d585d6a55956d15",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "323069d3563327ee4eabdefe84f9f541",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "53d8ec4a004440ff7fba3170c841a6c8",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "5c3d3da8514d2cd99cfdd1dd8f0873f8",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "5fd49bfe2b74276027244bb50455dbc1",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "5fd49bfe2b74276027244bb50455dbc1#2",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "74d3521362e00e0797ab325c602dbe90",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "8ba484c87ac5d2f00277aee8fb53ee12",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "8c38aa1a59223f576d768c262aa02734",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "8ef2a049e652ca72d3c04a789f2bd29f",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
-    },
-    {
-      "fingerprint": "b8c280b4a04975fa270165773c1257a6",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.path-traversal.path-join-resolve-traversal",
-      "path": "graph-templates/tools/validate-templates/index.js"
     },
     {
       "fingerprint": "e61562c8d77990757586c0e119e422f4",
@@ -1262,54 +1052,6 @@
       "path": "packages/engine/src/specs.ts"
     },
     {
-      "fingerprint": "2d7168b7e50e3b978f65eb68cb5e8e7d",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
-      "path": "packages/engine/src/template-runtime-auth.ts"
-    },
-    {
-      "fingerprint": "32f7f88266f7bee49e3b60c833283047",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-redos",
-      "path": "packages/engine/src/template-runtime-aws.ts"
-    },
-    {
-      "fingerprint": "6a8d37a6d33ae7401e2cf23cd2d7d86e",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.detect-redos",
-      "path": "packages/engine/src/template-runtime-aws.ts"
-    },
-    {
-      "fingerprint": "87415053f80dd8830f80baafe1c9f383",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.html-in-template-string",
-      "path": "packages/engine/src/template-runtime-crud.ts"
-    },
-    {
-      "fingerprint": "e4fdfde38bef62551e7aa64df061fa07",
-      "tool": "semgrep",
-      "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
-      "path": "packages/engine/src/template-runtime-docs.ts"
-    },
-    {
-      "fingerprint": "317870a87065419746ed7c117e3fc339",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.unknown-value-with-script-tag",
-      "path": "packages/engine/src/template-runtime-frontend.ts"
-    },
-    {
-      "fingerprint": "d3c069bf08f24d2cddf28df52176fe06",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.html-in-template-string",
-      "path": "packages/engine/src/template-runtime-frontend.ts"
-    },
-    {
-      "fingerprint": "5c2c953ec4851fae2ddb9d63ef42ad13",
-      "tool": "semgrep",
-      "rule": "javascript.ajv.security.audit.ajv-allerrors-true",
-      "path": "packages/engine/src/template-runtime.ts"
-    },
-    {
       "fingerprint": "978f9830f1b62917c9fb2a70df0b4292",
       "tool": "semgrep",
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
@@ -1340,34 +1082,10 @@
       "path": "packages/engine/tests/fixtures/dart-runtime/Dockerfile"
     },
     {
-      "fingerprint": "58514869d3b67c7a052af1ea81e4d633",
-      "tool": "semgrep",
-      "rule": "typescript.react.security.react-insecure-request",
-      "path": "packages/engine/tests/fixtures/frontend-runtime/browser.cjs"
-    },
-    {
-      "fingerprint": "baecbd151831059cabfaf8e4c92884df",
-      "tool": "hadolint",
-      "rule": "DL3002",
-      "path": "packages/engine/tests/fixtures/fullstack-runtime/Dockerfile"
-    },
-    {
-      "fingerprint": "242c2b02b318423d68609806fe36e85e",
-      "tool": "hadolint",
-      "rule": "DL3008",
-      "path": "packages/engine/tests/fixtures/fullstack-runtime/Dockerfile"
-    },
-    {
       "fingerprint": "99c5c8e6e685ca67064dca5ab7a3bd60",
       "tool": "hadolint",
       "rule": "DL3022",
       "path": "packages/engine/tests/fixtures/rust-runtime/Dockerfile"
-    },
-    {
-      "fingerprint": "6b8bbc0aa0b818159ba7c69cc66d2e22",
-      "tool": "hadolint",
-      "rule": "DL3008",
-      "path": "packages/engine/tests/fixtures/testing-runtime/Dockerfile"
     },
     {
       "fingerprint": "cd8e836f57ed20bee30a2b617d617eb0",
@@ -1452,18 +1170,6 @@
       "tool": "suppression",
       "rule": "nosemgrep",
       "path": "packages/engine/tests/security-catalog.test.ts"
-    },
-    {
-      "fingerprint": "2312d3d53748788a77d250d5d5876693",
-      "tool": "gitleaks",
-      "rule": "aws-access-token",
-      "path": "packages/engine/tests/template-runtime-database.test.ts"
-    },
-    {
-      "fingerprint": "22b9abc2f4b8337f761e45247270d611",
-      "tool": "semgrep",
-      "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
-      "path": "packages/engine/tests/template-runtime-oauth.test.ts"
     },
     {
       "fingerprint": "1888ead9f565dbb74ff29760c387f91e",

@@ -140,38 +140,18 @@ export function isAllowedPath(
     return false;
   // Conservatively protect aliases even on case-sensitive machines; projects
   // routinely move to default case-insensitive macOS/Windows filesystems.
-  const segments = clean.split("/");
-  // This locally generated deployment request carries account, IAM, VPC and
-  // secret-reference ARNs. A broad exportPaths allowlist must not expose it.
-  // Keep it writable/readable for local proposals and verification.
-  if (
-    forExport &&
-    segments.length >= 2 &&
-    segments.at(-2)?.toLowerCase() === "deploy" &&
-    segments.at(-1)?.toLowerCase() === "ecs-express-create-service.json"
-  )
-    return false;
   // Exclusions compare in Unicode NFC, so a decomposed file name cannot
   // slip past an exclusion typed in the usual composed form.
   const nfcSegments = clean.normalize("NFC").split("/");
   const prefixes = nfcSegments.map((_, index) =>
     nfcSegments.slice(0, index + 1).join("/"),
   );
-  // Only these exact public artifacts can cross the root .graph boundary. The
-  // ledger additionally requires owner policy opt-in; it is never engine state.
-  // All explicit exclusions and independent cloud-export rules still apply.
-  const publicContext =
-    clean === ".graph/CONTEXT.md" ||
-    (clean === ".graph/manifest.json" &&
-      policy.allowPublicTemplateLedger === true);
-  if (!publicContext && !inWorkingSet(clean, policy)) return false;
+  if (!inWorkingSet(clean, policy)) return false;
   if (
-    protectedPaths.some(
-      (pattern) =>
-        !(publicContext && [".graph/**", ".graph"].includes(pattern)) &&
-        prefixes.some((prefix) =>
-          picomatch(pattern, { dot: true, nocase: true })(prefix),
-        ),
+    protectedPaths.some((pattern) =>
+      prefixes.some((prefix) =>
+        picomatch(pattern, { dot: true, nocase: true })(prefix),
+      ),
     ) ||
     policy.excludedPaths.some((pattern) =>
       prefixes.some((prefix) =>
@@ -245,15 +225,7 @@ export async function safePath(
         .relative(base, await realpath(current))
         .split(path.sep)
         .join("/");
-      if (
-        !isAllowedPath(canonical, policy) &&
-        !(
-          canonical === ".graph" &&
-          (relative === ".graph/CONTEXT.md" ||
-            (relative === ".graph/manifest.json" &&
-              policy.allowPublicTemplateLedger === true))
-        )
-      )
+      if (!isAllowedPath(canonical, policy))
         throw new Error(
           `Resolved path is outside allowed project scope: ${relative}`,
         );

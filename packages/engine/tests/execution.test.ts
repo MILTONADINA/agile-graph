@@ -983,19 +983,19 @@ describe("managed execution", () => {
   });
   it("reloads the policy exactly as the project file has it, dropping removed keys and keeping the file's key order", async () => {
     const { root, config } = await fixture();
-    config.policy.allowPublicTemplateLedger = true;
+    config.policy.requirePlanApproval = true;
     await writeJson(path.join(root, PROJECT_FILE), config);
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
     });
     engines.push(engine);
     const live = engine.config.policy;
-    expect(live.allowPublicTemplateLedger).toBe(true);
-    // The operator revokes the ledger opt-in and adds a working set in the
-    // middle of the policy, as an edit by hand would.
+    expect(live.requirePlanApproval).toBe(true);
+    // The operator drops the plan-approval requirement and adds a working
+    // set in the middle of the policy, as an edit by hand would.
     const edited: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(config.policy)) {
-      if (key === "allowPublicTemplateLedger") continue;
+      if (key === "requirePlanApproval") continue;
       edited[key] = value;
       if (key === "excludedPaths") edited.workingSet = ["math.cjs"];
     }
@@ -1007,10 +1007,10 @@ describe("managed execution", () => {
     const fresh = (await loadProject(root)).policy;
     // A running DAG holds the policy object, so it is updated in place.
     expect(engine.config.policy).toBe(live);
-    expect("allowPublicTemplateLedger" in engine.config.policy).toBe(false);
+    expect("requirePlanApproval" in engine.config.policy).toBe(false);
     expect(Object.keys(engine.config.policy)).toEqual(Object.keys(fresh));
     // Indexing and context use the same policy as the file.
-    expect("allowPublicTemplateLedger" in engine.context.policy).toBe(false);
+    expect("requirePlanApproval" in engine.context.policy).toBe(false);
     expect(engine.context.policy).toEqual(fresh);
     // A plan made in this process matches one made by a fresh process.
     expect(util.hash(engine.config.policy)).toBe(util.hash(fresh));
@@ -1022,7 +1022,7 @@ describe("managed execution", () => {
   });
   it("stops narrowing indexing to a working set removed from the project file, so a plan made in a long-lived engine starts in a fresh one", async () => {
     const { root, config } = await fixture();
-    config.policy.allowPublicTemplateLedger = true;
+    config.policy.requirePlanApproval = true;
     config.policy.workingSet = ["math.cjs"];
     await writeJson(path.join(root, PROJECT_FILE), config);
     const engine = await GraphEngine.open(root, {
@@ -1030,16 +1030,17 @@ describe("managed execution", () => {
     });
     engines.push(engine);
     const narrowed = await engine.context.index({ semantic: false });
-    // The operator removes the working set and the ledger opt-in by hand.
+    // The operator removes the working set and the plan-approval
+    // requirement by hand.
     const {
       workingSet: _workingSet,
-      allowPublicTemplateLedger: _ledger,
+      requirePlanApproval: _approval,
       ...policy
     } = config.policy;
     await writeJson(path.join(root, PROJECT_FILE), { ...config, policy });
     await engine.refresh();
     expect("workingSet" in engine.context.policy).toBe(false);
-    expect("allowPublicTemplateLedger" in engine.context.policy).toBe(false);
+    expect("requirePlanApproval" in engine.context.policy).toBe(false);
     const plan = await engine.createPlan({
       objective: "Fix addition",
       acceptance: ["tests pass"],

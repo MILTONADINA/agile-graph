@@ -19,7 +19,6 @@ import {
 import type { GraphEngine } from "./service.js";
 import { dockerAvailable } from "./execution/docker.js";
 import { MAX_PLAN_OBJECTIVE } from "./planning.js";
-import { listTemplates } from "./templates.js";
 import { projectOverview } from "./overview.js";
 import { summarizeOutcomes } from "./insights.js";
 import { discoverInstalledWorkers } from "./workers/installed.js";
@@ -247,7 +246,6 @@ export function createServer(
       z.object({ id: z.string() }).parse(request.params).id,
     ),
   );
-  app.get("/api/templates", () => listTemplates());
   app.get("/api/decisions", async () => engine.store.decisions());
   app.get("/api/usage", async () => engine.store.accountingSummary());
   app.get("/api/insights", async () =>
@@ -298,14 +296,12 @@ export function createServer(
               z
                 .object({
                   id: z.string(),
-                  kind: z.enum(["worker", "template", "generator"]),
+                  kind: z.enum(["worker", "generator"]),
                   objective: z.string(),
                   dependsOn: z.array(z.string()),
                   providerId: z.string().optional(),
                   effort: z.string().optional(),
-                  templateId: z.string().optional(),
                   generatorId: z.string().optional(),
-                  inputs: z.record(z.unknown()).optional(),
                   writes: z
                     .array(z.string().min(1).max(200))
                     .min(1)

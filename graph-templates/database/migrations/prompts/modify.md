@@ -1,1 +1,0 @@
-Never edit applied migrations or fabricate inverse SQL. A workflow or runner change requires review and isolated PostgreSQL regression tests. A committed migration is undone by a separately reviewed forward fix or restore plan, not this renderer.

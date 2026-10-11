@@ -72,7 +72,6 @@ describe("working set", () => {
     expect(isAllowedPath("kernel/sched/core.c", scoped)).toBe(true);
     expect(isAllowedPath("kernel/fork.c", scoped)).toBe(false);
     expect(isAllowedPath("README.md", scoped)).toBe(false);
-    expect(isAllowedPath(".graph/CONTEXT.md", scoped)).toBe(true);
     // Exclusions still apply inside the working set.
     expect(
       isAllowedPath(

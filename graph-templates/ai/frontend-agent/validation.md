@@ -1,5 +1,0 @@
-1. `frontend.schema.json` validates against `artifacts/frontend.schema.json`.
-2. Every `api.schema.json` route with `auth: required` maps to a page with `requiresAuth: true`.
-3. Every `data.pages[].components` name resolves uniquely to one `data.components[].name`. Page entries have no `kind` field; component definitions do.
-4. A Next.js frontend selects `project.nextjs` and `frontend.nextjs`. Referenced `form` and `table` kinds select `frontend.forms` and `frontend.tables` respectively. Enabled authentication selects `frontend.authentication` and its `authentication.password` backend prerequisite. A referenced `dashboard` kind needs a non-`none` auth strategy and selects authentication, forms, tables and `frontend.dashboards`. Its route, data callbacks and backend authorization remain application work.
-5. A React frontend selects `project.vite-react` and `frontend.react`. If auth, form, table or dashboard work is requested, report the current graph-contract gap and do not substitute the Next.js nodes or claim those features were generated. Application page routes remain separate work for both stacks.

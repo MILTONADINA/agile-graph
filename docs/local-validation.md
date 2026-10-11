@@ -1,5 +1,9 @@
 # Local validation — 2026-09-22–25 UTC
 
+> **2026-10-11:** the app generator (`create-graph-app`), the template kit
+> (`graph-templates`), the reference app and the engine's template runtime
+> were removed from the repository. Entries about them below are history.
+
 These are development observations, not production calibration or a claimed
 percentage reduction in model cost. Private run databases retain detailed
 events and failures. Until 2026-09-25 no metered API model calls were
@@ -550,7 +554,7 @@ access, provider credentials, or network access during generated-code execution:
   supported secure browser context; arbitrary cross-site cookie deployments are
   not validated by the same-site, different-port test.
 
-A separate [real full-stack fixture](fullstack-runtime.md) then passed both engine
+A separate real full-stack fixture then passed both engine
 checks, strict generated compilation, 37 backend and three frontend emitted tests,
 actual Drizzle SQL generation and repeated guarded migrations on PostgreSQL 16.
 Chromium exercised the production-built Next frontend against the actual generated

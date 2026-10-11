@@ -40,7 +40,7 @@
     "version": "1.0.0",
     "taskId": "verifier-infrastructure-stop",
     "fixtureKind": "known-history-quickjs-native-ledger-and-virtual-setup",
-    "imageId": "sha256:c60db856513039981a41782b5f5cb4f2749bbd037cee2d0befeff0fa44ed65f9",
+    "imageId": "sha256:afb21cda2aefec5ed136137a0b5ea6055bc93437f5263ad9c9c73a92d3e9784a",
     "runtime": {
       "version": "1.0.0",
       "node": "v24.16.0",
@@ -68,16 +68,14 @@
       }
     },
     "verifierHashes": {
-      "verify-verifier-infrastructure.mjs": "0dbdd043fa9150fe984010e9bc82cf75358904c0f73ad6b02445f4b7e2ab11f5",
+      "verify-verifier-infrastructure.mjs": "c54f8b0e2312468082e4296c2236155fcdcb8b66f4e3c33a7f37201b10ad7662",
       "candidate-verifier-infrastructure.mjs": "a9e5da85a470033e0c693f8e24d278f517f37079b406718779f1f6104afef388",
       "candidate-verifier-setup.mjs": "bde6356dff3cb00225dc88bdd62272034708348a2e6cb4171794477bf26a7d7b",
       "infrastructure-runtime/history.mjs": "77e9c9830d32d6296ae870d1df40b274845bb2c9af606a2cfd6d8edeea591ec8",
-      "infrastructure-runtime/provision.mjs": "4a2c8ed782a34302424db78045b61d88db3b4d531b986898debace03003adcea",
+      "infrastructure-runtime/provision.mjs": "8a49cd5f0e4f9b1612af3d73a2ee48331223019a819c857143c1ac4f8d9778ca",
       "infrastructure-runtime/Dockerfile": "06647d764257df250fdf2689d72f65a2c2dd7d7cb4f5b01d32f50a14cd9069e4",
-      "verify-template-invocations.mjs": "6786267df2255978d68a137d8280763b22bc81398c466ac060088c35bfbc6bdf",
-      "candidate-template-invocations.mjs": "2c8d03720886a786ebc9fec387dd97237ba559b1d8697d4f12c7f6a11809b534",
       "run.mjs": "76440489103459426dae2ec956a927faea77e04340e47d8997b4b887d9c3b380",
-      "isolated-candidate.mjs": "5844c72f1fa16eed8c39aa8c84e477fd3681bbc42ca2eea0090a82e7ada05075",
+      "isolated-candidate.mjs": "eeb0fd6cdfaba95a14f3e8ead9896568c7206c3f08f8ff815d89587c1442b85c",
       "corpus-history.mjs": "712da94736caeebd13efa497bebff9c8217b37518747406b7268b98a8f8e8321"
     },
     "trustedStoreIdentities": [
@@ -2026,7 +2024,7 @@
     "version": "1.0.0",
     "taskId": "verifier-infrastructure-stop",
     "fixtureKind": "known-history-quickjs-native-ledger-and-virtual-setup",
-    "imageId": "sha256:c60db856513039981a41782b5f5cb4f2749bbd037cee2d0befeff0fa44ed65f9",
+    "imageId": "sha256:afb21cda2aefec5ed136137a0b5ea6055bc93437f5263ad9c9c73a92d3e9784a",
     "runtime": {
       "version": "1.0.0",
       "node": "v24.16.0",
@@ -2054,16 +2052,14 @@
       }
     },
     "verifierHashes": {
-      "verify-verifier-infrastructure.mjs": "0dbdd043fa9150fe984010e9bc82cf75358904c0f73ad6b02445f4b7e2ab11f5",
+      "verify-verifier-infrastructure.mjs": "c54f8b0e2312468082e4296c2236155fcdcb8b66f4e3c33a7f37201b10ad7662",
       "candidate-verifier-infrastructure.mjs": "a9e5da85a470033e0c693f8e24d278f517f37079b406718779f1f6104afef388",
       "candidate-verifier-setup.mjs": "bde6356dff3cb00225dc88bdd62272034708348a2e6cb4171794477bf26a7d7b",
       "infrastructure-runtime/history.mjs": "77e9c9830d32d6296ae870d1df40b274845bb2c9af606a2cfd6d8edeea591ec8",
-      "infrastructure-runtime/provision.mjs": "4a2c8ed782a34302424db78045b61d88db3b4d531b986898debace03003adcea",
+      "infrastructure-runtime/provision.mjs": "8a49cd5f0e4f9b1612af3d73a2ee48331223019a819c857143c1ac4f8d9778ca",
       "infrastructure-runtime/Dockerfile": "06647d764257df250fdf2689d72f65a2c2dd7d7cb4f5b01d32f50a14cd9069e4",
-      "verify-template-invocations.mjs": "6786267df2255978d68a137d8280763b22bc81398c466ac060088c35bfbc6bdf",
-      "candidate-template-invocations.mjs": "2c8d03720886a786ebc9fec387dd97237ba559b1d8697d4f12c7f6a11809b534",
       "run.mjs": "76440489103459426dae2ec956a927faea77e04340e47d8997b4b887d9c3b380",
-      "isolated-candidate.mjs": "5844c72f1fa16eed8c39aa8c84e477fd3681bbc42ca2eea0090a82e7ada05075",
+      "isolated-candidate.mjs": "eeb0fd6cdfaba95a14f3e8ead9896568c7206c3f08f8ff815d89587c1442b85c",
       "corpus-history.mjs": "712da94736caeebd13efa497bebff9c8217b37518747406b7268b98a8f8e8321"
     },
     "trustedStoreIdentities": [

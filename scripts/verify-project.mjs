@@ -16,11 +16,9 @@ import { fileURLToPath } from "node:url";
 
 const packageRoots = [
   "",
-  "create-graph-app",
   "packages/contracts",
   "packages/engine",
   "packages/dashboard",
-  "graph-templates/tools/validate-graph",
 ];
 const reservedVerifierStatuses = new Set([78, 125, 126, 127]);
 
@@ -110,28 +108,21 @@ export function runVerification(
     process.exitCode = 78;
     return;
   }
-  for (const args of [
-    ["run", "check"],
-    ["test", "--prefix", "graph-templates/tools/validate-graph"],
-  ]) {
-    const result = spawnSync("npm", args, {
-      cwd: workspace,
-      stdio: "inherit",
-      shell: false,
-    });
-    if (result.error) {
-      console.error("[graph-verifier:setup-failed]");
-      console.error(result.error.message);
-      process.exitCode = 78;
-      return;
-    }
-    if (result.status !== 0) {
-      // npm and its tests may print the setup marker or choose a reserved
-      // status themselves. Neither is trusted verifier/Docker provenance.
-      process.exitCode = childCheckExitCode(result.status);
-      return;
-    }
+  const result = spawnSync("npm", ["run", "check"], {
+    cwd: workspace,
+    stdio: "inherit",
+    shell: false,
+  });
+  if (result.error) {
+    console.error("[graph-verifier:setup-failed]");
+    console.error(result.error.message);
+    process.exitCode = 78;
+    return;
   }
+  if (result.status !== 0)
+    // npm and its tests may print the setup marker or choose a reserved
+    // status themselves. Neither is trusted verifier/Docker provenance.
+    process.exitCode = childCheckExitCode(result.status);
 }
 
 if (

@@ -1,1 +1,0 @@
-export { validateBeforeGenerate } from './validate';

@@ -81,9 +81,9 @@ describe("bounded routing", () => {
 });
 
 describe("turn estimates", () => {
-  it("counts model workers but not generator or template steps", () => {
+  it("counts model workers but not generator steps", () => {
     const plan = {
-      steps: [{ kind: "generator" }, { kind: "template" }] as never,
+      steps: [{ kind: "generator" }] as never,
     };
     expect(likelyWorkerTurns(plan, { reviewer: false, maxAttempts: 3 })).toBe(
       0,

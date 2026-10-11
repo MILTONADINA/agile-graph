@@ -1,1 +1,0 @@
-Rarely needs modification. To add a second wrapper (e.g. one that also logs timing), add a new named export rather than changing `asyncHandler`'s signature — existing generated routes call it positionally.

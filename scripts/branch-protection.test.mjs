@@ -23,7 +23,6 @@ const platformChecks = [
   "platform (ubuntu-24.04-arm)",
   "platform (macos-15)",
   "platform (windows-2025)",
-  "generated-apps",
   "sidecar",
 ];
 
@@ -59,7 +58,7 @@ function liveProtection(branch) {
   };
 }
 
-test("branch profiles retain seven main checks, nine dev checks, and distinct review rules", () => {
+test("branch profiles retain six main checks, eight dev checks, and distinct review rules", () => {
   assert.deepEqual(requiredChecks.main, [...platformChecks, "sealed-oracle"]);
   assert.deepEqual(requiredChecks.dev, [
     ...platformChecks,

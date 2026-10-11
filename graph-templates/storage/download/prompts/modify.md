@@ -1,1 +1,0 @@
-To add response transforms (e.g. resizing an image in-flight), wrap `object.Body` in a transform stream before `.pipe(res)` — add it as a new method rather than changing `streamToResponse`'s existing signature.

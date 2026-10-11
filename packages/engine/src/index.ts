@@ -14,7 +14,6 @@ export {
 } from "./project.js";
 export { createServer } from "./server.js";
 export { createMcpServer } from "./mcp.js";
-export { listTemplates, scaffold, validateArtifacts } from "./templates.js";
 export {
   evaluateDecisions,
   canPromote,
@@ -45,10 +44,6 @@ export {
 export { backupProject, restoreProject } from "./operations.js";
 export { readRunReceipt } from "./store.js";
 export { runDag, validateDag } from "./execution/dag.js";
-export {
-  renderTemplateProposal,
-  templateRuntimeCapability,
-} from "./templates.js";
 export {
   exportEvaluationDraft,
   importEvaluationLabels,

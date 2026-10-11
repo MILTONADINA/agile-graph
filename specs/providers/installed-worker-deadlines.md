@@ -47,10 +47,10 @@ separate post-merge CI evidence.
   - Test: packages/engine/tests/util.test.ts :: retains the default deadline when timeoutMs is undefined
   - Test: packages/engine/tests/util.test.ts :: still rejects cancellation and clears its kill timer without a deadline
   - Test: packages/engine/tests/util.test.ts :: still rejects output overflow without a deadline
-- AC3: Eligible installed-worker DAG generation uses the same selection, including tester steps and subsequent implementation/repair calls. Its cancellation remains live. API/local, unknown, template and generator steps retain the ordinary finite envelope; an explicit installed deadline longer than that envelope is not prematurely truncated by it.
+- AC3: Eligible installed-worker DAG generation uses the same selection, including tester steps and subsequent implementation/repair calls. Its cancellation remains live. API/local, unknown and generator steps retain the ordinary finite envelope; an explicit installed deadline longer than that envelope is not prematurely truncated by it.
   - Test: packages/engine/tests/dag.test.ts :: omits only installed worker deadlines in completion-driven mode
   - Test: packages/engine/tests/dag.test.ts :: keeps completion-driven installed worker steps cancellable
-  - Test: packages/engine/tests/dag.test.ts :: keeps API, local, unknown, template and generator deadlines finite with an installed override
+  - Test: packages/engine/tests/dag.test.ts :: keeps API, local, unknown and generator deadlines finite with an installed override
   - Test: packages/engine/tests/dag.test.ts :: uses the explicit finite installed deadline instead of the ordinary envelope
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: keeps installed tester, implementer and repair completion-driven under the same policy
 - AC4: With an explicit override, the service binds each DAG worker's provider kind when selecting the envelope. A different kind at dispatch is refused before invocation, so another provider cannot reuse an installed-worker envelope with no deadline.
@@ -69,7 +69,7 @@ worker-step deadlines; native clients/providers can retain their own limits.
 Process cancellation/termination, output and turn bounds, export controls,
 schema validation and installed-client capability checks stay in place.
 Worker-slot waits and capability probes remain bounded, as do API requests,
-templates, generators and security scans. Verification is unchanged by the
+generators and security scans. Verification is unchanged by the
 installed-worker setting; its separate opt-in is specified in
 [verification deadlines](../quality/verification-deadlines.md). The setting does not change any
 write scope, credential, provider enablement or budget. Installed workers still

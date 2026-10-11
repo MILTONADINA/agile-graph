@@ -1,5 +1,0 @@
-{
-  "packages": [],
-  "services": ["aws"],
-  "templates": [{ "id": "devops.docker", "relationship": "requires" }]
-}

@@ -153,7 +153,6 @@ test("only the named cloud task gains a bounded 256-KiB response and larger JSON
   });
   for (const taskId of [
     undefined,
-    "portable-npm-spawn",
     "linux-private-verification-mount",
     "unmetered-decision-budget",
   ])

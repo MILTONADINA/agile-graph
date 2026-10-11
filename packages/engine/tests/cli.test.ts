@@ -1180,7 +1180,7 @@ describe("command line", () => {
     // No docker on PATH: a refusal must come before any Docker call.
     const empty = await mkdtemp(path.join(tmpdir(), "graph-cli-path-"));
     directories.push(empty);
-    for (const id of ["template-express", "https://juice-shop.example"]) {
+    for (const id of ["toy-express", "https://juice-shop.example"]) {
       const scan = await graph.with({ PATH: empty })("security-live-scan", id);
       expect(scan.code).toBe(1);
       expect(scan.stderr).toContain("is not an authorized live target");
@@ -2099,7 +2099,7 @@ describe("command line", () => {
     expect(JSON.parse(cleared.stdout)).toEqual({ audit: null });
   }, 120_000);
 
-  it("shows everything plan-approve's approval covers, including a template step's inputs and each step's effort", async () => {
+  it("shows everything plan-approve's approval covers, including each step's effort", async () => {
     const { graph } = await project();
     await graph("init");
     await graph(
@@ -2115,28 +2115,22 @@ describe("command line", () => {
     // Outside the project, so the steps file is not bound as source.
     const outside = await mkdtemp(path.join(tmpdir(), "graph-cli-steps-"));
     directories.push(outside);
-    const inputs = {
-      targetDirectory: "services/api",
-      exposeStack: true,
-      anything: "a value the approver must see",
-    };
     const steps = path.join(outside, "steps.json");
     await writeFile(
       steps,
       JSON.stringify([
         {
-          id: "errors",
-          kind: "template",
-          objective: "Add the error handler",
+          id: "test",
+          kind: "worker",
+          objective: "Test addition",
           dependsOn: [],
-          templateId: "backend.error-handler",
-          inputs,
+          providerId: "qwen",
         },
         {
           id: "fix",
           kind: "worker",
           objective: "Fix addition",
-          dependsOn: ["errors"],
+          dependsOn: ["test"],
           providerId: "qwen",
           effort: "high",
         },
@@ -2144,9 +2138,9 @@ describe("command line", () => {
     );
     const plan = await graph(
       "plan",
-      "Add error handling",
+      "Fix addition",
       "--accept",
-      "Errors return JSON",
+      "The tests pass",
       "--steps",
       steps,
     );
@@ -2156,17 +2150,11 @@ describe("command line", () => {
     expect(shown.code).toBe(0);
     const output = JSON.parse(shown.stdout);
     expect(output.steps).toEqual([
-      expect.objectContaining({
-        id: "errors",
-        templateId: "backend.error-handler",
-        inputs,
-        effort: null,
-      }),
+      expect.objectContaining({ id: "test", providerId: "qwen", effort: null }),
       expect.objectContaining({
         id: "fix",
         providerId: "qwen",
         effort: "high",
-        inputs: null,
       }),
     ]);
     expect(output).toHaveProperty("routing");

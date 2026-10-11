@@ -1,1 +1,0 @@
-{ "packages": [], "services": [], "templates": [{ "id": "api.crud", "relationship": "extends" }] }

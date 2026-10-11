@@ -1,1 +1,0 @@
-Parse only renderer-owned seed metadata and require the entire prior source to match its regeneration. Exact repeats are no-ops; append only new nonconflicting entities. Refuse changed existing fixtures, duplicated tables or edited source rather than overwriting user logic.

@@ -9,10 +9,6 @@ import {
   mountCandidateCase,
   validateMountCandidateFiles,
 } from "./candidate-mount.mjs";
-import {
-  portableCandidateCase,
-  validatePortableCandidateFiles,
-} from "./candidate-portable.mjs";
 
 const sourcePath = "packages/engine/src/decisions.ts";
 const taskId = "unmetered-decision-budget";
@@ -121,7 +117,6 @@ export function validateCandidateFiles(id, files) {
     return validateCloudGraphCandidateFiles(files);
   if (id === "linux-private-verification-mount")
     return validateMountCandidateFiles(files);
-  if (id === "portable-npm-spawn") return validatePortableCandidateFiles(files);
   assertTask(id);
   const source = exactProperties(files, [sourcePath])[sourcePath];
   if (
@@ -266,7 +261,6 @@ function observation(input) {
 export function candidateCase(id) {
   if (id === "cloud-graph-export") return cloudGraphCandidateCase();
   if (id === "linux-private-verification-mount") return mountCandidateCase();
-  if (id === "portable-npm-spawn") return portableCandidateCase();
   assertTask(id);
   const registered = freeze(scenarios());
   const byId = new Map(registered.map((item) => [item.id, item]));

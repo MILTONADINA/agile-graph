@@ -22,7 +22,6 @@ import {
   isAllowedPath,
 } from "./policy.js";
 import { MAX_PLAN_OBJECTIVE } from "./planning.js";
-import { listTemplates } from "./templates.js";
 import {
   MCP_OPTIONAL_TOOLS,
   MCP_RUN_CONTROL_TOOLS,
@@ -567,15 +566,6 @@ export function createMcpServer(
     },
   );
   register(
-    "template_list",
-    {
-      description:
-        "Lists the templates shipped with this Graph Engineering installation; it takes no input and does not read or index the project. Returns a JSON array of entries with id (scaffold:<id> for project scaffolds, graph-node:<id> for catalog nodes), name, source, status, description and version; graph-node entries also report executable and, when not executable, runtimeReason. Entries marked executable can run as managed-plan template steps; the rest, including planned entries, are catalog descriptions. It runs no project policy check, so it also answers a cloud-backed client while the project policy is offline.",
-      inputSchema: {},
-    },
-    async () => listTemplates(),
-  );
-  register(
     "memory_propose",
     {
       description:
@@ -650,7 +640,7 @@ export function createMcpServer(
       "run_start",
       {
         description:
-          "Starts a managed run of an existing plan in this project and returns JSON with the run's id and initial status; the run continues in the background and run_status, when exposed, reports its progress. Every plan, including one that does not publish and whatever the project policy says, needs a person's stored approval of its exact content (graph-engine plan-approve <planId> --yes) before this tool can start it, and this tool cannot give it; the refusal names the command with the plan's current planSha256. The run works in an isolated git worktree, executes worker, template and operator-registered generator steps, runs the configured verification commands in a container, and publishes a commit or draft pull request only when the project's publication policy allows it. It fails if the plan is unknown or not approved in its current content, the project policy or source changed since planning, a referenced generator was removed or changed, the concurrency limit is reached, the plan has no verification commands (a plan keeps the commands configured when it was created, so one made before any check was added needs a new plan), Docker is not running, or, for a cloud-backed client, the project policy is offline. Active runs are cancelled when this server's connection closes.",
+          "Starts a managed run of an existing plan in this project and returns JSON with the run's id and initial status; the run continues in the background and run_status, when exposed, reports its progress. Every plan, including one that does not publish and whatever the project policy says, needs a person's stored approval of its exact content (graph-engine plan-approve <planId> --yes) before this tool can start it, and this tool cannot give it; the refusal names the command with the plan's current planSha256. The run works in an isolated git worktree, executes worker and operator-registered generator steps, runs the configured verification commands in a container, and publishes a commit or draft pull request only when the project's publication policy allows it. It fails if the plan is unknown or not approved in its current content, the project policy or source changed since planning, a referenced generator was removed or changed, the concurrency limit is reached, the plan has no verification commands (a plan keeps the commands configured when it was created, so one made before any check was added needs a new plan), Docker is not running, or, for a cloud-backed client, the project policy is offline. Active runs are cancelled when this server's connection closes.",
         inputSchema: {
           planId: z
             .string()
@@ -776,7 +766,7 @@ export function createMcpServer(
       "plan_create",
       {
         description:
-          "Creates a plan for a change in this project and returns JSON with its id, steps and routing. A plan needs an objective and at least one explicit acceptance criterion; the engine records the current policy, source and verification catalogue, so a later run_start fails if any changed. Omitted checkIds keeps every configured check; an explicit set selects registered IDs, must include every mandatory check, and cannot register or replace commands. Without steps the plan is one worker step; steps give a dependency-ordered list of worker, template or generator steps. A generator step names an operator-registered generatorId; this tool cannot register or change one. A cloud-backed client can create plans only while the project's publication policy is none, so a plan it wrote cannot publish private source, and only when the plan's worker steps, the configured tester and the configured reviewer all run on local providers or all run on non-local ones, template and generator steps counting as local, so a local step cannot pass files the export policy keeps from cloud models to a cloud worker or reviewer; a step of such a plan that fails repeatedly escalates only to another provider on the same side. It does not start work; start it with run_start.",
+          "Creates a plan for a change in this project and returns JSON with its id, steps and routing. A plan needs an objective and at least one explicit acceptance criterion; the engine records the current policy, source and verification catalogue, so a later run_start fails if any changed. Omitted checkIds keeps every configured check; an explicit set selects registered IDs, must include every mandatory check, and cannot register or replace commands. Without steps the plan is one worker step; steps give a dependency-ordered list of worker or generator steps. A generator step names an operator-registered generatorId; this tool cannot register or change one. A cloud-backed client can create plans only while the project's publication policy is none, so a plan it wrote cannot publish private source, and only when the plan's worker steps, the configured tester and the configured reviewer all run on local providers or all run on non-local ones, generator steps counting as local, so a local step cannot pass files the export policy keeps from cloud models to a cloud worker or reviewer; a step of such a plan that fails repeatedly escalates only to another provider on the same side. It does not start work; start it with run_start.",
         inputSchema: {
           objective: z
             .string()
@@ -808,14 +798,12 @@ export function createMcpServer(
               z
                 .object({
                   id: z.string(),
-                  kind: z.enum(["worker", "template", "generator"]),
+                  kind: z.enum(["worker", "generator"]),
                   objective: z.string(),
                   dependsOn: z.array(z.string()),
                   providerId: z.string().optional(),
                   effort: z.string().optional(),
-                  templateId: z.string().optional(),
                   generatorId: z.string().optional(),
-                  inputs: z.record(z.unknown()).optional(),
                   writes: z
                     .array(z.string().min(1).max(200))
                     .min(1)

@@ -1,1 +1,0 @@
-{ "packages": [], "services": [], "templates": [{ "id": "storage.upload", "relationship": "extends" }, { "id": "backend.error-handler", "relationship": "requires" }] }

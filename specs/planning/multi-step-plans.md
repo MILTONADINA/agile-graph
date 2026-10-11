@@ -44,7 +44,6 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: returns an out-of-scope edit to the worker as feedback
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: never applies a single-step edit outside the step's scope
   - Test: packages/engine/tests/dag.test.ts :: gives each step its own timeout rather than one for the whole plan
-  - Test: packages/engine/tests/dag.test.ts :: stops a step that ignores its signal at the step's time limit
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: keeps a DAG repair within the selected implementer's write scope
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: preserves a DAG repair's exclusions after an acknowledged resume
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: restores the implementer's write scope after a tester repair handoff

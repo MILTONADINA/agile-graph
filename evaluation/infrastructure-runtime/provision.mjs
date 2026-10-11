@@ -4,11 +4,11 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { infrastructureStoreSources, infrastructureHash } from "./history.mjs";
-import { templateDockerEndpoint } from "../verify-template-invocations.mjs";
+import { resolveLocalDockerEndpoint } from "../isolated-candidate.mjs";
 
 export const INFRA_IMAGE = "graph-infrastructure-control-guest:local";
 export async function provisionInfrastructureImage() {
-  const endpoint = await templateDockerEndpoint();
+  const endpoint = await resolveLocalDockerEndpoint();
   const context = await infrastructureStoreSources();
   const directory = await mkdtemp(
     path.join(tmpdir(), "graph-infrastructure-provision-"),

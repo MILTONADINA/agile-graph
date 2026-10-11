@@ -1,1 +1,0 @@
-To add a field to `AuthUser` (e.g. `avatarUrl`), update the interface in `AuthContext.tsx` directly — it must stay a subset of what `authentication.password`'s `PublicUser`/`/api/auth/me` response actually returns, or the extra field will always be `undefined`.

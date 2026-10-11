@@ -9,20 +9,13 @@ export default tseslint.config(
       "**/dist/",
       ".graph/",
       ".serena/",
-      // Catalog templates and their CommonJS tools use their own conventions.
-      "graph-templates/",
-      "create-graph-app/templates/",
       // Third-party files vendored unmodified; their bytes are sha256-pinned.
       "packages/engine/vendor/",
-      // Preserved reference snapshot, not maintained source.
-      "reference-app/",
       // Frozen historical runtimes whose bytes are pinned by retained receipts.
-      "evaluation/build-order-runtime/",
       "evaluation/infrastructure-runtime/",
       "evaluation/retry-visibility-runtime/",
-      "evaluation/template-invocation-runtime/",
       "evaluation/replays/",
-      // Fixture programs that run inside browsers or generated apps.
+      // Fixture programs that run inside native language containers.
       "packages/*/tests/fixtures/",
     ],
   },
@@ -56,7 +49,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.cjs", "create-graph-app/**/*.{js,ts}"],
+    files: ["**/*.cjs"],
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
 );

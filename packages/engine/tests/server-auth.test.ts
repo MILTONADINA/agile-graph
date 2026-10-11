@@ -103,7 +103,7 @@ async function expectEveryApiRouteGuarded(app: FastifyInstance) {
     "/api/runs/:id/events",
   ])
     expect(urls).toContain(expected);
-  expect(routes.length).toBeGreaterThanOrEqual(24);
+  expect(routes.length).toBeGreaterThanOrEqual(23);
 
   for (const route of routes)
     for (const method of route.methods) {

@@ -1,1 +1,0 @@
-{ "inputs": { "entityName": "Product" }, "expectedOutputs": { "files": ["src/controllers/productController.ts"], "exports": ["ProductController"] } }

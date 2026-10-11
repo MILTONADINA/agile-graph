@@ -116,7 +116,6 @@ import {
   type McpToolHashPins,
 } from "./mcp.js";
 import { MCP_OPTIONAL_TOOLS, parseAllowedTools } from "./mcp-tools.js";
-import { listTemplates, scaffold, validateArtifacts } from "./templates.js";
 import { evaluateDecisions, type EvaluationRow } from "./decisions.js";
 import { PROMOTION_IMPORT_BLOCKED } from "./promotion-authority.js";
 import { preparePromotionGrantRequest } from "./promotion-importer.js";
@@ -589,29 +588,6 @@ cli
       }
     });
   });
-cli.command("templates").action(async () => print(await listTemplates()));
-cli
-  .command("validate-graph <artifacts>")
-  .description(
-    "Validate fine-grained graph artifacts, bindings, dependency order, and manifests",
-  )
-  .action(async (artifacts) => {
-    const result = await validateArtifacts(path.resolve(artifacts));
-    print(result);
-    if (!(result as { valid: boolean }).valid) process.exitCode = 1;
-  });
-cli
-  .command("scaffold <config> <target>")
-  .option("--write", "Write a new project (default previews only)")
-  .action(async (config, target, options) =>
-    print(
-      scaffold(
-        await readJson(path.resolve(config)),
-        path.resolve(target),
-        !options.write,
-      ),
-    ),
-  );
 cli
   .command("policy")
   .option("--file <json>", "Replace project policy from a reviewed JSON file")
@@ -1362,7 +1338,7 @@ cli
   )
   .option(
     "--steps <json>",
-    "Reviewed dependency DAG steps with workers, templates or registered generators",
+    "Reviewed dependency DAG steps with workers or registered generators",
   )
   .action(async (objective, options) =>
     withEngine(async (engine) => {
@@ -1450,10 +1426,10 @@ function warnAboutPlan(
   return plan;
 }
 // The approval binds the whole stored plan, so everything that shapes what a
-// run does is shown: template inputs and a generator's frozen registration
-// determine what they generate, as an objective does for a worker step. A
-// projection of the plan alone, with the content hash an approval binds;
-// plan-status reports the stored approval.
+// run does is shown: a generator's frozen registration determines what it
+// generates, as an objective does for a worker step. A projection of the
+// plan alone, with the content hash an approval binds; plan-status reports
+// the stored approval.
 function shownPlan(plan: import("@graph-engineering/contracts").ExecutionPlan) {
   return {
     planId: plan.id,
@@ -1467,9 +1443,7 @@ function shownPlan(plan: import("@graph-engineering/contracts").ExecutionPlan) {
       dependsOn: step.dependsOn,
       providerId: step.providerId ?? null,
       effort: step.effort ?? null,
-      templateId: step.templateId ?? null,
       generatorId: step.generatorId ?? null,
-      inputs: step.inputs ?? null,
       writes: step.writes ?? null,
       covers: step.covers ?? null,
     })),

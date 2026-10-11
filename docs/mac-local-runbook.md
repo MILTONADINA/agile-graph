@@ -15,12 +15,12 @@ starting AIs. An AI using Graph Engineering's MCP context tools is different
 from Graph Engineering launching it as a managed proposal worker. Their current
 verification is deliberately reported separately:
 
-| AI          | Context / worker path                                                                           | Current local evidence                                                                                                                                                                                                                          |
-| ----------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| oMLX Qwen   | Graph-managed local worker receives a curated context packet; Qwen is not itself an MCP client. | Live bounded worker call and an unassisted real UTF-8 repair passed; no new model download.                                                                                                                                                     |
-| Claude Code | Project MCP client and optional subscription-backed managed proposal worker.                    | Live MCP retrieval and one bounded managed proposal passed; full Claude-managed repair is not claimed.                                                                                                                                          |
-| Codex       | Project MCP client; managed App Server worker only when restricted read roots are available.    | Live MCP retrieval passed. Installed `0.156.0` does not meet the managed-worker read-isolation gate.                                                                                                                                            |
-| Cursor      | Separate project MCP client and optional text-only SDK proposal worker.                         | Direct stdio `template_list` passed with 61 entries. The owner reports an in-app project-MCP call in this workspace; no Cursor tool trace was retained. SDK controls pass mocked tests; no Cursor user key or live proposal call is configured. |
+| AI          | Context / worker path                                                                           | Current local evidence                                                                                                                                                                                                                              |
+| ----------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| oMLX Qwen   | Graph-managed local worker receives a curated context packet; Qwen is not itself an MCP client. | Live bounded worker call and an unassisted real UTF-8 repair passed; no new model download.                                                                                                                                                         |
+| Claude Code | Project MCP client and optional subscription-backed managed proposal worker.                    | Live MCP retrieval and one bounded managed proposal passed; full Claude-managed repair is not claimed.                                                                                                                                              |
+| Codex       | Project MCP client; managed App Server worker only when restricted read roots are available.    | Live MCP retrieval passed. Installed `0.156.0` does not meet the managed-worker read-isolation gate.                                                                                                                                                |
+| Cursor      | Separate project MCP client and optional text-only SDK proposal worker.                         | A direct stdio handshake and read-only tool call passed. The owner reports an in-app project-MCP call in this workspace; no Cursor tool trace was retained. SDK controls pass mocked tests; no Cursor user key or live proposal call is configured. |
 
 The default checked-in project policy uses `allowlisted` inference/network
 mode but permits only local `qwen` and `laya` providers and no outbound hosts.
@@ -141,8 +141,8 @@ name `GRAPH ENGINEERING`. Serena is separate from the `graph-engineering`
 project MCP server. Its ignored project-only
 `.cursor/mcp.json` now uses explicit `type: "stdio"`, an absolute local Node
 executable, and Cursor's `${workspaceFolder}` interpolation. The exact
-configured command and args passed a direct stdio handshake and read-only
-`template_list` call with 61 catalog entries. Cursor initially discovered this
+configured command and args passed a direct stdio handshake and a read-only
+tool call. Cursor initially discovered this
 server as disconnected; on 2026-09-24 the owner reported that its in-app call
 works in this exact workspace. No Cursor tool trace was retained in this
 session, so the direct stdio smoke and owner report remain distinct evidence.
