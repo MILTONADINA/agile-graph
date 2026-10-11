@@ -35,7 +35,8 @@ export interface DecisionQuestion {
 export interface DecisionReservation {
   callId: string;
   provider: string;
-  amountUsd: number;
+  /** Null for an unpriced call under no cap: it binds the call to its ledger without reserving money. */
+  amountUsd: number | null;
 }
 export interface DecisionCallUsage {
   callId: string;
@@ -414,7 +415,10 @@ export async function decideBatch(
         : undefined;
       if (provider.apiKeyEnv && !key)
         throw new Error(`Missing ${provider.apiKeyEnv}`);
-      if (hosted && estimate !== null && options.budget) {
+      // Every hosted call is bound to its ledger before it is sent, an
+      // unpriced one under no cap too, so its usage settles on the day it
+      // was dispatched, not the day it returned.
+      if (hosted && options.budget) {
         await options.budget.reserve({
           callId,
           provider: provider.id,
