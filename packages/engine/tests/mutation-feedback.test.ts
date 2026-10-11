@@ -431,4 +431,39 @@ describe("mutation feedback to the tester", () => {
     expect(calls).toHaveLength(1);
     expect(testerInputs).toHaveLength(1);
   }, 60000);
+
+  it("starts no further baseline check once the check timeout is used, and bounds each by the time left", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.mutationRounds = 1;
+      config.policy.verificationTimeoutSeconds = 1;
+      config.verification = [
+        { image: "fixture", argv: ["test"] },
+        { image: "fixture", argv: ["lint"] },
+      ];
+    });
+    const { verify: inner } = sandbox();
+    const started: { argv: string[]; timeout: number | null | undefined }[] =
+      [];
+    const verify: typeof inner = async (...args) => {
+      if (args[5]) {
+        for (const check of args[1])
+          started.push({
+            argv: check.argv,
+            timeout: args[2].verificationTimeoutSeconds,
+          });
+        await new Promise((done) => setTimeout(done, 1100));
+      }
+      return inner(...args);
+    };
+    const { run, analyses } = await runWith(root, verify, () =>
+      tests("test('weak', () => {});\n"),
+    );
+    expect(run.status).toBe("succeeded");
+    expect(analyses.map((event) => event.data)).toMatchObject([
+      { status: "time-budget", killed: 0, score: null },
+    ]);
+    // The first baseline check used the whole budget, so the second never
+    // started, and the first was given only the time that was left.
+    expect(started).toEqual([{ argv: ["test"], timeout: 1 }]);
+  }, 60000);
 });

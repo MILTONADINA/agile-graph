@@ -79,19 +79,33 @@ export async function analyzeMutants(options: {
   const run = (
     checks: ProjectConfig["verification"],
     mutated: AddedFile[] = [],
+    policy: typeof options.policy = options.policy,
   ) =>
     options.verify(
       options.workspace,
       checks,
-      options.policy,
+      policy,
       options.snapshotHash,
       options.signal,
       { added, replaced: [...replaced, ...mutated] },
     );
   // The sandbox stops at a check's first failure, so each runs on its own.
+  // Baseline checks share the analysis deadline too: none starts once it has
+  // passed, and each may use only the time that is left.
   const passing: ProjectConfig["verification"] = [];
   for (const check of options.checks) {
-    const [result] = await run([check]);
+    if (now() >= deadline) break;
+    const policy =
+      deadline !== Infinity
+        ? {
+            ...options.policy,
+            verificationTimeoutSeconds: Math.max(
+              1,
+              Math.ceil((deadline - now()) / 1000),
+            ),
+          }
+        : options.policy;
+    const [result] = await run([check], [], policy);
     if (result?.code === 0) passing.push(check);
   }
   const mutants: Mutant[] = [];

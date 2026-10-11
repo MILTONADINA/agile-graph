@@ -2233,7 +2233,6 @@ export class GraphEngine {
           dataDir: this.dataDir,
           run,
           events: this.store.events(runId),
-          providers: await loadProviders(this.dataDir),
           policy: this.config.policy,
         });
       } catch (error) {
@@ -3436,6 +3435,7 @@ export class GraphEngine {
           "review.completed",
           {
             providerId: reviewer.id,
+            kind: reviewer.kind,
             model: result.model,
             passed: outcome.passed,
             verdict: result.review.verdict,
@@ -4463,6 +4463,7 @@ export class GraphEngine {
               );
             const dispatched = {
               provider: provider.id,
+              kind: provider.kind,
               model: provider.model,
               effort: step.effort ?? null,
               attempt,
