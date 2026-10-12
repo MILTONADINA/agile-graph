@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { RunEvent, RunRecord } from "@agile-graph/contracts";
 import { SCHEMA_VERSION } from "@agile-graph/contracts";
 import { classifyError } from "../src/feedback.js";
-import { runRetro, runsCreatedSince, summarizeRetro } from "../src/retro.js";
+import {
+  outputTail,
+  runRetro,
+  runsCreatedSince,
+  summarizeRetro,
+} from "../src/retro.js";
 
 const SENTINEL = "zq-private-marker";
 const START = Date.parse("2026-10-01T00:00:00.000Z");
@@ -329,5 +334,44 @@ describe("delivery retro", () => {
       event(4, "run.stopped", { error: "Required checks failed" }),
     ]);
     expect(retro.repeatedFailures).toBe(0);
+  });
+
+  it("tells two failures of the same check apart by their output, ignoring durations, timestamps and temporary paths", () => {
+    const failingWith = (stdout: string) => [
+      { argv: ["npm", "test"], image: "node:24", code: 1, stdout, stderr: "" },
+    ];
+    const verifications = (outputs: string[]) =>
+      runRetro(
+        record("failed"),
+        outputs.flatMap((stdout, index) => [
+          event(index * 2, "verification.started", {
+            snapshotHash: `s${index}`,
+          }),
+          event(index * 2 + 1, "verification.completed", {
+            checks: failingWith(stdout),
+          }),
+        ]),
+      ).repeatedFailures;
+    expect(
+      verifications([
+        "not ok 1 - add returns 5",
+        "not ok 2 - subtract returns 1",
+      ]),
+    ).toBe(0);
+    expect(
+      verifications([
+        "not ok 1 - add (12ms) at /tmp/graph-a1/x.js 2026-10-01T10:00:00Z",
+        "not ok 1 - add (31ms) at /tmp/graph-b2/x.js 2026-10-01T10:05:00Z",
+      ]),
+    ).toBe(1);
+  });
+
+  it("reads at most 40 lines of 500 characters of a check's output, quickly", () => {
+    const huge = `${"x".repeat(200_000)}\n`.repeat(50);
+    const started = performance.now();
+    const tail = outputTail(huge, "C:\\" + "a".repeat(100_000));
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(tail.split("\n")).toHaveLength(40);
+    expect(Math.max(...tail.split("\n").map((line) => line.length))).toBe(500);
   });
 });
