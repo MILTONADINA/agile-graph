@@ -356,4 +356,20 @@ describe("retries that learn from the previous failure", () => {
     expect(feedback[2]).toContain("failed exactly as");
     expect(feedback[2]).toContain("change approach. Use addition.");
   });
+
+  it("records a repeat decision refused by the cost cap as cost-cap", async () => {
+    const { events } = await run({
+      attempts: 3,
+      edits: ["a * b", "a / b", "a + b"],
+      codes: fixedWhen("a + b"),
+      repeatDecision: async () => {
+        throw new Error(
+          "The next call exceeds the configured estimated cost budget",
+        );
+      },
+    });
+    expect(
+      events.find((event) => event.type === "attempt.repeat_decision")?.data,
+    ).toMatchObject({ failed: "cost-cap" });
+  });
 });

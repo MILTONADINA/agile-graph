@@ -3757,7 +3757,7 @@ export class GraphEngine {
             this.store.event(
               run.id,
               "attempt.repeat_decision",
-              { attempt, providerId: reviewer.id, skipped: "not-exportable" },
+              { attempt, providerId: reviewer.id, failed: "scope" },
               stepId,
             );
             return undefined;
@@ -3777,6 +3777,14 @@ export class GraphEngine {
               ? ["", "Latest output:", feedback]
               : []),
           ].join("\n");
+          // Paired with attempt.repeat_decision, so a retro counts the call
+          // as review time.
+          this.store.event(
+            run.id,
+            "attempt.repeat_decision_started",
+            { attempt, providerId: reviewer.id },
+            stepId,
+          );
           const { result } = await this.invokeRepeatDecisionCall(
             {
               provider: reviewer,

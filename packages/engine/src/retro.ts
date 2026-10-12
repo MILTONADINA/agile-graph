@@ -63,6 +63,7 @@ const PHASES = {
   "dag.step.started": ["worker", "dag.step.completed"],
   "verification.started": ["verification", "verification.completed"],
   "review.started": ["review", "review.completed"],
+  "attempt.repeat_decision_started": ["review", "attempt.repeat_decision"],
   "security.scan_started": ["security", "security.scan_completed"],
 } as const;
 type Phase = (typeof PHASES)[keyof typeof PHASES][0];

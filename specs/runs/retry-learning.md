@@ -35,14 +35,16 @@ a decision instead of burning more time.
 - AC6: A multi-step plan's repair, and a retry after a reused solution failed its checks, starts from that failed verification: the first retry is told the previous attempt failed, and its failure counts towards a repeat.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: tells the first repair that the combined checks failed, and stops when the repairs repeat that failure
 
-- AC6: When a run has a reviewer, the first repeated failure goes to it in one fresh call with the task, the acceptance criteria, which checks failed with which exit codes on which two attempts, and the current diff; it answers change approach (with guidance), narrow the scope, or blocked, never a plain retry. The next attempt is told the decision and its guidance, and the run records `attempt.repeat_decision`.
+- AC7: When a run has a reviewer, the first repeated failure goes to it in one fresh call with the task, the acceptance criteria, which checks failed with which exit codes on which two attempts, and the current diff; it answers change approach (with guidance), narrow the scope, or blocked, never a plain retry. The next attempt is told the decision and its guidance, and the run records `attempt.repeat_decision_started` and `attempt.repeat_decision`, which the retro counts as review time.
   - Test: packages/engine/tests/repeat-failure.test.ts :: asks the run's reviewer to decide a repeated failure and passes its guidance to the next attempt
   - Test: packages/engine/tests/repeat-failure.test.ts :: asks the reviewer only on the first repeat, and still stops at the third
-- AC7: A reviewer's blocked decision stops the run at once with the `repeated-failure` kind.
+  - Test: packages/engine/tests/retro.test.ts :: counts a reviewer's decision on a repeated failure as review time
+- AC8: A reviewer's blocked decision stops the run at once with the `repeated-failure` kind.
   - Test: packages/engine/tests/repeat-failure.test.ts :: stops at once when the reviewer judges a repeated failure blocked
-- AC8: When the decision cannot be made (a failed call, a cost cap, or a change a cloud reviewer may not receive), the run records why as an error kind and the retry falls back to the change-approach notice.
+- AC9: When the decision cannot be made (a failed call, a cost cap, or a change a cloud reviewer may not receive, recorded as `scope`), the run records why as an error kind and the retry falls back to the change-approach notice.
   - Test: packages/engine/tests/repeat-failure.test.ts :: falls back to the change-approach notice when the reviewer's decision fails
-- AC9: A cloud reviewer gets the failing checks and exit codes but never their output, and a cloud worker gets the guidance only when it came from a cloud reviewer that saw nothing outside the export paths.
+  - Test: packages/engine/tests/repeat-failure.test.ts :: records a repeat decision refused by the cost cap as cost-cap
+- AC10: A cloud reviewer gets the failing checks and exit codes but never their output, and a cloud worker gets the guidance only when it came from a cloud reviewer that saw nothing outside the export paths.
   - Test: packages/engine/tests/repeat-failure.test.ts :: gives a cloud reviewer the failing checks and exit codes but never their output, and passes its guidance to a cloud worker
 
 ## Security considerations
