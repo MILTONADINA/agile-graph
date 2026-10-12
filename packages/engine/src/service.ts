@@ -104,6 +104,7 @@ import {
 import {
   findingId,
   invokeReviewWorker,
+  invokeRepeatDecision,
   invokeVerifyFix,
   priorBlockingFindings,
   reusableFixVerdicts,
@@ -111,6 +112,8 @@ import {
   VERIFY_FIX_LIMIT,
   verifyFixFeedback,
   type PriorFinding,
+  type RepeatDecision,
+  type RepeatDecisionInput,
   type ReviewInput,
   type VerifyFixInput,
   type VerifyFixResult,
@@ -201,6 +204,7 @@ import {
   assertPlanVerificationSelection,
   resolveVerificationSelection,
 } from "./verification-selection.js";
+import { classifyError } from "./feedback.js";
 import { failureSignature } from "./retro.js";
 import { parseSpec, planFromSpec, SPECS_DIR } from "./specs.js";
 import {
@@ -249,6 +253,15 @@ export interface EngineDependencies {
    */
   verifyFix?: (input: VerifyFixInput) => Promise<{
     result: VerifyFixResult;
+    model: string;
+    usage: Usage;
+  }>;
+  /**
+   * Decides what follows a repeated check failure; defaults to a fresh call
+   * to the configured reviewer's API.
+   */
+  repeatDecision?: (input: RepeatDecisionInput) => Promise<{
+    result: RepeatDecision;
     model: string;
     usage: Usage;
   }>;
@@ -1052,6 +1065,14 @@ export class GraphEngine {
   private invokeFixCheck(input: VerifyFixInput, plan: ExecutionPlan) {
     return this.reviewerCall(input, plan, () =>
       (this.deps.verifyFix ?? invokeVerifyFix)(input),
+    );
+  }
+  private invokeRepeatDecisionCall(
+    input: RepeatDecisionInput,
+    plan: ExecutionPlan,
+  ) {
+    return this.reviewerCall(input, plan, () =>
+      (this.deps.repeatDecision ?? invokeRepeatDecision)(input),
     );
   }
   private async reviewerCall<T extends { usage: Usage }>(
@@ -3149,6 +3170,8 @@ export class GraphEngine {
       // The latest verification's failing checks and exit codes, hashed;
       // null when its checks passed.
       let checkFailure: string | null = null;
+      // Which checks failed with which exit codes, for a repeat decision.
+      let failedCheckLines: string[] = [];
       let verified = false;
       let verifiedHash: string | undefined;
       // The snapshot the last verification in this execution checked.
@@ -3706,6 +3729,99 @@ export class GraphEngine {
       // proposed no change; the tester answers it on the next attempt.
       let implementerDispute: string | undefined;
       let unresolvedDispute: string | undefined;
+      // After a repeated check failure, the run's reviewer decides what the
+      // next attempt does: change approach, narrow the scope, or blocked.
+      // Undefined without a reviewer, or when the call could not be made,
+      // so the retry falls back to the change-approach notice.
+      const decideRepeat = async (
+        stepId: string,
+        objective: string,
+        attempt: number,
+      ): Promise<
+        | {
+            decision: RepeatDecision["decision"];
+            guidance: string;
+            exportable: boolean;
+          }
+        | undefined
+      > => {
+        if (!reviewerId) return undefined;
+        try {
+          const reviewer = await this.reviewer(reviewerId);
+          assertOnPlanSide(run.plan, reviewer, reviewerRole(reviewer.id));
+          const written = (await runWrittenPaths()).sort();
+          const exportable = written.every((file) =>
+            isAllowedPath(file, this.config.policy, true),
+          );
+          if (reviewer.kind !== "local" && !exportable) {
+            this.store.event(
+              run.id,
+              "attempt.repeat_decision",
+              { attempt, providerId: reviewer.id, skipped: "not-exportable" },
+              stepId,
+            );
+            return undefined;
+          }
+          const diff = await changeDiff({
+            workspace,
+            baseCommit,
+            files: written,
+            policy: this.config.policy,
+            signal,
+          });
+          // Check output may quote private source: a local reviewer only.
+          const failure = [
+            `The same required checks failed with the same exit codes on attempts ${attempt - 1} and ${attempt}:`,
+            ...failedCheckLines,
+            ...(reviewer.kind === "local" && feedback
+              ? ["", "Latest output:", feedback]
+              : []),
+          ].join("\n");
+          const { result } = await this.invokeRepeatDecisionCall(
+            {
+              provider: reviewer,
+              policy: this.config.policy,
+              objective,
+              acceptance: run.plan.acceptance,
+              failure,
+              diff,
+              signal,
+            },
+            run.plan,
+          );
+          const guidance = redact(result.guidance).slice(0, 1500);
+          this.store.event(
+            run.id,
+            "attempt.repeat_decision",
+            {
+              attempt,
+              providerId: reviewer.id,
+              decision: result.decision,
+              guidance,
+            },
+            stepId,
+          );
+          return {
+            decision: result.decision,
+            guidance,
+            // Guidance a local reviewer wrote may quote check output.
+            exportable: exportable && reviewer.kind !== "local",
+          };
+        } catch (error) {
+          if (signal.aborted) throw error;
+          this.store.event(
+            run.id,
+            "attempt.repeat_decision",
+            {
+              attempt,
+              providerId: reviewerId,
+              failed: classifyError(errorMessage(error)),
+            },
+            stepId,
+          );
+          return undefined;
+        }
+      };
       const verify = async (stepId: string) => {
         if (signal.aborted) throw new Error("Run cancelled");
         await this.assertCurrentPlanVerification(run.plan);
@@ -3777,6 +3893,9 @@ export class GraphEngine {
         verifiedHash = verified ? after : undefined;
         feedback = compactFailures(checks);
         checkFailure = failureSignature(recorded);
+        failedCheckLines = checks
+          .filter((check) => check.code !== 0)
+          .map((check) => `${check.argv.join(" ")} exited ${check.code}`);
         // Checks passing is not enough when the project has a reviewer: the
         // reviewer must approve, or its findings become the next attempt's
         // feedback. It can only hold a change back, never accept one.
@@ -4333,6 +4452,9 @@ export class GraphEngine {
                 unchanged: false,
               })
             : "";
+        // The reviewer's decision on the last repeated failure, if any.
+        let repeatGuidance:
+          Awaited<ReturnType<typeof decideRepeat>> | undefined;
         for (
           let attempt = firstAttempt;
           attempt <= this.config.policy.maxAttempts;
@@ -4465,6 +4587,16 @@ export class GraphEngine {
             const workerFeedback = [
               // Fixed sentences only, so every worker may receive it.
               retryNotice,
+              repeatGuidance &&
+                `The reviewer's decision after the repeated failure: ${
+                  repeatGuidance.decision === "narrow_scope"
+                    ? "narrow the scope"
+                    : "change approach"
+                }. ${
+                  provider.kind === "local" || repeatGuidance.exportable
+                    ? repeatGuidance.guidance
+                    : "Request the exportable source you need to act on it."
+                }`,
               provider.kind === "local"
                 ? feedback
                 : feedback
@@ -4748,6 +4880,14 @@ export class GraphEngine {
               throw new Error(
                 "Required checks failed the same way on three attempts in a row; the run stopped instead of retrying the same approach. Read the failure, then change the plan or the code before resuming",
               );
+            repeatGuidance =
+              repeated && repeats === 1
+                ? await decideRepeat(step.id, step.objective, attempt)
+                : undefined;
+            if (repeatGuidance?.decision === "blocked")
+              throw new Error(
+                "Required checks failed the same way on two attempts in a row, and the reviewer judged the run blocked; a person should decide how to proceed",
+              );
             retryNotice = retryNoticeFor({
               attempt,
               maxAttempts: this.config.policy.maxAttempts,
@@ -4757,6 +4897,7 @@ export class GraphEngine {
           } else {
             repeats = 0;
             retryNotice = "";
+            repeatGuidance = undefined;
           }
           previousFailure = checkFailure;
           previousCheckedHash = checkedHash;

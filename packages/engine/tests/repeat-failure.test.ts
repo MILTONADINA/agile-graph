@@ -20,7 +20,16 @@ afterEach(async () => {
     await rm(root, { recursive: true, force: true });
 });
 
-type Verify = NonNullable<Parameters<typeof GraphEngine.open>[1]>["verify"];
+type Deps = NonNullable<Parameters<typeof GraphEngine.open>[1]>;
+type Verify = Deps["verify"];
+
+const usage = {
+  inputTokens: 1,
+  outputTokens: 1,
+  cachedTokens: 0,
+  costUsd: 0,
+  estimated: false,
+};
 
 /**
  * A run whose worker makes one edit per attempt (`edits`, each replacing the
@@ -30,6 +39,10 @@ async function run(options: {
   attempts: number;
   edits: string[];
   codes: (body: string) => number;
+  /** Configures a reviewer that approves every change it reviews. */
+  repeatDecision?: Deps["repeatDecision"];
+  /** Cloud (API) worker and reviewer instead of local ones. */
+  cloud?: boolean;
 }) {
   const root = await mkdtemp(path.join(os.tmpdir(), "graph-repeat-"));
   roots.push(root);
@@ -46,6 +59,18 @@ async function run(options: {
   const config = await initializeProject(root);
   config.policy.providers = ["local"];
   config.policy.maxAttempts = options.attempts;
+  if (options.repeatDecision) {
+    config.policy.providers = ["local", "reviewer"];
+    config.review = { providerId: "reviewer" };
+  }
+  if (options.cloud)
+    config.policy = {
+      ...config.policy,
+      inference: "allowlisted",
+      network: "allowlisted",
+      allowedHosts: ["api.openai.com"],
+      exportPaths: ["math.cjs", "math.test.cjs"],
+    };
   config.verification = [
     { image: "node:24-alpine", argv: ["node", "--test", "math.test.cjs"] },
   ];
@@ -54,12 +79,29 @@ async function run(options: {
   await checked("git", ["commit", "-m", "test: fixture"], { cwd: root });
   const data = projectDataDir(config.projectId);
   roots.push(data);
-  await configureProvider(data, {
-    id: "local",
-    kind: "local",
-    model: "fixture",
-    endpoint: "http://127.0.0.1:11434/v1",
-  });
+  await configureProvider(
+    data,
+    options.cloud
+      ? { id: "local", kind: "openai", model: "fixture" }
+      : {
+          id: "local",
+          kind: "local",
+          model: "fixture",
+          endpoint: "http://127.0.0.1:11434/v1",
+        },
+  );
+  if (options.repeatDecision)
+    await configureProvider(
+      data,
+      options.cloud
+        ? { id: "reviewer", kind: "openai", model: "fixture-reviewer" }
+        : {
+            id: "reviewer",
+            kind: "local",
+            model: "fixture-reviewer",
+            endpoint: "http://127.0.0.1:11434/v1",
+          },
+    );
   const feedback: string[] = [];
   let body = "a - b";
   const verify: Verify = async (workspace, checks, _policy, snapshotHash) => {
@@ -76,6 +118,21 @@ async function run(options: {
   const engine = await GraphEngine.open(root, {
     dockerAvailable: async () => true,
     verify,
+    repeatDecision: options.repeatDecision,
+    review: async (input) => ({
+      model: "fixture-reviewer",
+      usage,
+      review: {
+        verdict: "approve",
+        summary: "Looks right",
+        criteria: input.acceptance.map((criterion) => ({
+          criterion,
+          met: "yes",
+          evidence: "The checks pass",
+        })),
+        findings: [],
+      },
+    }),
     worker: async (input) => {
       feedback.push(input.feedback ?? "");
       const next = options.edits[feedback.length - 1] ?? body;
@@ -179,5 +236,124 @@ describe("retries that learn from the previous failure", () => {
     expect(
       events.find((event) => event.type === "attempt.repeated_failure")?.data,
     ).toMatchObject({ unchanged: true });
+  });
+
+  it("asks the run's reviewer to decide a repeated failure and passes its guidance to the next attempt", async () => {
+    const asked: string[] = [];
+    const { result, feedback, events } = await run({
+      attempts: 3,
+      edits: ["a * b", "a / b", "a + b"],
+      codes: fixedWhen("a + b"),
+      repeatDecision: async (input) => {
+        asked.push(input.failure);
+        return {
+          model: "fixture-reviewer",
+          usage,
+          result: { decision: "change_approach", guidance: "Use addition." },
+        };
+      },
+    });
+    expect(result.status).toBe("succeeded");
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain("on attempts 1 and 2");
+    expect(asked[0]).toContain("node --test math.test.cjs exited 1");
+    // A local reviewer also sees the latest output.
+    expect(asked[0]).toContain("not ok 1 - add");
+    expect(feedback[2]).toContain(
+      "The reviewer's decision after the repeated failure: change approach. Use addition.",
+    );
+    expect(
+      events.find((event) => event.type === "attempt.repeat_decision")?.data,
+    ).toMatchObject({
+      attempt: 2,
+      providerId: "reviewer",
+      decision: "change_approach",
+    });
+  });
+
+  it("stops at once when the reviewer judges a repeated failure blocked", async () => {
+    const { result, feedback } = await run({
+      attempts: 5,
+      edits: ["a * b", "a / b", "a % b"],
+      codes: () => 1,
+      repeatDecision: async () => ({
+        model: "fixture-reviewer",
+        usage,
+        result: {
+          decision: "blocked",
+          guidance: "The check imports a file that does not exist.",
+        },
+      }),
+    });
+    expect(result.status).toBe("failed");
+    expect(feedback).toHaveLength(2);
+    expect(result.error).toContain("the reviewer judged the run blocked");
+    expect(classifyError(result.error!)).toBe("repeated-failure");
+  });
+
+  it("falls back to the change-approach notice when the reviewer's decision fails", async () => {
+    const { result, feedback, events } = await run({
+      attempts: 3,
+      edits: ["a * b", "a / b", "a + b"],
+      codes: fixedWhen("a + b"),
+      repeatDecision: async () => {
+        throw new Error("HTTP 503 from the provider");
+      },
+    });
+    expect(result.status).toBe("succeeded");
+    expect(feedback[2]).toContain("failed exactly as");
+    expect(feedback[2]).not.toContain("The reviewer's decision");
+    expect(
+      events.find((event) => event.type === "attempt.repeat_decision")?.data,
+    ).toMatchObject({ attempt: 2, failed: "provider-call" });
+  });
+
+  it("asks the reviewer only on the first repeat, and still stops at the third", async () => {
+    let asked = 0;
+    const { result, feedback } = await run({
+      attempts: 5,
+      edits: ["a * b", "a / b", "a % b", "a + b"],
+      codes: () => 1,
+      repeatDecision: async () => {
+        asked++;
+        return {
+          model: "fixture-reviewer",
+          usage,
+          result: { decision: "narrow_scope", guidance: "Only change add." },
+        };
+      },
+    });
+    expect(asked).toBe(1);
+    expect(feedback[2]).toContain(
+      "The reviewer's decision after the repeated failure: narrow the scope. Only change add.",
+    );
+    expect(result.status).toBe("failed");
+    expect(feedback).toHaveLength(3);
+    expect(result.error).toContain("on three attempts in a row");
+  });
+
+  it("gives a cloud reviewer the failing checks and exit codes but never their output, and passes its guidance to a cloud worker", async () => {
+    const asked: string[] = [];
+    const { result, feedback } = await run({
+      cloud: true,
+      attempts: 3,
+      edits: ["a * b", "a / b", "a + b"],
+      codes: fixedWhen("a + b"),
+      repeatDecision: async (input) => {
+        asked.push(input.failure);
+        return {
+          model: "fixture-reviewer",
+          usage,
+          result: { decision: "change_approach", guidance: "Use addition." },
+        };
+      },
+    });
+    expect(result.status).toBe("succeeded");
+    expect(asked[0]).toContain("node --test math.test.cjs exited 1");
+    expect(asked[0]).not.toContain("not ok 1 - add");
+    // A cloud worker gets the notices and guidance, never the output.
+    expect(feedback[2]).not.toContain("not ok 1 - add");
+    expect(feedback[2]).toContain("failed exactly as");
+    expect(feedback[2]).toContain("change approach. Use addition.");
   });
 });
