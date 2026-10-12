@@ -109,6 +109,9 @@ authority.
 - Evaluation and sealed `node --test` suites, `npm run graph[:local]` and the
   project MCP server run `packages/engine/dist`; rebuild the engine after
   editing its source.
+- Before pushing, run `npm run preflight`: the format check, lint and
+  typecheck plus the tests related to the files you changed, in a few
+  minutes instead of a 25-minute CI cycle. It never replaces CI.
 - `npm run check` is not CI. CI also runs `npm run format:check` and
   `npm run lint` first, the `node --test` suites in `scripts/` and
   `evaluation/` and `python -m unittest discover -s sidecars/laya -p 'test_*.py'`;
