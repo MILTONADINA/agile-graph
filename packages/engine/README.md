@@ -38,7 +38,7 @@ results with `graph-engine accept`. `graph-engine --help` lists every command.
 
 To give an AI client such as Claude Code, Codex or Cursor the project's
 context, run `graph-engine -C /path/to/your/project mcp` as its MCP server.
-See [connecting an AI client](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/mcp-clients.md).
+See [connecting an AI client](https://github.com/MILTONADINA/agile-graph/blob/main/docs/mcp-clients.md).
 
 ## Optional integrations
 
@@ -76,9 +76,9 @@ off with `graph-engine feedback-config off` or `GRAPH_ENGINE_NO_FEEDBACK=1`.
 ## Documentation
 
 The [repository](https://github.com/MILTONADINA/agile-graph) has the
-[platform guide](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/platform.md),
-[working as an AI agile team](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/agile-team.md)
-and the [documentation index](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/README.md).
+[platform guide](https://github.com/MILTONADINA/agile-graph/blob/main/docs/platform.md),
+[working as an AI agile team](https://github.com/MILTONADINA/agile-graph/blob/main/docs/agile-team.md)
+and the [documentation index](https://github.com/MILTONADINA/agile-graph/blob/main/docs/README.md).
 
 ## License
 

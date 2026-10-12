@@ -43,7 +43,7 @@
   ],
   "github": {
     "repository": "MILTONADINA/agile-graph",
-    "baseBranch": "dev",
+    "baseBranch": "main",
     "remote": "origin"
   },
   "security": {

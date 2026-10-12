@@ -1179,8 +1179,9 @@ fixture's bytes (`0fe5088`).
 
 - Workspace: this checkout only; do not expand work into other project folders.
 - Repository: `https://github.com/MILTONADINA/agile-graph.git` (the
-  `origin` remote), a standalone project the owner leads. The only authorized
-  integration target is its **`dev`** branch. Do not push to `main`.
+  `origin` remote), a standalone project the owner leads. Since 2026-10-12 the
+  only integration target is its **`main`** branch, through PRs; the old `dev`
+  branch is retired. Do not push to `main` directly.
 - The earlier `cf4245848cab24181b104d5cc3eb36f19a32a9f7` fork-`dev` state
   and `feat/sealed-evidence-continuation-20260924` feature branch are history:
   the latter was integrated by PR #16. Its integration tip and post-merge CI
@@ -1321,9 +1322,9 @@ instructions. Preserve the distinction between a **product goal**, an
    visible. No classifier confidence or successful test alone merges a PR or
    publishes artifacts.
 7. **Owner-led Git history.** The owner leads the project alone. Work only
-   in this repository, on focused feature branches with PRs into `dev`, green
+   in this repository, on focused feature branches with PRs into `main`, green
    exact-tip CI, reviewed diff and professional single-author commits. Never
-   push to `main`. No AI co-author trailer or unrelated-project identifier in
+   push to `main` directly. No AI co-author trailer or unrelated-project identifier in
    tracked docs, PRs, comments or public artifacts. Keep shared Serena/global
    config and other project work untouched.
 8. **Open-source release governance.** Agile Graph is open source under
@@ -1596,12 +1597,12 @@ model. In particular:
 1. Inspect `pwd`, `git status --short --branch`, `git log -1`, `git remote -v`,
    the live fork `dev` tip and open PRs. Start new work from the live fork
    `dev` tip, never from an older handover or feature branch. Preserve
-   `.serena/` and every ignored private path; do not commit directly on `dev`.
-2. For subsequent changes, fetch/fast-forward `dev`, then create a
+   `.serena/` and every ignored private path; do not commit directly on `main`.
+2. For subsequent changes, fetch/fast-forward `main`, then create a
    focused `feat/`, `fix/`, or `chore/` branch. Push only to `origin`; PRs target
-   `MILTONADINA/agile-graph:dev`. The owner explicitly authorized the
+   `MILTONADINA/agile-graph:main`. The owner explicitly authorized the
    working agent to review the actual diff and exact-tip green CI, then merge
-   PRs into fork `dev`; zero GitHub approvals are required there. This is
+   PRs into `main`; zero GitHub approvals are required there. This is
    **author review**, not independent review or human acceptance. No direct push to
    protected branches, no AI co-author trailers, no unrelated project
    identifiers in commits, tracked docs, PRs or public artifacts, and no

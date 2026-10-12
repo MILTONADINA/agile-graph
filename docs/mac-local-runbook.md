@@ -1,10 +1,10 @@
 # Local development handoff
 
 This checkout is configured for the owner's repository and local inference.
-Create a focused feature branch from the current `dev`; the older
+Create a focused feature branch from the current `main`; the older
 `feat/engineering-platform` branch is historical, not a continuation target.
-Never work directly on `main` or protected `dev`. When ready, PR review and
-merges target `MILTONADINA/agile-graph:dev`. Commits use the configured
+Never work directly on protected `main`. When ready, PR review and
+merges target `MILTONADINA/agile-graph:main`. Commits use the configured
 human identity, without AI co-author trailers.
 
 ## Initial AI integrations

@@ -45,10 +45,10 @@ it.
   - Test: packages/engine/tests/package-layout.test.ts :: treats an installed engine as no checkout and keeps every file it serves inside the package
   - Test: packages/engine/tests/package-layout.test.ts :: accepts a checkout only when its root package is this repository's
   - Test: packages/engine/tests/package-layout.test.ts :: finds the repository it runs from as a source checkout
-- AC6: A release publishes only a tagged commit that is on `dev`, after the
+- AC6: A release publishes only a tagged commit that is on `main`, after the
   owner approves the `npm` environment, with npm trusted publishing rather
   than a stored token, and only when the tag names the packages' version.
-  - Test: scripts/npm-packages.test.mjs :: the release workflow publishes only reviewed commits from dev, without a stored token
+  - Test: scripts/npm-packages.test.mjs :: the release workflow publishes only reviewed commits from main, without a stored token
   - Test: scripts/npm-packages.test.mjs :: a release tag names the packages' version
 
 ## Security considerations
@@ -61,7 +61,7 @@ else is installed. A source checkout is recognized only by the engine's
 position inside it and the repository's own root package name. Publishing
 uses OpenID Connect from GitHub Actions, so no npm token is stored, and npm
 records provenance for each version. Anyone with write access can push a
-tag, so the release refuses a commit that did not reach `dev` through its
+tag, so the release refuses a commit that did not reach `main` through its
 protected checks and waits for the owner's approval. The optional Cursor SDK
 has a proprietary license and brings an HTTP client version with known
 advisories, which the repository's own override cannot fix for installed

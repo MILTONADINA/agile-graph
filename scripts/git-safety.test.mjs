@@ -44,21 +44,18 @@ function liveProtection(branch) {
   };
 }
 
-test("branch protection profiles retain the exact six and eight CI checks", () => {
+test("branch protection profiles retain the exact eight CI checks on main and the retired dev", () => {
   assert.deepEqual(requiredChecks.main, [
     "platform (ubuntu-24.04)",
     "platform (ubuntu-24.04-arm)",
     "platform (macos-15)",
     "platform (windows-2025)",
     "sidecar",
-    "sealed-oracle",
-  ]);
-  assert.deepEqual(requiredChecks.dev, [
-    ...requiredChecks.main.slice(0, 5),
     "historical-replays",
     "sealed-public-intake",
     "sealed-oracle",
   ]);
+  assert.deepEqual(requiredChecks.dev, requiredChecks.main);
   for (const branch of ["main", "dev"]) {
     const live = liveProtection(branch);
     assert.doesNotThrow(() => assertSafeToReplace(branch, live));

@@ -141,13 +141,13 @@ test("the engine tarball holds its compiled code and runtime files, never source
   assert.ok(!files.some((file) => /^dist\/.*template/.test(file)));
 });
 
-test("the release workflow publishes only reviewed commits from dev, without a stored token", async () => {
+test("the release workflow publishes only reviewed commits from main, without a stored token", async () => {
   const workflow = await read(".github/workflows/release.yml");
   assert.match(workflow, /^\s+id-token: write$/m);
   assert.match(workflow, /^\s+environment: npm$/m);
   assert.match(
     workflow,
-    /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/dev/,
+    /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/,
   );
   assert.doesNotMatch(workflow, /secrets\.|NPM_TOKEN|NODE_AUTH_TOKEN/);
   assert.match(workflow, /node --test scripts\/npm-packages\.test\.mjs/);

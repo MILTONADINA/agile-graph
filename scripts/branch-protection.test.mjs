@@ -58,32 +58,24 @@ function liveProtection(branch) {
   };
 }
 
-test("branch profiles retain six main checks, eight dev checks, and distinct review rules", () => {
-  assert.deepEqual(requiredChecks.main, [...platformChecks, "sealed-oracle"]);
-  assert.deepEqual(requiredChecks.dev, [
-    ...platformChecks,
-    "historical-replays",
-    "sealed-public-intake",
-    "sealed-oracle",
-  ]);
-  const main = protectionFor("main");
-  const dev = protectionFor("dev");
-  assert.equal(
-    main.required_pull_request_reviews.required_approving_review_count,
-    1,
-  );
-  assert.equal(
-    main.required_pull_request_reviews.require_last_push_approval,
-    true,
-  );
-  assert.equal(
-    dev.required_pull_request_reviews.required_approving_review_count,
-    0,
-  );
-  assert.equal(
-    dev.required_pull_request_reviews.require_last_push_approval,
-    false,
-  );
+test("main and the retired dev keep eight checks and the owner's zero-approval review rule", () => {
+  for (const branch of ["main", "dev"]) {
+    assert.deepEqual(requiredChecks[branch], [
+      ...platformChecks,
+      "historical-replays",
+      "sealed-public-intake",
+      "sealed-oracle",
+    ]);
+    const profile = protectionFor(branch);
+    assert.equal(
+      profile.required_pull_request_reviews.required_approving_review_count,
+      0,
+    );
+    assert.equal(
+      profile.required_pull_request_reviews.require_last_push_approval,
+      false,
+    );
+  }
   for (const branch of ["main", "dev"]) {
     const live = liveProtection(branch);
     assert.doesNotThrow(() => assertSafeToReplace(branch, live));
@@ -106,12 +98,14 @@ test("dry-run preserves branch-specific fork protections", () => {
   assert.equal(printed.repository, "MILTONADINA/agile-graph");
   assert.deepEqual(printed.protections.main.required_status_checks.contexts, [
     ...platformChecks,
+    "historical-replays",
+    "sealed-public-intake",
     "sealed-oracle",
   ]);
   assert.equal(
     printed.protections.main.required_pull_request_reviews
       .required_approving_review_count,
-    1,
+    0,
   );
   assert.deepEqual(printed.protections.dev.required_status_checks.contexts, [
     ...platformChecks,

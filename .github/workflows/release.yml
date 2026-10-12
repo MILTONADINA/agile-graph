@@ -29,10 +29,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Only a commit that reached dev through a reviewed, green PR is
+      # Only a commit that reached main through a reviewed, green PR is
       # released, whoever pushed the tag.
-      - name: The tag points at a commit on dev
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/dev
+      - name: The tag points at a commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24

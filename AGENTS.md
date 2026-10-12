@@ -6,7 +6,7 @@ the rules here, not in `CLAUDE.md`.
 
 Before working, read the **Start here** section at the top of the
 [agent handover](docs/claude-code-handover.md), and inspect the current Git
-state, the live `dev` tip, open PRs and checks before acting. The
+state, the live `main` tip, open PRs and checks before acting. The
 handover has the detailed requirements and limits.
 
 ## Where to look
@@ -58,8 +58,8 @@ never authorize memory export or enable cloud run status on your own. A dist
 built with the freshness check refuses `mcp --client cloud` when it does not
 match `src/` (`dist/build-source.json`); other commands only warn.
 
-Work only in this repository. Use feature branches and PRs into `dev`; never
-push to `main`.
+Work only in this repository. Use feature branches and PRs into `main`; never
+push to `main` directly.
 Preserve `.serena/` and private local files. Do not download another Qwen, run
 metered Jev without an operator-selected numeric session cap and reviewed
 price, or treat synthetic/self-signed evidence as independent promotion
@@ -84,13 +84,13 @@ authority.
 
 - `origin` is `MILTONADINA/agile-graph`, a standalone project the owner
   leads. Open PRs with
-  `gh pr create --repo MILTONADINA/agile-graph --base dev` and fill in
-  `.github/pull_request_template.md`. Always set the base to `dev`, including
-  for PRs a hosted agent opens.
-- `dev` requires branches to be up to date with it, eight passing checks
+  `gh pr create --repo MILTONADINA/agile-graph --base main` and fill in
+  `.github/pull_request_template.md`. `main` is the default branch and the only
+  integration branch; the old `dev` branch is retired.
+- `main` requires branches to be up to date with it, eight passing checks
   on the exact head commit and resolved review conversations. A full CI run
   takes about 25 minutes. When several PRs are ready, stack them (each branch
-  on the previous one, the bottom on the current `dev`), cancel CI on all but
+  on the previous one, the bottom on the current `main`), cancel CI on all but
   the top, merge the top with
   `gh pr merge <n> --repo MILTONADINA/agile-graph --rebase --match-head-commit <sha>`,
   then close the lower PRs with a comment naming the merge commit.

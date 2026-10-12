@@ -6,7 +6,7 @@ You are a local model with a small context window, taking over Agile Graph (GE).
 
 **Git and PRs**
 
-- Push only to the `origin` remote, on feature branches, and open PRs into `dev`.
+- Push only to the `origin` remote, on feature branches, and open PRs into `main`.
 - Never push to `main`.
 - Never merge with failing, pending or skipped checks, and never use admin or override flags.
 
@@ -73,9 +73,9 @@ GE is a local-first "AI agile team" engine.
 
 ## 3. State and how to merge
 
-> **Update, 2026-10-11:** round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `origin/dev` and ignore any local `fix/round5-*` branches.
+> **Update, 2026-10-11:** round 5 (#146, #147 and the feedback fix) was not built. Start it fresh from `origin/main` and ignore any local `fix/round5-*` branches.
 
-- **Merged into `dev`:** rounds 1 to 4; the removal of the app generator, template kit and reference app; the owner-led, MIT-licensed project setup; the npm packaging; and the `decisionMaxCostUsd` cap. To see the tip: `git log --oneline -10 origin/dev`.
+- **Merged into `main`** (the only integration branch since 2026-10-12; `dev` is retired): rounds 1 to 4; the removal of the app generator, template kit and reference app; the owner-led, MIT-licensed project setup; the npm packaging; and the `decisionMaxCostUsd` cap. To see the tip: `git log --oneline -10 origin/main`.
 - **Releases:** the engine and contracts packages are ready for npm, but publishing them is the owner's step ([publishing](publishing.md)). Never push a tag or publish.
 
 ### The merge gate
