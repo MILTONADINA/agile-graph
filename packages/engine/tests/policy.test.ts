@@ -959,3 +959,14 @@ describe("project boundaries", () => {
     ).rejects.toThrow("Symlink");
   });
 });
+
+describe("glob complexity at match time", () => {
+  it("matches nothing for a step scope whose glob could backtrack for minutes, instead of hanging", () => {
+    const started = performance.now();
+    const matches = globAllowlist(["**/a*a*a*a*a*a*b"]);
+    expect(matches(`x/${"a".repeat(255)}`)).toBe(false);
+    expect(matches("x/ab")).toBe(false);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(globAllowlist(["src/*.ts"])("src/a.ts")).toBe(true);
+  });
+});

@@ -3,6 +3,7 @@ import path from "node:path";
 import { lstat, readdir, realpath } from "node:fs/promises";
 import picomatch from "picomatch";
 import {
+  globComplexityError,
   isApiKind,
   isInstalledKind,
   type ContextPacket,
@@ -68,7 +69,13 @@ export function wholeRepository(policy: ProjectPolicy): ProjectPolicy {
  * `!!` double negation and empty entries have no clear meaning.
  */
 export function validGlobEntry(pattern: string): boolean {
-  return pattern.length > 0 && pattern !== "!" && !pattern.startsWith("!!");
+  return (
+    pattern.length > 0 &&
+    pattern !== "!" &&
+    !pattern.startsWith("!!") &&
+    // A glob that could backtrack for minutes is never compiled.
+    globComplexityError(pattern) === undefined
+  );
 }
 /**
  * Compiles an allowlist of globs such as `exportPaths` or a step's `writes`.
