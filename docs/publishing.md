@@ -59,11 +59,20 @@ workflow needs npm 11.5.1 or later, which it installs.
    npm publish --workspace packages/engine --access public
    ```
 
-4. **Connect each package to the workflow.** On npmjs.com, open each package's
-   settings → Trusted Publisher → GitHub Actions, and enter organization or
-   user `MILTONADINA`, repository `graph-engineering`, workflow filename
-   `release.yml` and environment `npm`. A new trusted publisher must complete
-   a publish within two days, or it has to be created again.
+4. **Connect each package to the workflow.** `npm trust` needs npm 11.15.0 or
+   later, so check `npm --version` first and upgrade with
+   `npm install -g npm@11` if it is older. Run these in your own terminal,
+   because npm asks you to confirm each one with two-factor authentication:
+
+   ```sh
+   npm trust github @agile-graph/contracts --file release.yml --repository MILTONADINA/agile-graph --environment npm --allow-publish
+   npm trust github @agile-graph/engine --file release.yml --repository MILTONADINA/agile-graph --environment npm --allow-publish
+   ```
+
+   The same settings can be entered on npmjs.com under each package's
+   settings → Trusted Publisher → GitHub Actions. A new trusted publisher must
+   complete a publish within two days, or it has to be created again.
+
 5. **Optionally require trusted publishing.** In each package's settings,
    choose to disallow token publishing, so only the workflow can publish.
 

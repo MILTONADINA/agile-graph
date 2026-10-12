@@ -72,7 +72,7 @@ See [context lifecycle](context-lifecycle.md) for API signatures, limits, backup
 {
   "command": "node",
   "args": [
-    "/absolute/path/to/graph-engineering/packages/engine/dist/cli.js",
+    "/absolute/path/to/agile-graph/packages/engine/dist/cli.js",
     "-C",
     "/path/to/project",
     "mcp",
