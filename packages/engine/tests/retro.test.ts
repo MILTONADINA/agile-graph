@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RunEvent, RunRecord } from "@agile-graph/contracts";
 import { SCHEMA_VERSION } from "@agile-graph/contracts";
 import { classifyError } from "../src/feedback.js";
-import { runRetro, summarizeRetro } from "../src/retro.js";
+import { runRetro, runsCreatedSince, summarizeRetro } from "../src/retro.js";
 
 const SENTINEL = "zq-private-marker";
 const START = Date.parse("2026-10-01T00:00:00.000Z");
@@ -236,11 +236,59 @@ describe("delivery retro", () => {
       createdAt: "2026-09-01T00:00:00.000Z",
     };
     const recent = record("succeeded", "recent");
-    const retros = [old, recent].map((run) => runRetro(run, []));
     expect(
-      summarizeRetro(retros, { since: "2026-09-30T00:00:00.000Z" }).perRun.map(
-        (run) => run.runId,
+      runsCreatedSince([old, recent], "2026-09-30T00:00:00.000Z").map(
+        (run) => run.id,
       ),
     ).toEqual(["recent"]);
+    expect(runsCreatedSince([old, recent]).map((run) => run.id)).toEqual([
+      "old",
+      "recent",
+    ]);
+    expect(() => runsCreatedSince([old], "yesterday")).toThrow(
+      "--since must be an ISO 8601 date or time",
+    );
+  });
+
+  it("counts concurrent steps' phase time once, as wall-clock time", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const retro = runRetro(record("succeeded"), [
+      step(event(0, "worker.dispatched"), "one"),
+      step(event(1, "worker.dispatched"), "two"),
+      step(event(5, "worker.completed"), "one"),
+      step(event(10, "worker.completed"), "two"),
+      // A finish without a step closes that phase's latest open span.
+      event(10, "security.scan_started"),
+      event(12, "security.scan_completed"),
+      event(12, "run.succeeded"),
+    ]);
+    expect(retro.minutes).toMatchObject({
+      total: 12,
+      worker: 10,
+      security: 2,
+      waiting: 0,
+    });
+  });
+
+  it("counts a first verification that never finished as reached and not passed", () => {
+    const retro = runRetro(record("failed"), [
+      event(0, "verification.started", { snapshotHash: "a" }),
+      event(3, "run.stopped", { error: "Run cancelled" }),
+    ]);
+    expect(retro.firstVerificationPassed).toBe(false);
+    expect(summarizeRetro([retro]).firstPassVerification).toEqual({
+      passed: 0,
+      reached: 1,
+    });
+  });
+
+  it("prints no timestamps", () => {
+    const retro = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      event(5, "run.succeeded"),
+    ]);
+    expect(JSON.stringify(summarizeRetro([retro]))).not.toMatch(
+      /\d{4}-\d{2}-\d{2}T/,
+    );
   });
 });

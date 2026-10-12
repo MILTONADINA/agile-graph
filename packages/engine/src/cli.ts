@@ -102,7 +102,7 @@ import {
   scannerBuildHint,
 } from "./security/scan.js";
 import { ENGINE_VERSION } from "./package-layout.js";
-import { runRetro, summarizeRetro } from "./retro.js";
+import { runRetro, runsCreatedSince, summarizeRetro } from "./retro.js";
 import {
   LIVE_BASELINE_FILE,
   liveBaselineFrom,
@@ -1739,10 +1739,9 @@ cli
   .action((options) =>
     withEngine(async (engine) =>
       summarizeRetro(
-        engine.store
-          .runs()
-          .map((run) => runRetro(run, engine.store.events(run.id))),
-        { since: options.since },
+        runsCreatedSince(engine.store.runs(), options.since).map((run) =>
+          runRetro(run, engine.store.events(run.id)),
+        ),
       ),
     ),
   );
