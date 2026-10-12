@@ -38,6 +38,7 @@ async function project(options: { cloud?: boolean } = {}) {
     path.join(root, "math.cjs"),
     "exports.add = (a, b) => a - b;\n",
   );
+  await writeFile(path.join(root, "notes.md"), "add must return a + b\n");
   const config = await initializeProject(root);
   config.policy.providers = ["worker"];
   config.verification = [
@@ -49,7 +50,7 @@ async function project(options: { cloud?: boolean } = {}) {
       inference: "allowlisted",
       network: "allowlisted",
       allowedHosts: ["api.openai.com"],
-      exportPaths: ["math.cjs", "math.test.cjs"],
+      exportPaths: ["math.cjs", "math.test.cjs", "notes.md"],
     };
   await writeJson(path.join(root, PROJECT_FILE), config);
   await checked("git", ["add", "."], { cwd: root });
@@ -207,5 +208,56 @@ describe("lessons from repeated failures", () => {
     // One attempt: it fails, and no retry follows to receive the lesson.
     const { events } = await run(1, ["a * b"]);
     expect(events.some((event) => event.type === "lesson.applied")).toBe(false);
+  });
+
+  it("re-checks an authorized lesson against today's export policy before a cloud worker sees it", async () => {
+    const { engine, config, run } = await project({ cloud: true });
+    const first = await run(5, stuck);
+    const lessonId = first.events.find(
+      (event) => event.type === "lesson.proposed",
+    )!.data.memoryId as string;
+    await engine.context.acceptMemory(lessonId);
+    // A person replaces the automatic lesson with one citing exportable
+    // evidence, shares it and authorizes its exact text for export.
+    await engine.context.index({ semantic: false });
+    const sourced = await engine.context.proposeMemory({
+      kind: "observation",
+      text: "Lesson: add must return a + b, as the notes say.",
+      sources: [{ path: "notes.md", startLine: 1, endLine: 1 }],
+      supersedes: lessonId,
+    });
+    await engine.context.acceptMemory(sourced.id);
+    await engine.context.promoteMemory(sourced.id);
+    const review = await engine.context.memoryExportReview(sourced.id);
+    await engine.context.authorizeMemoryExport(sourced.id, review.textSha256);
+    const shown = await run(3, ["a * b", "a + b"]);
+    expect(shown.feedback[1]).toContain(`${LESSON} ${sourced.text}`);
+    // The policy no longer lets its evidence leave the machine.
+    config.policy.exportPaths = ["math.cjs", "math.test.cjs"];
+    const hidden = await run(3, ["a * b", "a + b"]);
+    expect(hidden.feedback[1]).not.toContain(LESSON);
+  });
+
+  it("shows the accepted replacement of a lesson even after a rejected draft replacement", async () => {
+    const { engine, run } = await project();
+    const first = await run(5, stuck);
+    const lessonId = first.events.find(
+      (event) => event.type === "lesson.proposed",
+    )!.data.memoryId as string;
+    await engine.context.acceptMemory(lessonId);
+    const draft = await engine.context.proposeMemory({
+      kind: "observation",
+      text: "Lesson draft: try multiplication.",
+      supersedes: lessonId,
+    });
+    await engine.context.rejectMemory(draft.id, "Wrong countermeasure");
+    const replacement = await engine.context.proposeMemory({
+      kind: "observation",
+      text: "Lesson: add must return a + b.",
+      supersedes: lessonId,
+    });
+    await engine.context.acceptMemory(replacement.id);
+    const { feedback } = await run(3, ["a * b", "a + b"]);
+    expect(feedback[1]).toContain(`${LESSON} ${replacement.text}`);
   });
 });

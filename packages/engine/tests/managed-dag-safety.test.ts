@@ -2867,6 +2867,37 @@ describe("tester role", () => {
     );
   });
 
+  it("never counts an implementer's dispute and the tester's answer as repeated failures", async () => {
+    const root = await testerFixture(3);
+    const noChange = (summary: string) => ({
+      ...result("one"),
+      proposal: { summary, requests: [], changes: [] },
+    });
+    const engine = await open(root, {
+      worker: vi.fn(async (input: WorkerInput) =>
+        input.objective.startsWith("Act as the team's tester, before")
+          ? writesWrongTest
+          : input.objective.startsWith(
+                "Act as the team's tester. The implementer",
+              )
+            ? noChange("My test is right")
+            : input.objective.startsWith("Repair")
+              ? noChange("The test's expected value is wrong")
+              : result("one"),
+      ),
+      verify: wrongExpectation,
+    });
+    const planned = await plan(engine, [step("one")]);
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain(
+      "the implementer disputes the tester's tests: The test's expected value is wrong; a person should decide",
+    );
+    const types = engine.store.events(run.id).map((event) => event.type);
+    expect(types).not.toContain("attempt.repeated_failure");
+    expect(types).not.toContain("lesson.proposed");
+  });
+
   it("refuses an implementer edit to the tester's file under a different letter case", async () => {
     const root = await testerFixture(3);
     const repairs: (string | undefined)[] = [];
