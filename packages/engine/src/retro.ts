@@ -226,6 +226,8 @@ export function runRetro(
     if (event.type === "run.stopped") {
       // A stop ends every open span; time stopped is not phase time.
       for (const key of [...open.keys()]) close(key, at);
+      // A first verification the stop interrupted stays reached and failed.
+      firstVerificationOpen = false;
       stoppedAt = at;
       if (typeof event.data.error === "string")
         stopKinds.push(classifyError(event.data.error));

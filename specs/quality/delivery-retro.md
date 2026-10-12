@@ -31,9 +31,10 @@ the measuring step: it changes no gate, prompt or run.
   - Test: packages/engine/tests/retro.test.ts :: reads at most 40 lines of 500 characters of a check's output, quickly
 - AC3: Stop reasons are reported only as the catalogue's error kinds, which now also name a path outside the allowed scope, a missing file, a potential secret in a patch and an aborted operation; the message is never kept.
   - Test: packages/engine/tests/retro.test.ts :: reports stop reasons as kinds only, never the message
-- AC4: The totals give runs by status, summed and median minutes, the first-pass verification rate (runs whose first verification passed, of runs that reached one; a first verification that never finished counts as reached and not passed) and stop kinds, holding only counts, minutes, kinds and run IDs, with no timestamps.
+- AC4: The totals give runs by status, summed and median minutes, the first-pass verification rate (runs whose first verification passed, of runs that reached one; a first verification that never finished counts as reached and not passed, even when the run is later resumed) and stop kinds, holding only counts, minutes, kinds and run IDs, with no timestamps.
   - Test: packages/engine/tests/retro.test.ts :: totals runs, the first-pass verification rate and stop kinds, keeping only counts, minutes, kinds and run IDs
   - Test: packages/engine/tests/retro.test.ts :: counts a first verification that never finished as reached and not passed
+  - Test: packages/engine/tests/retro.test.ts :: keeps a first verification a stop interrupted as failed after a resume
   - Test: packages/engine/tests/retro.test.ts :: prints no timestamps
 - AC5: `--since <date>` limits the retro to runs created on or after an ISO 8601 date or date-time, and refuses any other text or an impossible calendar date.
   - Test: packages/engine/tests/retro.test.ts :: limits the retro to runs created on or after --since

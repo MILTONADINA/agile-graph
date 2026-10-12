@@ -4539,13 +4539,6 @@ export class GraphEngine {
         // a repair can meet a known failure before its first attempt.
         let lesson: Awaited<ReturnType<typeof lessonFor>> =
           seeded && checkFailure ? await lessonFor(checkFailure) : undefined;
-        if (lesson && (provider.kind === "local" || lesson.exportAuthorized))
-          this.store.event(
-            run.id,
-            "lesson.applied",
-            { memoryId: lesson.memoryId, attempt: firstAttempt - 1 },
-            step.id,
-          );
         // The reviewer's decision on the last repeated failure, if any.
         let repeatGuidance:
           Awaited<ReturnType<typeof decideRepeat>> | undefined;
@@ -4678,13 +4671,24 @@ export class GraphEngine {
             };
             // Test logs may quote private source even when they contain no key-like
             // strings. They stay local; remote workers get only a generic failure.
+            const lessonShown =
+              lesson && (provider.kind === "local" || lesson.exportAuthorized);
+            // Recorded once per attempt, when the retry is about to receive
+            // it, so a lesson found after the last attempt is not counted.
+            if (lesson && lessonShown && turn === 0)
+              this.store.event(
+                run.id,
+                "lesson.applied",
+                { memoryId: lesson.memoryId, attempt },
+                step.id,
+              );
             const workerFeedback = [
               // Fixed sentences only, so every worker may receive it.
               retryNotice,
               // A lesson reaches a cloud worker only once its exact text is
               // authorized for export, like mandatory memory.
               lesson &&
-                (provider.kind === "local" || lesson.exportAuthorized) &&
+                lessonShown &&
                 `A lesson the team accepted for this failure: ${lesson.text}`,
               repeatGuidance &&
                 `The reviewer's decision after the repeated failure: ${
@@ -5003,16 +5007,6 @@ export class GraphEngine {
               );
             }
             lesson = await lessonFor(checkFailure);
-            if (
-              lesson &&
-              (provider.kind === "local" || lesson.exportAuthorized)
-            )
-              this.store.event(
-                run.id,
-                "lesson.applied",
-                { memoryId: lesson.memoryId, attempt },
-                step.id,
-              );
             retryNotice = retryNoticeFor({
               attempt,
               maxAttempts: this.config.policy.maxAttempts,
