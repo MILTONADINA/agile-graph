@@ -35,6 +35,16 @@ a decision instead of burning more time.
 - AC6: A multi-step plan's repair, and a retry after a reused solution failed its checks, starts from that failed verification: the first retry is told the previous attempt failed, and its failure counts towards a repeat.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: tells the first repair that the combined checks failed, and stops when the repairs repeat that failure
 
+- AC6: When a run has a reviewer, the first repeated failure goes to it in one fresh call with the task, the acceptance criteria, which checks failed with which exit codes on which two attempts, and the current diff; it answers change approach (with guidance), narrow the scope, or blocked, never a plain retry. The next attempt is told the decision and its guidance, and the run records `attempt.repeat_decision`.
+  - Test: packages/engine/tests/repeat-failure.test.ts :: asks the run's reviewer to decide a repeated failure and passes its guidance to the next attempt
+  - Test: packages/engine/tests/repeat-failure.test.ts :: asks the reviewer only on the first repeat, and still stops at the third
+- AC7: A reviewer's blocked decision stops the run at once with the `repeated-failure` kind.
+  - Test: packages/engine/tests/repeat-failure.test.ts :: stops at once when the reviewer judges a repeated failure blocked
+- AC8: When the decision cannot be made (a failed call, a cost cap, or a change a cloud reviewer may not receive), the run records why as an error kind and the retry falls back to the change-approach notice.
+  - Test: packages/engine/tests/repeat-failure.test.ts :: falls back to the change-approach notice when the reviewer's decision fails
+- AC9: A cloud reviewer gets the failing checks and exit codes but never their output, and a cloud worker gets the guidance only when it came from a cloud reviewer that saw nothing outside the export paths.
+  - Test: packages/engine/tests/repeat-failure.test.ts :: gives a cloud reviewer the failing checks and exit codes but never their output, and passes its guidance to a cloud worker
+
 ## Security considerations
 
 The notice is built from the attempt number, the attempt budget and two
@@ -45,10 +55,16 @@ truncated hash of check identities and exit codes; check output never
 enters it or the event. Stopping on a repeated failure only ends work
 earlier; it never skips, weakens or reorders a check.
 
+The reviewer decision is a reviewer call like the review itself: it shares
+the run's worker slots, turn budget and cost reservations, refuses secrets
+and installed agents, and is skipped for a cloud reviewer when the change
+touches paths outside the export paths. Check output, which may quote
+private source, goes only to a local reviewer, and guidance from a local
+reviewer never reaches a cloud worker. The guidance is redacted and kept to
+1,500 characters in the event.
+
 ## Non-goals
 
-Asking a reviewer model to decide between changing approach, narrowing the
-scope or declaring the run blocked (the next change in this epic); lessons
-that carry across runs; changing review or security-gate retries, which
+Lessons that carry across runs (the next change in this epic); changing review or security-gate retries, which
 already re-check earlier findings by ID and fingerprint; changing the
 recovery controller's decision inputs.

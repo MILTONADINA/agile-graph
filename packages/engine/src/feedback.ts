@@ -33,7 +33,7 @@ export const ERROR_KINDS = [
   {
     // Before checks-failed, whose words its message starts with.
     kind: "repeated-failure",
-    pattern: /failed the same way on three attempts/,
+    pattern: /failed the same way on (two|three) attempts/,
     description: "Checks kept failing the same way, so the run stopped",
   },
   {
