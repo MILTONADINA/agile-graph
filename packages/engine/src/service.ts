@@ -37,6 +37,7 @@ import {
   isAllowedPath,
   redact,
   safePath,
+  unexportableMandatoryMemory,
   wholeRepository,
 } from "./policy.js";
 import {
@@ -3747,9 +3748,11 @@ export class GraphEngine {
         | undefined
       > => {
         if (!reviewerId) return undefined;
+        // A reviewer that moved across the plan's export boundary stops the
+        // run, as it does for the review itself, rather than being skipped.
+        const reviewer = await this.reviewer(reviewerId);
+        assertOnPlanSide(run.plan, reviewer, reviewerRole(reviewer.id));
         try {
-          const reviewer = await this.reviewer(reviewerId);
-          assertOnPlanSide(run.plan, reviewer, reviewerRole(reviewer.id));
           const written = (await runWrittenPaths()).sort();
           const exportable = written.every((file) =>
             isAllowedPath(file, this.config.policy, true),
@@ -3814,7 +3817,10 @@ export class GraphEngine {
             decision: result.decision,
             guidance,
             // Guidance a local reviewer wrote may quote check output.
-            exportable: exportable && reviewer.kind !== "local",
+            exportable:
+              exportable &&
+              reviewer.kind !== "local" &&
+              !containsSecret(guidance),
           };
         } catch (error) {
           if (signal.aborted) throw error;
@@ -3847,7 +3853,9 @@ export class GraphEngine {
             text: [
               `Lesson: the required checks failed the same way ${cause} in run ${run.id}, working on: ${objective}.`,
               `Failing checks: ${failedCheckLines.join("; ")}.`,
-              guidance ? `The reviewer's view: ${guidance}` : "",
+              guidance
+                ? `The reviewer model's view (model output; check it before accepting): ${guidance}`
+                : "",
               "Accept this lesson once the countermeasure is known; later runs that meet this failure are shown it.",
             ]
               .filter(Boolean)
@@ -3863,10 +3871,32 @@ export class GraphEngine {
           this.store.event(
             run.id,
             "lesson.capture_failed",
-            { error: errorMessage(error) },
+            { error: redact(errorMessage(error)) },
             stepId,
           );
         }
+      };
+      // Whether a lesson may reach a cloud worker now: as for mandatory
+      // memory, consent alone is not enough; the text, its sources and its
+      // sharing are checked against today's policy, at every use.
+      const lessonExportable = async (memoryId: string) => {
+        const review = await this.context.memoryExportReview(memoryId);
+        return (
+          review.status === "accepted" &&
+          review.exportAuthorized &&
+          unexportableMandatoryMemory(
+            [
+              {
+                memoryId,
+                kind: review.kind,
+                text: review.text,
+                visibility: review.visibility,
+                sources: review.sources,
+              },
+            ],
+            this.config.policy,
+          ) === null
+        );
       };
       // The accepted, unexpired lesson for a failure signature, following
       // supersessions to the memory now in force; newest lesson first.
@@ -3888,7 +3918,12 @@ export class GraphEngine {
             hops++
           ) {
             const previous = memory.id;
-            memory = memories.find((record) => record.supersedes === previous);
+            memory = memories.find(
+              (record) =>
+                record.supersedes === previous &&
+                (record.status === "accepted" ||
+                  record.status === "superseded"),
+            );
           }
           if (
             !memory ||
@@ -3896,11 +3931,11 @@ export class GraphEngine {
             memoryExpired(memory, now)
           )
             continue;
-          const review = await this.context.memoryExportReview(memory.id);
+          const exportable = await lessonExportable(memory.id);
           return {
             memoryId: memory.id,
             text: memory.text,
-            exportAuthorized: review.exportAuthorized,
+            exportAuthorized: exportable,
           };
         }
         return undefined;
@@ -4436,6 +4471,8 @@ export class GraphEngine {
       }
       for (const step of singleSteps) {
         verified = false;
+        // A resumed step whose retained patch failed its checks again.
+        let resumedFailure = false;
         // An acknowledged recovery checks the retained patch first. It never
         // reapplies the original exact-substring patch to an already edited file.
         if (
@@ -4460,6 +4497,7 @@ export class GraphEngine {
             this.store.event(run.id, "step.reconciled", {}, step.id);
             continue;
           }
+          resumedFailure = !justChecked;
         }
         let provider = (await this.providers()).find(
           (p) => p.id === step.providerId,
@@ -4471,7 +4509,7 @@ export class GraphEngine {
         // A repair starts from the combined result's failed verification,
         // and a reused solution's failed check counts as an attempt too: the
         // first retry is told so, and compares its failure with that one.
-        let seeded = step.id === DAG_REPAIR_STEP;
+        let seeded = step.id === DAG_REPAIR_STEP || resumedFailure;
         const solutionInput = {
           key: `worker:${hash({ objective: step.objective, acceptance: run.plan.acceptance })}`,
           inputs: {
@@ -4671,8 +4709,12 @@ export class GraphEngine {
             };
             // Test logs may quote private source even when they contain no key-like
             // strings. They stay local; remote workers get only a generic failure.
+            // Re-checked every turn for a cloud worker, so a revoked
+            // authorization or a narrowed policy takes effect at once.
             const lessonShown =
-              lesson && (provider.kind === "local" || lesson.exportAuthorized);
+              lesson &&
+              (provider.kind === "local" ||
+                (await lessonExportable(lesson.memoryId)));
             // Recorded once per attempt, when the retry is about to receive
             // it, so a lesson found after the last attempt is not counted.
             if (lesson && lessonShown && turn === 0)
@@ -4967,10 +5009,19 @@ export class GraphEngine {
             }
             break;
           }
+          // An implementer disputing the tester's test proposes no change on
+          // purpose, and the tester then answers; their unchanged failures
+          // are the dispute flow, settled by a person, never a repeat.
+          const disputeFlow =
+            step.id === DAG_REPAIR_STEP &&
+            testerRepairPlan !== undefined &&
+            (implementerDispute !== undefined || repairedByTester);
           if (checkFailure) {
-            const repeated = checkFailure === previousFailure;
+            const repeated = !disputeFlow && checkFailure === previousFailure;
             const unchanged =
-              checkedHash !== undefined && checkedHash === previousCheckedHash;
+              !disputeFlow &&
+              checkedHash !== undefined &&
+              checkedHash === previousCheckedHash;
             repeats = repeated ? repeats + 1 : 0;
             if (repeated)
               this.store.event(
@@ -4990,8 +5041,11 @@ export class GraphEngine {
                 "Required checks failed the same way on three attempts in a row; the run stopped instead of retrying the same approach. Read the failure, then change the plan or the code before resuming",
               );
             }
+            // A decision needs an attempt left to act on it.
             repeatGuidance =
-              repeated && repeats === 1
+              repeated &&
+              repeats === 1 &&
+              attempt < this.config.policy.maxAttempts
                 ? await decideRepeat(step.id, step.objective, attempt)
                 : undefined;
             if (repeatGuidance?.decision === "blocked") {
@@ -5553,7 +5607,7 @@ function retryNoticeFor(input: {
         : `Attempt ${input.attempt} of ${input.maxAttempts}`
     } failed its required checks. Do not resubmit the same change: find the cause in the failure and change your approach.`,
     input.repeated
-      ? "The required checks failed exactly as they did on the previous attempt (the same checks with the same exit codes), so the last change did not reach the cause. Try a different approach instead of adjusting the same lines; if the cause lies outside the files you may change, say so in your summary."
+      ? "The required checks failed exactly as they did on the previous attempt (the same checks failing the same way), so the last change did not reach the cause. Try a different approach instead of adjusting the same lines; if the cause lies outside the files you may change, say so in your summary."
       : "",
     input.unchanged
       ? "Your last change left the checked files exactly as before."

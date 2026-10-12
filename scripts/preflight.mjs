@@ -3,10 +3,16 @@
 // chosen from the files it changed, so a rejection costs minutes here
 // instead of a 25-minute CI cycle. It never replaces CI or `npm run check`.
 import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ENGINE = "packages/engine/";
+/** A file argument that can never be read as an option. */
+const asPath = (file) => (file.startsWith("./") ? file : `./${file}`);
+/** The JavaScript entry point each tool step runs with this Node. */
+const TOOL_BINS = { eslint: "eslint", vitest: "vitest" };
 const CONTRACTS = "packages/contracts/";
 const DASHBOARD = "packages/dashboard/";
 
@@ -27,7 +33,7 @@ export function planPreflight(changed, deleted = []) {
   if (touched.includes("eslint.config.mjs"))
     steps.push({ name: "lint", command: "npm", args: ["run", "lint"] });
   else if (lintable.length)
-    steps.push({ name: "lint", command: "npx", args: ["eslint", ...lintable] });
+    steps.push({ name: "lint", tool: "eslint", args: lintable.map(asPath) });
   const typed = touched.some(
     (file) => /\.tsx?$/.test(file) || /(^|\/)tsconfig[^/]*\.json$/.test(file),
   );
@@ -43,8 +49,8 @@ export function planPreflight(changed, deleted = []) {
   if (engine.length)
     steps.push({
       name: "engine tests",
-      command: "npx",
-      args: ["vitest", "related", "--run", ...engine],
+      tool: "vitest",
+      args: ["related", "--run", ...engine.map(asPath)],
       cwd: ENGINE,
     });
   if (touched.some((file) => file.startsWith(DASHBOARD)))
@@ -114,6 +120,18 @@ function exists(file) {
   }
 }
 
+/** The bin script a package declares, resolved from the repository. */
+function toolEntry(tool) {
+  const manifest = createRequire(path.join(root, "package.json")).resolve(
+    `${TOOL_BINS[tool]}/package.json`,
+  );
+  const { bin } = JSON.parse(readFileSync(manifest, "utf8"));
+  return path.join(
+    path.dirname(manifest),
+    typeof bin === "string" ? bin : bin[tool],
+  );
+}
+
 function git(args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" })
     .split("\n")
@@ -145,10 +163,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for (const step of planPreflight(changed, deleted)) {
     const begun = Date.now();
     process.stdout.write(`Preflight: ${step.name}...\n`);
-    const result = spawnSync(step.command, step.args, {
+    // Tools run as `node <entry>` with no shell, so no path in the change
+    // reaches a shell; only npm's fixed scripts use one, on Windows.
+    const [command, args] = step.tool
+      ? [process.execPath, [toolEntry(step.tool), ...step.args]]
+      : [step.command, step.args];
+    const result = spawnSync(command, args, {
       cwd: path.join(root, step.cwd ?? ""),
       stdio: "inherit",
-      shell: process.platform === "win32",
+      shell:
+        !step.tool && step.command === "npm" && process.platform === "win32",
     });
     const seconds = ((Date.now() - begun) / 1000).toFixed(0);
     if (result.status !== 0) {

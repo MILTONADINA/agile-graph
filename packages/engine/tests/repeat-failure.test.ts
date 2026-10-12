@@ -372,4 +372,23 @@ describe("retries that learn from the previous failure", () => {
       events.find((event) => event.type === "attempt.repeat_decision")?.data,
     ).toMatchObject({ failed: "cost-cap" });
   });
+
+  it("does not pay for a repeat decision when no attempt is left to act on it", async () => {
+    let asked = 0;
+    const { result } = await run({
+      attempts: 2,
+      edits: ["a * b", "a / b"],
+      codes: () => 1,
+      repeatDecision: async () => {
+        asked++;
+        return {
+          model: "fixture-reviewer",
+          usage,
+          result: { decision: "change_approach", guidance: "Use addition." },
+        };
+      },
+    });
+    expect(result.status).toBe("failed");
+    expect(asked).toBe(0);
+  });
 });

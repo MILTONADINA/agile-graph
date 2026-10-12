@@ -400,6 +400,7 @@ export class RunStore {
       CREATE TABLE IF NOT EXISTS run_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE,run_id TEXT,project_id TEXT,json TEXT);
       CREATE TABLE IF NOT EXISTS decisions(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,json TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS events_run ON run_events(project_id,run_id,seq);
+      CREATE INDEX IF NOT EXISTS events_type ON run_events(project_id,json_extract(json,'$.type'),seq);
       CREATE TABLE IF NOT EXISTS run_owners(run_id TEXT PRIMARY KEY,pid INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS inference_calls(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,owner_id TEXT NOT NULL,provider TEXT NOT NULL,reserved REAL,usage_json TEXT);
       CREATE INDEX IF NOT EXISTS inference_owner ON inference_calls(project_id,owner_id);
