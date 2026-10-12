@@ -201,6 +201,7 @@ import {
   assertPlanVerificationSelection,
   resolveVerificationSelection,
 } from "./verification-selection.js";
+import { failureSignature } from "./retro.js";
 import { parseSpec, planFromSpec, SPECS_DIR } from "./specs.js";
 import {
   applyRepair,
@@ -3145,6 +3146,9 @@ export class GraphEngine {
         ],
       });
       let feedback = "";
+      // The latest verification's failing checks and exit codes, hashed;
+      // null when its checks passed.
+      let checkFailure: string | null = null;
       let verified = false;
       let verifiedHash: string | undefined;
       // The snapshot the last verification in this execution checked.
@@ -3732,17 +3736,17 @@ export class GraphEngine {
         );
         await this.assertCurrentPlanVerification(run.plan);
         const after = await workspaceFingerprint(workspace, this.config.policy);
+        // What the event keeps of each check, which the failure signature
+        // also reads, so a run and a later retro compare the same output.
+        const recorded = checks.map((c) => ({
+          ...c,
+          stdout: redact(c.stdout).slice(-16000),
+          stderr: redact(c.stderr).slice(-16000),
+        }));
         this.store.event(
           run.id,
           "verification.completed",
-          {
-            checks: checks.map((c) => ({
-              ...c,
-              stdout: redact(c.stdout).slice(-16000),
-              stderr: redact(c.stderr).slice(-16000),
-            })),
-            snapshotHash: after,
-          },
+          { checks: recorded, snapshotHash: after },
           stepId,
         );
         if (before !== after)
@@ -3772,6 +3776,7 @@ export class GraphEngine {
           checks.every((c) => c.code === 0);
         verifiedHash = verified ? after : undefined;
         feedback = compactFailures(checks);
+        checkFailure = failureSignature(recorded);
         // Checks passing is not enough when the project has a reviewer: the
         // reviewer must approve, or its findings become the next attempt's
         // feedback. It can only hold a change back, never accept one.
@@ -4310,6 +4315,12 @@ export class GraphEngine {
           if (await verify(step.id)) continue;
           stepPacket = await currentContext();
         }
+        // The previous attempt's check failure and snapshot, so a retry
+        // that repeats it is told so, and a third in a row stops the run.
+        let previousFailure: string | null = null;
+        let previousCheckedHash: string | undefined;
+        let repeats = 0;
+        let retryNotice = "";
         for (
           let attempt = firstAttempt;
           attempt <= this.config.policy.maxAttempts;
@@ -4440,6 +4451,8 @@ export class GraphEngine {
             // Test logs may quote private source even when they contain no key-like
             // strings. They stay local; remote workers get only a generic failure.
             const workerFeedback = [
+              // Fixed sentences only, so every worker may receive it.
+              retryNotice,
               provider.kind === "local"
                 ? feedback
                 : feedback
@@ -4707,6 +4720,34 @@ export class GraphEngine {
             }
             break;
           }
+          if (checkFailure) {
+            const repeated = checkFailure === previousFailure;
+            const unchanged =
+              checkedHash !== undefined && checkedHash === previousCheckedHash;
+            repeats = repeated ? repeats + 1 : 0;
+            if (repeated)
+              this.store.event(
+                run.id,
+                "attempt.repeated_failure",
+                { attempt, signature: checkFailure, repeats, unchanged },
+                step.id,
+              );
+            if (repeats >= 2)
+              throw new Error(
+                "Required checks failed the same way on three attempts in a row; the run stopped instead of retrying the same approach. Read the failure, then change the plan or the code before resuming",
+              );
+            retryNotice = retryNoticeFor({
+              attempt,
+              maxAttempts: this.config.policy.maxAttempts,
+              repeated,
+              unchanged,
+            });
+          } else {
+            repeats = 0;
+            retryNotice = "";
+          }
+          previousFailure = checkFailure;
+          previousCheckedHash = checkedHash;
           save("running");
           const alternatives = (await this.providers()).filter((candidate) => {
             try {
@@ -5220,4 +5261,26 @@ function patchErrorFeedback(
       reason: "path-alias",
     };
   return undefined;
+}
+/**
+ * What a retry after a check failure is told before the failure itself:
+ * fixed sentences with no project data, so a cloud worker may receive them.
+ */
+function retryNoticeFor(input: {
+  attempt: number;
+  maxAttempts: number;
+  repeated: boolean;
+  unchanged: boolean;
+}): string {
+  return [
+    `Attempt ${input.attempt} of ${input.maxAttempts} failed its required checks. Do not resubmit the same change: find the cause in the failure and change your approach.`,
+    input.repeated
+      ? "The required checks failed exactly as they did on the previous attempt (the same checks with the same exit codes), so the last change did not reach the cause. Try a different approach instead of adjusting the same lines; if the cause lies outside the files you may change, say so in your summary."
+      : "",
+    input.unchanged
+      ? "Your last change left the checked files exactly as before."
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
