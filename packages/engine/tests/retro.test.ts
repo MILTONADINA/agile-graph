@@ -245,9 +245,20 @@ describe("delivery retro", () => {
       "old",
       "recent",
     ]);
-    expect(() => runsCreatedSince([old], "yesterday")).toThrow(
-      "--since must be an ISO 8601 date or time",
-    );
+    for (const invalid of [
+      "yesterday",
+      "10/01/2026",
+      "2026-02-30",
+      "2026-10-01T25:00Z",
+    ])
+      expect(() => runsCreatedSince([old], invalid)).toThrow(
+        "--since must be an ISO 8601 date or time",
+      );
+    expect(
+      runsCreatedSince([old, recent], "2026-09-30T12:00:00+02:00").map(
+        (run) => run.id,
+      ),
+    ).toEqual(["recent"]);
   });
 
   it("counts concurrent steps' phase time once, as wall-clock time", () => {
@@ -290,5 +301,33 @@ describe("delivery retro", () => {
     expect(JSON.stringify(summarizeRetro([retro]))).not.toMatch(
       /\d{4}-\d{2}-\d{2}T/,
     );
+  });
+
+  it("counts a multi-step plan's worker steps as worker time and attempts", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const retro = runRetro(record("succeeded"), [
+      step(event(0, "dag.step.started", { providerId: "local" }), "one"),
+      step(event(0, "dag.step.started", { providerId: null }), "generate"),
+      step(event(4, "worker.completed"), "one"),
+      step(event(5, "dag.step.completed"), "one"),
+      step(event(6, "dag.step.completed"), "generate"),
+      event(10, "run.succeeded"),
+    ]);
+    expect(retro.attempts).toBe(1);
+    expect(retro.minutes).toMatchObject({ worker: 6, waiting: 4 });
+  });
+
+  it("tells unnamed checks with the same command in different images apart", () => {
+    const failingIn = (image: string) => [
+      { argv: ["npm", "test"], image, code: 1, stdout: "", stderr: "" },
+    ];
+    const retro = runRetro(record("failed"), [
+      event(0, "verification.started", { snapshotHash: "a" }),
+      event(1, "verification.completed", { checks: failingIn("node:24") }),
+      event(2, "verification.started", { snapshotHash: "b" }),
+      event(3, "verification.completed", { checks: failingIn("node:22") }),
+      event(4, "run.stopped", { error: "Required checks failed" }),
+    ]);
+    expect(retro.repeatedFailures).toBe(0);
   });
 });
