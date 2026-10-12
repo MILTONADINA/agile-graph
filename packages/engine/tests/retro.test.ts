@@ -402,4 +402,26 @@ describe("delivery retro", () => {
       stopKinds: { "repeated-failure": 2 },
     });
   });
+
+  it("keeps a first verification a stop interrupted as failed after a resume", () => {
+    const retro = runRetro(record("succeeded"), [
+      event(0, "verification.started", { snapshotHash: "a" }),
+      event(1, "run.stopped", { error: "Run cancelled" }),
+      event(5, "run.started", { resuming: true }),
+      event(6, "verification.started", { snapshotHash: "a" }),
+      event(7, "verification.completed", {
+        checks: [
+          {
+            argv: ["npm", "test"],
+            image: "node:24",
+            code: 0,
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      }),
+      event(8, "run.succeeded"),
+    ]);
+    expect(retro.firstVerificationPassed).toBe(false);
+  });
 });

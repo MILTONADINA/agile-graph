@@ -167,7 +167,7 @@ describe("lessons from repeated failures", () => {
     expect(feedback[1]).toContain("node --test math.test.cjs exited 1");
     expect(
       events.find((event) => event.type === "lesson.applied")?.data,
-    ).toMatchObject({ memoryId, attempt: 1 });
+    ).toMatchObject({ memoryId, attempt: 2 });
   });
 
   it("never shows a lesson nobody accepted, or one a person rejected", async () => {
@@ -195,5 +195,17 @@ describe("lessons from repeated failures", () => {
     expect(
       unauthorized.events.some((event) => event.type === "lesson.applied"),
     ).toBe(false);
+  });
+
+  it("does not count a lesson as shown when no attempt is left to receive it", async () => {
+    const { engine, run } = await project();
+    const first = await run(5, stuck);
+    const memoryId = first.events.find(
+      (event) => event.type === "lesson.proposed",
+    )!.data.memoryId as string;
+    await engine.context.acceptMemory(memoryId);
+    // One attempt: it fails, and no retry follows to receive the lesson.
+    const { events } = await run(1, ["a * b"]);
+    expect(events.some((event) => event.type === "lesson.applied")).toBe(false);
   });
 });

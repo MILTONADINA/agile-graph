@@ -19,8 +19,9 @@ project memories a person already reviews.
 
 - AC1: When a run stops because its checks failed the same way on three attempts in a row, or its reviewer judged a repeated failure blocked, it proposes a private observation memory naming the failing checks and exit codes, the task and any reviewer guidance, and records `lesson.proposed` with the memory and the failure signature.
   - Test: packages/engine/tests/lessons.test.ts :: proposes a private lesson when a run stops on a repeated failure
-- AC2: Once a person accepts that lesson, any later run whose checks fail with the same signature shows it to the worker with the very next attempt, and records `lesson.applied`; a lesson superseded by a newer accepted memory is shown as the newer one.
+- AC2: Once a person accepts that lesson, any later run whose checks fail with the same signature shows it to the worker with the very next attempt, and records `lesson.applied` when that attempt receives it (never when no attempt is left to receive it); a lesson superseded by a newer accepted memory is shown as the newer one.
   - Test: packages/engine/tests/lessons.test.ts :: shows an accepted lesson to a later run as soon as it meets the same failure
+  - Test: packages/engine/tests/lessons.test.ts :: does not count a lesson as shown when no attempt is left to receive it
 - AC3: A lesson nobody accepted, or one a person rejected, is never shown.
   - Test: packages/engine/tests/lessons.test.ts :: never shows a lesson nobody accepted, or one a person rejected
 - AC4: A cloud worker is shown a lesson only once its exact text is authorized for export, as for mandatory memory.
