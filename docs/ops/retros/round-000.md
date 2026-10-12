@@ -14,67 +14,84 @@
 
 ## What was slow
 
+The numbers below use the retro's final definitions (wall-clock phase spans
+that count a multi-step plan's steps, and failure signatures that include
+each check's output tail). An earlier draft of this page used a first
+version that ignored output and counted 2 repeated failures; with the final
+signature there are none, and the hypotheses below say so.
+
 | Managed runs (12)                       | Value                              |
 | --------------------------------------- | ---------------------------------- |
 | Succeeded / failed                      | 3 / 9                              |
 | Minutes from first event to end         | 1,348 in total, median 3.4 per run |
 | Stopped, waiting for a person to resume | 1,278 (95%)                        |
-| Worker / verification / review          | 21.5 / 14.6 / 0.6                  |
-| Waiting outside any paired phase        | 33.3                               |
+| Worker / verification / review          | 25.9 / 14.6 / 0.6                  |
+| Waiting outside any phase               | 28.9                               |
+| Worker attempts / verifications         | 17 / 8                             |
 | First verification passed               | 2 of the 3 runs that reached one   |
 
 Almost all elapsed time was a stopped run waiting for a person. Compute was
-about 36 minutes across all twelve runs.
+about 41 minutes across all twelve runs.
 
-| Repository CI (100 PR runs) | Value                                   |
-| --------------------------- | --------------------------------------- |
-| Passed                      | 35, median 26 minutes (13 to 31)        |
-| Failed                      | 8, median 21 minutes before the failure |
-| Cancelled                   | 56, lower PRs of stacks, by design      |
-| Re-run after a failure      | 2                                       |
+| Repository CI (last 100 PR runs)         | Value                                   |
+| ---------------------------------------- | --------------------------------------- |
+| Passed                                   | 35, median 26 minutes (13 to 31)        |
+| Failed (latest attempt)                  | 8, median 21 minutes before the failure |
+| Runs with a failed platform job, any try | 11                                      |
+| Cancelled                                | 56, lower PRs of stacks, by design      |
 
 A failure costs about 21 minutes to surface, then a fix, then a full 26-minute
-cycle again. Of the 8 failed runs, 6 failed `npm run check` on Windows
-(4 of them on Windows only), 2 failed the Linux Dart or Java analyzer
-bindings, 1 failed the scanner sidecar, and 1 failed `npm run check` on all
-four platforms: a regression a local run would have shown in minutes.
+cycle again. Of the 11 runs with a failed platform job, read from their job
+logs:
+
+- 3 hit the 30-second test limit on the Windows runner, 2 of them with no
+  other failure;
+- 1 hit a test's own 10-second speed limit on Windows;
+- 3 failed other tests on Windows only;
+- 2 failed the same test on three or four platforms, regressions a local
+  run would show in minutes;
+- 3 failed the Linux Dart or Java analyzer bindings.
 
 ## What kept failing
 
-- **Retries that did not learn.** Of 8 verifications, 2 failed exactly as
-  the same step's previous verification had (same failing check, same exit
-  code), and 2 re-checked a snapshot that had not changed. In the one run
-  that needed several attempts, the second and third verifications both
-  repeated the first failure before the fourth passed.
 - **The same early stops, run after run.** Seven of the nine failed runs
   stopped before any verification. Their stop kinds repeat across runs:
   `missing-file` 3, `worker-no-progress` 3, `aborted` 3, `scope` 2,
   `context-budget` 2, `patch-secret` 1. Nothing carried a lesson from one run
   to the next.
+- **Checks run again on unchanged work.** 2 of 8 verifications re-checked a
+  snapshot the same step had already checked, each time right after a
+  resume.
+- **Retries did change the outcome.** In the one run that needed several
+  attempts, each failed verification failed differently (a permissions
+  error, then the test runner, then an assertion) before the fourth passed.
 
 ## Hypotheses for the next rounds
 
 Each is confirmed or refuted by the deciding number above, and ranked by
 minutes saved per round divided by risk.
 
-1. **A retry repeats the previous approach.** Confirmed: 2 of the 3
-   re-verifications in the multi-attempt run repeated the failure. Next
-   change: every retry carries the previous failure with an instruction to
-   change approach, and a repeated failure goes to the reviewer model for a
-   decision (change approach, narrow the scope or blocked; never a plain
-   retry) instead of spending another attempt.
+1. **A retry repeats the previous approach.** Refuted on this sample: 0 of 8
+   verifications repeated the step's previous failure, though there is only
+   one multi-attempt run to judge from. The retry notice and the stop on a
+   third identical failure are still added as a cheap guard (they change
+   nothing until a failure actually repeats), and the next retros count how
+   often they fire.
 2. **Recurring stop kinds have no memory.** Confirmed by the stop kinds
    above. Next change: a lesson is an accepted project memory carrying a
-   failure signature, matched against a failure and added to the next
-   attempt; a stopped run proposes one for a person to accept.
+   failure signature, matched against a failure and shown to the next
+   attempt; a run stopped by a repeated failure proposes one.
 3. **Stopped time dominates.** Confirmed: 95% of elapsed minutes. To
-   measure next: how much of it follows a repeated failure that a decision
-   could have settled without waiting.
-4. **Windows-only CI failures cost full cycles.** To measure next: how many
-   were test timeouts on a slow runner rather than real faults.
-5. **Nothing checks a change before CI.** To measure next: which of the 8
-   CI failures a local preflight of format, lint, type check and the changed
-   tests would have caught.
+   measure next: how much of it follows a failure a decision could have
+   settled without waiting for a person.
+4. **Windows-only CI failures cost full cycles.** Confirmed for timeouts: 2
+   runs failed only on the 30-second limit on Windows, and a third also hit
+   it. Next change: a 60-second default on Windows only.
+5. **Nothing checks a change before CI.** Confirmed: 2 runs failed on three
+   or four platforms. Next change: a local preflight of format, lint, type
+   check and the tests related to the change.
+6. **Resumes re-check unchanged work.** New: 2 of 8 verifications. To
+   measure next: the minutes they cost.
 
 ## What Laya, Jev and the advisor did
 
