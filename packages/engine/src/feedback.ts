@@ -190,7 +190,7 @@ export function feedbackReportText(report: FeedbackReport): string {
     ERROR_KINDS.find((entry) => entry.kind === kind)?.description ??
     "An error outside the catalog";
   return [
-    "Graph Engineering feedback report",
+    "Agile Graph feedback report",
     "",
     `- Engine version: ${report.engineVersion}`,
     `- Command: ${report.command} (${report.phase})`,
@@ -296,7 +296,7 @@ export async function offerFeedback(
   io.write(
     [
       "",
-      "Graph Engineering hit a difficulty. You can help improve it by sending",
+      "Agile Graph hit a difficulty. You can help improve it by sending",
       "this public report to its maintainers. If you submit it, GitHub",
       "attributes the issue to your account; it is not anonymous. It contains:",
       "",

@@ -521,7 +521,10 @@ export async function executeCloudGraph(request, CandidateError) {
         ]),
       ],
       ["ignore", 'export {refuse as default} from "graph:cloud";'],
+      // Historical candidates import the contracts under the project's old
+      // npm scope; current ones use the new scope.
       ["@graph-engineering/contracts", 'export const SCHEMA_VERSION="1.0.0";'],
+      ["@agile-graph/contracts", 'export const SCHEMA_VERSION="1.0.0";'],
       ["graph:database", reexports(["ContextDatabase"])],
       [
         "graph:intelligence",
