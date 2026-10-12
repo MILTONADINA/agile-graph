@@ -20,7 +20,7 @@ approval.
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) runs when a
 tag such as `v0.1.0` is pushed. It:
 
-1. refuses a tag whose commit is not on `dev`, so only reviewed, green work is
+1. refuses a tag whose commit is not on `main`, so only reviewed, green work is
    released, whoever pushed the tag;
 2. waits for an approval on the `npm` environment;
 3. builds everything, then checks that the tag matches both package versions,
@@ -49,7 +49,7 @@ workflow needs npm 11.5.1 or later, which it installs.
    manual:
 
    ```sh
-   git switch dev && git pull --ff-only origin dev
+   git switch main && git pull --ff-only origin main
    npm ci
    npm run build
    node --test scripts/npm-packages.test.mjs
@@ -73,11 +73,11 @@ workflow needs npm 11.5.1 or later, which it installs.
    `packages/contracts/package.json` and `packages/engine/package.json`, and
    the engine's dependency on `@agile-graph/contracts` to that exact
    version. Run `npm install --package-lock-only` and commit the lockfile.
-2. Merge the PR into `dev` through the usual checks.
+2. Merge the PR into `main` through the usual checks.
 3. Tag the merged commit and push the tag:
 
    ```sh
-   git switch dev && git pull --ff-only origin dev
+   git switch main && git pull --ff-only origin main
    git tag v0.1.1
    git push origin v0.1.1
    ```

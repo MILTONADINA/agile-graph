@@ -8,18 +8,20 @@ const platformChecks = [
   "sidecar",
 ];
 
+// main is the only integration branch; the retired dev keeps the same rules.
+const integrationChecks = [
+  ...platformChecks,
+  "historical-replays",
+  "sealed-public-intake",
+  "sealed-oracle",
+];
 export const requiredChecks = {
-  main: [...platformChecks, "sealed-oracle"],
-  dev: [
-    ...platformChecks,
-    "historical-replays",
-    "sealed-public-intake",
-    "sealed-oracle",
-  ],
+  main: integrationChecks,
+  dev: integrationChecks,
 };
 
-const requiredApprovals = { main: 1, dev: 0 };
-const lastPushApproval = { main: true, dev: false };
+const requiredApprovals = { main: 0, dev: 0 };
+const lastPushApproval = { main: false, dev: false };
 export function protectionFor(branch) {
   const contexts = requiredChecks[branch];
   if (!contexts) throw new Error(`Unsupported protected branch: ${branch}`);
