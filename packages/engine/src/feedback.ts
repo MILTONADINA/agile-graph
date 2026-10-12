@@ -105,7 +105,8 @@ export const ERROR_KINDS = [
   },
   {
     kind: "cost-cap",
-    pattern: /spending cap|maxCostUsd|cost cap|budget exceeded/,
+    pattern:
+      /spending cap|maxCostUsd|cost cap|budget exceeded|estimated cost budget/,
     description: "A spending cap stopped the work",
   },
   {

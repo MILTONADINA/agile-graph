@@ -374,4 +374,16 @@ describe("delivery retro", () => {
     expect(tail.split("\n")).toHaveLength(40);
     expect(Math.max(...tail.split("\n").map((line) => line.length))).toBe(500);
   });
+
+  it("counts a reviewer's decision on a repeated failure as review time", () => {
+    const step = (event: RunEvent) => ({ ...event, stepId: "one" });
+    const retro = runRetro(record("succeeded"), [
+      step(event(0, "attempt.repeat_decision_started", { attempt: 2 })),
+      step(
+        event(3, "attempt.repeat_decision", { decision: "change_approach" }),
+      ),
+      event(4, "run.succeeded"),
+    ]);
+    expect(retro.minutes).toMatchObject({ review: 3, waiting: 1 });
+  });
 });
