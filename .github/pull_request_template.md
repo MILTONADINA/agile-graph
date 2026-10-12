@@ -8,7 +8,7 @@ List checks actually run and any limitations. Link source-backed evidence when r
 
 ## Review
 
-- [ ] Targets `dev` and contains no unrelated changes
+- [ ] Targets `main` and contains no unrelated changes
 - [ ] Compatibility and migration effects are documented
 - [ ] No credentials, private context, generated databases, or model weights are included
 - [ ] Commit history is focused and contains no AI co-author trailers
