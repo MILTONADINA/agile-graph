@@ -40,6 +40,10 @@ export interface RunRetro {
   unchangedReverifications: number;
   /** Whether the run's first verification passed; null when it had none. */
   firstVerificationPassed: boolean | null;
+  /** Lessons this run proposed after a repeated failure. */
+  lessonsProposed: number;
+  /** Times an accepted lesson was shown to this run's worker. */
+  lessonsApplied: number;
   stopKinds: ErrorKind[];
 }
 
@@ -51,6 +55,8 @@ export interface RetroSummary {
   verifications: number;
   repeatedFailures: number;
   unchangedReverifications: number;
+  lessonsProposed: number;
+  lessonsApplied: number;
   firstPassVerification: { passed: number; reached: number };
   stopKinds: Record<string, number>;
   perRun: RunRetro[];
@@ -182,6 +188,8 @@ export function runRetro(
   };
   let stoppedAt: number | undefined;
   let attempts = 0;
+  let lessonsProposed = 0;
+  let lessonsApplied = 0;
   let verifications = 0;
   let repeatedFailures = 0;
   let unchangedReverifications = 0;
@@ -229,6 +237,8 @@ export function runRetro(
       typeof event.data.providerId === "string"
     )
       attempts++;
+    if (event.type === "lesson.proposed") lessonsProposed++;
+    if (event.type === "lesson.applied") lessonsApplied++;
     if (event.type === "verification.started") {
       verifications++;
       // Reaching a first verification counts even if it never finishes.
@@ -278,6 +288,8 @@ export function runRetro(
     repeatedFailures,
     unchangedReverifications,
     firstVerificationPassed,
+    lessonsProposed,
+    lessonsApplied,
     stopKinds,
   };
 }
@@ -352,6 +364,8 @@ export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
     verifications: sum((retro) => retro.verifications),
     repeatedFailures: sum((retro) => retro.repeatedFailures),
     unchangedReverifications: sum((retro) => retro.unchangedReverifications),
+    lessonsProposed: sum((retro) => retro.lessonsProposed),
+    lessonsApplied: sum((retro) => retro.lessonsApplied),
     firstPassVerification: {
       passed: perRun.filter((retro) => retro.firstVerificationPassed === true)
         .length,

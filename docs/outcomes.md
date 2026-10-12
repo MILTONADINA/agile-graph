@@ -73,6 +73,8 @@ after. For each run and in total it reports:
   the same step's previous one did (the change in between fixed nothing),
   and verifications of an unchanged snapshot;
 - the first-pass verification rate;
+- lessons proposed after a repeated failure, and accepted lessons shown to a
+  worker;
 - stop reasons as fixed error kinds, such as `scope`, `missing-file`,
   `context-budget` or `worker-no-progress`.
 
