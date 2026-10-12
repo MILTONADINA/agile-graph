@@ -1,6 +1,6 @@
 # Working as an AI agile team
 
-Graph Engineering runs software work the way an agile team does: a person
+Agile Graph runs software work the way an agile team does: a person
 owns the product and makes the decisions, and AI workers plan, build, test,
 review and scan the work in small, checked increments. This page maps each
 agile practice to what the graph actually does and the command behind it.
@@ -22,7 +22,7 @@ acceptance before it counts as done.
 
 ## The loop
 
-| Agile practice                        | In Graph Engineering                                                                                                                                                                                                                                                                                                                                                                   | Command                                                                    |
+| Agile practice                        | In Agile Graph                                                                                                                                                                                                                                                                                                                                                                         | Command                                                                    |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Backlog item with acceptance criteria | A feature spec in `specs/<area>/<id>.md` with numbered acceptance criteria, each linked to the test that proves it ([spec format](../specs/README.md))                                                                                                                                                                                                                                 | `graph-engine spec-new <area> <id>`                                        |
 | Definition of ready                   | `spec-check` fails when a spec's criteria are not each linked to a test case that exists in the named file, or a ready spec still holds a `[NEEDS CLARIFICATION: ...]` question; CI runs it on every change (a test behind an environment switch counts only when a CI step runs it)                                                                                                   | `graph-engine spec-check`                                                  |

@@ -66,4 +66,4 @@ Worker output is untrusted and accepted only as a schema-valid patch proposal; n
 
 ## Non-goals
 
-Graph Engineering does not log in, install or update client CLIs, copy stored native credentials, or grant workers repository, shell or network access. Codex is reported unavailable where the installed binary lacks restricted-read protocol support.
+Agile Graph does not log in, install or update client CLIs, copy stored native credentials, or grant workers repository, shell or network access. Codex is reported unavailable where the installed binary lacks restricted-read protocol support.

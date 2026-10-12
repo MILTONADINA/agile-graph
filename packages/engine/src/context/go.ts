@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { z } from "zod";
-import type { GraphEdge, SourceReference } from "@graph-engineering/contracts";
+import type { GraphEdge, SourceReference } from "@agile-graph/contracts";
 import { command } from "../util.js";
 import { hash, type ParsedFile } from "./parser.js";
 import type { SemanticResult } from "./semantic.js";

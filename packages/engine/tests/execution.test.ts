@@ -19,7 +19,7 @@ import {
   type ExecutionPlan,
   type ProjectConfig,
   type RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   initializeProject,
   configureProvider,

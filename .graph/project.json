@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "projectId": "b92d8cb4-ea9d-4fc7-b7b8-7a116a8b6d65",
-  "name": "Graph Engineering",
+  "name": "Agile Graph",
   "policy": {
     "version": "1.0.0",
     "inference": "allowlisted",
@@ -42,7 +42,7 @@
     }
   ],
   "github": {
-    "repository": "MILTONADINA/graph-engineering",
+    "repository": "MILTONADINA/agile-graph",
     "baseBranch": "dev",
     "remote": "origin"
   },

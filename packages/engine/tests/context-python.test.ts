@@ -5,7 +5,7 @@ import { PassThrough } from "node:stream";
 import { mkdtemp, mkdir, rm, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { parseFile } from "../src/context/parser.js";
 import { pythonRuntime, resolvePythonBindings } from "../src/context/python.js";
 import { PYTHON_HELPER } from "../src/context/python-helper.js";

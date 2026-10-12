@@ -14,7 +14,7 @@ import {
   DEFAULT_POLICY,
   type ProjectConfig,
   type RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   createWorkspace,
   recoverBaseCommit,

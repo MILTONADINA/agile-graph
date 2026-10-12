@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join, sep } from "node:path";
-import type { ProjectPolicy } from "@graph-engineering/contracts";
+import type { ProjectPolicy } from "@agile-graph/contracts";
 
 export const EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-code";
 export const EMBEDDING_REVISION = "516f4baf13dec4ddddda8631e019b5737c8bc250";

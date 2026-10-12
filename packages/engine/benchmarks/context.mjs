@@ -1,5 +1,5 @@
 /** Reproducible synthetic index benchmark; not a model-quality evaluation.
- * Build first: npm run build -w @graph-engineering/contracts && npm run build -w @graph-engineering/engine
+ * Build first: npm run build -w @agile-graph/contracts && npm run build -w @agile-graph/engine
  * Run: node packages/engine/benchmarks/context.mjs 5000
  */
 import {
@@ -15,7 +15,7 @@ import { tmpdir, platform, arch, cpus } from "node:os";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { ContextEngine } from "../dist/context/index.js";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 
 const fileCount = Number(process.argv[2] ?? 1000);
 if (!Number.isInteger(fileCount) || fileCount < 100 || fileCount > 10000)

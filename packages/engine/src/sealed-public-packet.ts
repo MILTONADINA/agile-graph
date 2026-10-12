@@ -5,7 +5,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import type { ProjectPolicy } from "@graph-engineering/contracts";
+import type { ProjectPolicy } from "@agile-graph/contracts";
 import { containsSecret, isAllowedPath, safePath } from "./policy.js";
 import { canonicalJson, freezeJson } from "./sealed-collection-schema.js";
 

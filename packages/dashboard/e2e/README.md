@@ -7,7 +7,7 @@ On Linux CI use `npx playwright install --with-deps chromium`.
 From the repository root:
 
 ```sh
-npm run test:e2e:fixture -w @graph-engineering/dashboard
+npm run test:e2e:fixture -w @agile-graph/dashboard
 ```
 
 The launcher starts the real built engine on an ephemeral loopback port. It

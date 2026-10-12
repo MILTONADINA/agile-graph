@@ -1,8 +1,4 @@
-import type {
-  ProjectPolicy,
-  RunRecord,
-  Usage,
-} from "@graph-engineering/contracts";
+import type { ProjectPolicy, RunRecord, Usage } from "@agile-graph/contracts";
 import type { DecisionBudget } from "./decision-batch.js";
 
 export interface AccountingGroup {

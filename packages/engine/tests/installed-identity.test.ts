@@ -17,7 +17,7 @@ import type {
   InstalledWorkerBinding,
   InstalledWorkerIdentity,
   ProviderConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 
 const hooks = vi.hoisted(() => ({
   afterRead: undefined as (() => Promise<void>) | undefined,

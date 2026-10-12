@@ -8,7 +8,7 @@ import {
   SCHEMA_VERSION,
   type ExecutionPlan,
   type RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { readRunReceipt, RunStore } from "../src/store.js";
 import { runEvidence } from "../src/overview.js";
 

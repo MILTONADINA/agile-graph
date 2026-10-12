@@ -1,6 +1,6 @@
 import { Worker } from "node:worker_threads";
 import ts from "typescript";
-import type { GraphEdge } from "@graph-engineering/contracts";
+import type { GraphEdge } from "@agile-graph/contracts";
 import type { ParsedFile } from "./parser.js";
 import { CONFIG_LIMITS, isModuleConfig } from "./semantic-resolver.js";
 

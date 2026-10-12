@@ -1,9 +1,9 @@
 {
-  "name": "@graph-engineering/engine",
+  "name": "@agile-graph/engine",
   "version": "0.1.0",
   "description": "An AI agile team for your repository: test-first AI workers in isolated Git worktrees, behind the checks, code review and security scans you approve.",
   "keywords": [
-    "graph-engineering",
+    "agile-graph",
     "ai-agents",
     "agile",
     "mcp",
@@ -12,19 +12,20 @@
     "developer-tools",
     "cli"
   ],
-  "homepage": "https://github.com/MILTONADINA/graph-engineering/tree/dev/packages/engine#readme",
+  "homepage": "https://github.com/MILTONADINA/agile-graph/tree/dev/packages/engine#readme",
   "bugs": {
-    "url": "https://github.com/MILTONADINA/graph-engineering/issues"
+    "url": "https://github.com/MILTONADINA/agile-graph/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MILTONADINA/graph-engineering.git",
+    "url": "git+https://github.com/MILTONADINA/agile-graph.git",
     "directory": "packages/engine"
   },
   "license": "MIT",
   "author": "Milton Adina",
   "type": "module",
   "bin": {
+    "agile-graph": "dist/cli.js",
     "graph-engine": "dist/cli.js"
   },
   "exports": {
@@ -58,7 +59,7 @@
   },
   "dependencies": {
     "@fastify/static": "10.1.4",
-    "@graph-engineering/contracts": "0.1.0",
+    "@agile-graph/contracts": "0.1.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "better-sqlite3": "13.0.3",
     "commander": "^14.0.0",

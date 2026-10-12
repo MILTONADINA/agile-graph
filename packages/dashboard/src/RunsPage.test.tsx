@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { RunRecord } from "@graph-engineering/contracts";
+import type { RunRecord } from "@agile-graph/contracts";
 import { CompletionNotice, PlanVerification } from "./RunsPage";
 
 const notice = (

@@ -15,7 +15,7 @@ import {
   DEFAULT_POLICY,
   type LiveTarget,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   LIVE_BASELINE_FILE,
   LIVE_SCAN_ID_LABEL,

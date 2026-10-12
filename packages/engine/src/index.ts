@@ -1,4 +1,4 @@
-export * from "@graph-engineering/contracts";
+export * from "@agile-graph/contracts";
 export { GraphEngine } from "./service.js";
 export { verificationCatalogueSha256 } from "./verification-selection.js";
 export { ContextEngine } from "./context/index.js";

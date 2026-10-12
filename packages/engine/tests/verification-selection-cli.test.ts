@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { VerificationCheck } from "@graph-engineering/contracts";
+import type { VerificationCheck } from "@agile-graph/contracts";
 import { initializeProject } from "../src/project.js";
 import { checked, writeJson } from "../src/util.js";
 import { planSha256 } from "../src/store.js";

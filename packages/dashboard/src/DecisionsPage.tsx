@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { DecisionRecord } from "@graph-engineering/contracts";
+import type { DecisionRecord } from "@agile-graph/contracts";
 import type { AccountingSummary, OutcomeSummary } from "./types";
 import { InsightsPanel } from "./InsightsPanel";
 import type { Api } from "./api";

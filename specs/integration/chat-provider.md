@@ -26,7 +26,7 @@ adding a kind risked missing a privacy check.
   - Test: packages/engine/tests/chat-provider.test.ts :: refuses a cloud client's plan that mixes a chat provider with local roles
 - AC4: A `chat` provider is priced like other API providers: recorded prices admit it under a numeric cost cap and price its usage, and without prices a numeric cap refuses it with the same refusal as an unpriced `openai` worker and its calls have no cost estimate.
   - Test: packages/engine/tests/chat-provider.test.ts :: is priced and capped like other API providers
-- AC5: Provider kinds are defined once in `@graph-engineering/contracts` as `LOCAL_KINDS`, `API_KINDS` (`openai`, `anthropic`, `chat`) and `INSTALLED_KINDS`, with `isInstalledKind`, `isApiKind` and `isCloudKind` (every kind but `local`, so an unknown kind fails closed); the engine's installed-agent and API allowlists use them, and `chat` keeps the ordinary worker deadline and is never an installed worker.
+- AC5: Provider kinds are defined once in `@agile-graph/contracts` as `LOCAL_KINDS`, `API_KINDS` (`openai`, `anthropic`, `chat`) and `INSTALLED_KINDS`, with `isInstalledKind`, `isApiKind` and `isCloudKind` (every kind but `local`, so an unknown kind fails closed); the engine's installed-agent and API allowlists use them, and `chat` keeps the ordinary worker deadline and is never an installed worker.
   - Test: packages/engine/tests/chat-provider.test.ts :: defines each kind once and classifies chat as a cloud API kind
 
 ## Security considerations

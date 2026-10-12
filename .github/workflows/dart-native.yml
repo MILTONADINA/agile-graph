@@ -43,6 +43,6 @@ jobs:
           docker buildx build --platform=linux/amd64 --load --pull=false --network=none -f packages/engine/tests/fixtures/dart-runtime/Dockerfile -t graph-dart-analyzer:local packages/engine/tests/fixtures/dart-runtime
           docker image inspect graph-dart-analyzer:local --format 'Dart image={{.Id}} os={{.Os}} arch={{.Architecture}} env={{json .Config.Env}} entrypoint={{json .Config.Entrypoint}} labels={{json .Config.Labels}}'
       - name: Direct and imported Dart binding regression
-        run: npm test -w @graph-engineering/engine -- --run tests/context-dart-runtime.test.ts -t 'binds a direct and imported top-level call with all Dart source provenance'
+        run: npm test -w @agile-graph/engine -- --run tests/context-dart-runtime.test.ts -t 'binds a direct and imported top-level call with all Dart source provenance'
         env:
           GRAPH_ENGINE_DART_DOCKER_TESTS: "1"

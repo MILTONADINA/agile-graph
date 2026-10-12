@@ -8,7 +8,7 @@
 // offers; resolved bindings need a Dart analyzer.
 import { createHash } from "node:crypto";
 import type { Node } from "web-tree-sitter";
-import type { SourceReference } from "@graph-engineering/contracts";
+import type { SourceReference } from "@agile-graph/contracts";
 import type { ParsedFile } from "./parser.js";
 
 /**

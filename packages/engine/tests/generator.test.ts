@@ -14,7 +14,7 @@ import path from "node:path";
 import {
   DEFAULT_POLICY,
   type GeneratorRegistration,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { generateInContainer } from "../src/execution/generator.js";
 import { checked, command, type CommandResult } from "../src/util.js";
 

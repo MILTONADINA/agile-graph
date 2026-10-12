@@ -3,7 +3,7 @@ import {
   DEFAULT_POLICY,
   assertProjectConfig,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 
 describe("zero-cost policy", () => {
   it("accepts a zero external-API-spend ceiling", () => {

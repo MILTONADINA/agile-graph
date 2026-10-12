@@ -15,7 +15,7 @@ import type {
   RunOutcome,
   RunRecord,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   assertGeneratorRegistration,
   assertInstalledWorkerBinding,
@@ -23,7 +23,7 @@ import {
   isInstalledKind,
   readTurnBudget,
   sameGeneratorRegistration,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextEngine } from "./context/index.js";
 import { inputTokenCeiling } from "./tokens.js";
 import { packetSavings } from "./insights-context.js";

@@ -2,7 +2,7 @@
 
 A professional team does not call work done because its author says so, or
 because tests pass: another engineer reviews the change against what was
-asked. Graph Engineering can require the same of every managed run.
+asked. Agile Graph can require the same of every managed run.
 
 ```sh
 graph-engine reviewer <providerId>   # require this provider's approval

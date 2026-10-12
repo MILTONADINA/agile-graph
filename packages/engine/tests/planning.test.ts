@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
-import type { RunEvent } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
+import type { RunEvent } from "@agile-graph/contracts";
 import {
   LIKELY_FIX_CHECKS_PER_REPAIR,
   acCoverage,

@@ -13,7 +13,7 @@ that plan's approval. Operators need opt-in executable identity within the
 existing plan/provider contract, without consumer-specific shims or a new
 authorization service.
 
-Released by [PR #122](https://github.com/MILTONADINA/graph-engineering/pull/122)
+Released by [PR #122](https://github.com/MILTONADINA/agile-graph/pull/122)
 at fork `dev` pin `40cfd318d5c79830ab02b3c84d260061f873b627` after scoped
 review and all nine required exact-head CI checks. The PR records the complete
 release evidence; these synthetic regressions are not native live-inference

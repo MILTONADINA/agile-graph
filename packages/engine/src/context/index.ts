@@ -32,7 +32,7 @@ import {
   type ProjectPolicy,
   type RepositorySnapshot,
   type SourceReference,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextDatabase, type Statement } from "./database.js";
 import {
   canonicalJson,

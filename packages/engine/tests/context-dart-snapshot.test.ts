@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { CodeSymbol } from "@graph-engineering/contracts";
+import type { CodeSymbol } from "@agile-graph/contracts";
 import { hash, parseFile } from "../src/context/parser.js";
 import {
   dartPosition,

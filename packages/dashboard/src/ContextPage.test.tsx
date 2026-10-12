@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   SCHEMA_VERSION,
   type RepositorySnapshot,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import type { Api } from "./api";
 import type { ProjectResponse } from "./types";
 

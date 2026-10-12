@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import type { ExecutionPlan, RunRecord } from "@graph-engineering/contracts";
+import type { ExecutionPlan, RunRecord } from "@agile-graph/contracts";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import {
   configureProvider,

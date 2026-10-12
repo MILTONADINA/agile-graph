@@ -3,7 +3,7 @@ import {
   assertVerificationSelection,
   type ExecutionPlan,
   type VerificationCheck,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { hash } from "./util.js";
 
 type VerificationPlan = Pick<

@@ -13,7 +13,7 @@ reuse approval after catalogue drift. Selection must be explicit, stable and
 bound to the existing approved plan without changing the project catalogue.
 
 This follow-on is separate from installed-worker identity. It was released in
-[PR #123](https://github.com/MILTONADINA/graph-engineering/pull/123) at
+[PR #123](https://github.com/MILTONADINA/agile-graph/pull/123) at
 `104accacf0c4389699bfab3f32140095e13654fa`. Required CI run `36820953784`,
 attempt 1, passed all nine jobs on checked head
 `37ffe9ca190dab56864efa99b60110c262225edd`; checked and merged commits share

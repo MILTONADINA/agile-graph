@@ -1,20 +1,20 @@
 {
-  "name": "@graph-engineering/contracts",
+  "name": "@agile-graph/contracts",
   "version": "0.1.0",
-  "description": "Versioned schemas shared by the Graph Engineering engine: project policy, context, execution plans, runs and decisions.",
+  "description": "Versioned schemas shared by the Agile Graph engine: project policy, context, execution plans, runs and decisions.",
   "keywords": [
-    "graph-engineering",
+    "agile-graph",
     "schemas",
     "contracts",
     "ai-agents"
   ],
-  "homepage": "https://github.com/MILTONADINA/graph-engineering/tree/dev/packages/contracts#readme",
+  "homepage": "https://github.com/MILTONADINA/agile-graph/tree/dev/packages/contracts#readme",
   "bugs": {
-    "url": "https://github.com/MILTONADINA/graph-engineering/issues"
+    "url": "https://github.com/MILTONADINA/agile-graph/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MILTONADINA/graph-engineering.git",
+    "url": "git+https://github.com/MILTONADINA/agile-graph.git",
     "directory": "packages/contracts"
   },
   "license": "MIT",

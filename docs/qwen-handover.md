@@ -1,6 +1,6 @@
 # Qwen handover — 2026-10-11
 
-You are a local model with a small context window, taking over Graph Engineering (GE). Do one step at a time and read only what each step needs. `AGENTS.md` holds the full rules; the ones below are the ones you are most likely to need.
+You are a local model with a small context window, taking over Agile Graph (GE). Do one step at a time and read only what each step needs. `AGENTS.md` holds the full rules; the ones below are the ones you are most likely to need.
 
 ## 1. Rules you must never break
 
@@ -83,9 +83,9 @@ GE is a local-first "AI agile team" engine.
 Use it for every merge. It's written for PR 144; for another PR, replace 144 with that PR's number.
 
 1. Get the head SHA and merge state:
-   `gh pr view 144 --repo MILTONADINA/graph-engineering --json headRefOid,mergeStateStatus`
+   `gh pr view 144 --repo MILTONADINA/agile-graph --json headRefOid,mergeStateStatus`
 2. Get the checks:
-   `gh pr checks 144 --repo MILTONADINA/graph-engineering`
+   `gh pr checks 144 --repo MILTONADINA/agile-graph`
    CI takes about 25 minutes. To wait, add `--watch`; don't push again while you wait.
 3. Count unresolved review threads; this must print 0:
 
@@ -99,10 +99,10 @@ Use it for every merge. It's written for PR 144; for another PR, replace 144 wit
    - `mergeStateStatus` is `CLEAN`.
 
    Then run:
-   `gh pr merge 144 --repo MILTONADINA/graph-engineering --rebase --match-head-commit <the exact headRefOid>`
+   `gh pr merge 144 --repo MILTONADINA/agile-graph --rebase --match-head-commit <the exact headRefOid>`
 
 5. Close each lower PR with a comment naming the merge commit:
-   `gh pr close 141 --repo MILTONADINA/graph-engineering --comment "Included in the stack merged by #144 at <merge sha>"`
+   `gh pr close 141 --repo MILTONADINA/agile-graph --comment "Included in the stack merged by #144 at <merge sha>"`
    Do the same for #142 and #143.
 
 **If a check fails**
@@ -134,7 +134,7 @@ PR #148 holds the five round-4 changes, each as a build commit and a review-fix 
 ## 5. Next steps, in order
 
 1. Run `graph-engine insights-context` (added in round 4) to measure the context savings.
-2. Do the owner's feedback issues first, ahead of the research ideas. Read each issue with `gh issue view <n> --repo MILTONADINA/graph-engineering`. Each item below is its own PR, through the merge gate:
+2. Do the owner's feedback issues first, ahead of the research ideas. Read each issue with `gh issue view <n> --repo MILTONADINA/agile-graph`. Each item below is its own PR, through the merge gate:
    1. **Issue 147, blind retry.**
       - Attempt n+1 must include the previous attempt's error, exit code, timeout flag and log tail, plus an instruction to change approach.
       - If the same failure signature occurs twice, stop and escalate; never make a third identical attempt.
@@ -156,17 +156,17 @@ PR #148 holds the five round-4 changes, each as a build commit and a review-fix 
 ## 6. How to work with a 16k window
 
 - **Read code through MCP** with `context_get` or `symbol_search`, which return cited excerpts.
-  - Rebuild the engine first: `npm run build:dependencies`, then `npm run build -w @graph-engineering/engine`.
+  - Rebuild the engine first: `npm run build:dependencies`, then `npm run build -w @agile-graph/engine`.
   - If `context_get` refuses because of unauthorized memory, read the file directly with `sed`. Never authorize the export.
 - **Read files a range at a time:** `sed -n 'START,ENDp' <file>`.
 - **Run tests one file at a time:**
   1. `npm run build:dependencies`
-  2. `npm test -w @graph-engineering/engine -- tests/<file>.test.ts`
+  2. `npm test -w @agile-graph/engine -- tests/<file>.test.ts`
 
   GitHub CI runs the full suite.
 
 - **Before every commit, run:**
-  - `npm run typecheck -w @graph-engineering/engine`
+  - `npm run typecheck -w @agile-graph/engine`
   - `npm run lint`, which must show 0 errors
   - `npm run format:check`
   - `git status`, to make sure no protected file or `package-lock.json` is staged

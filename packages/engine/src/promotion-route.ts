@@ -5,7 +5,7 @@
 // and no admission point, so every checked route refuses with
 // "no-verified-issuer" and keeps its baseline. The comparison a future grant
 // must pass is `checkGrantedRoute`, a pure function over two identities.
-import type { ProjectPolicy } from "@graph-engineering/contracts";
+import type { ProjectPolicy } from "@agile-graph/contracts";
 import { z } from "zod";
 import type { DecisionProvider } from "./decisions.js";
 import { decisionCostCap } from "./policy.js";

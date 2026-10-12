@@ -26,7 +26,7 @@ before(() => {
   // needs tsx and the source schema when run under plain Node with root deps.
   execFileSync(
     process.platform === "win32" ? "npm.cmd" : "npm",
-    ["run", "build", "-w", "@graph-engineering/engine"],
+    ["run", "build", "-w", "@agile-graph/engine"],
     {
       cwd: repository,
       encoding: "utf8",

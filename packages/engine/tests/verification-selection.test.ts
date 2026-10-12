@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { VerificationCheck } from "@graph-engineering/contracts";
+import type { VerificationCheck } from "@agile-graph/contracts";
 import { hash } from "../src/util.js";
 import {
   assertPlanVerificationSelection,

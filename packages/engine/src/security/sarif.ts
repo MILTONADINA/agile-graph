@@ -115,7 +115,7 @@ export function toSarif(
           driver: {
             name: "graph-engineering",
             version,
-            informationUri: "https://github.com/MILTONADINA/graph-engineering",
+            informationUri: "https://github.com/MILTONADINA/agile-graph",
             rules,
           },
         },

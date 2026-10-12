@@ -1,4 +1,4 @@
-# Graph Engineering
+# Agile Graph
 
 An AI agile team for your repository. You are the product owner: you write
 feature specs with acceptance criteria, approve plans and accept results. AI
@@ -30,7 +30,7 @@ every guide.
 ## Install
 
 ```sh
-npm install --global @graph-engineering/engine
+npm install --global @agile-graph/engine
 graph-engine -C /path/to/your/project init
 graph-engine -C /path/to/your/project index --lexical
 graph-engine -C /path/to/your/project serve
@@ -90,7 +90,7 @@ reconciliation. See the lifecycle guide before changing storage.
 
 ```sh
 npm run check
-GRAPH_ENGINE_DOCKER_TESTS=1 npm test -w @graph-engineering/engine
+GRAPH_ENGINE_DOCKER_TESTS=1 npm test -w @agile-graph/engine
 ```
 
 Use focused feature branches, reviewed PRs, and `dev` as the integration

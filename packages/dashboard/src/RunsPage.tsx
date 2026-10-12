@@ -3,7 +3,7 @@ import type {
   ExecutionPlan,
   RunEvent,
   RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import type { Api } from "./api";
 import { dockerAvailable, type ProjectResponse } from "./types";
 import {

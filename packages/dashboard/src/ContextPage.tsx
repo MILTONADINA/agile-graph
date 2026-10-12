@@ -1,8 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type {
-  ContextPacket,
-  RepositorySnapshot,
-} from "@graph-engineering/contracts";
+import type { ContextPacket, RepositorySnapshot } from "@agile-graph/contracts";
 import type { Api } from "./api";
 import type { ProjectResponse } from "./types";
 import {

@@ -106,7 +106,7 @@ Run the focused storage and ledger tests with:
 node --test evaluation/sealed/tests/repository-snapshot.test.mjs \
   evaluation/sealed/tests/originals.test.mjs \
   evaluation/sealed/tests/repository-claim.test.mjs
-npm run test -w @graph-engineering/engine -- tests/sealed-aggregate-provenance.test.ts
+npm run test -w @agile-graph/engine -- tests/sealed-aggregate-provenance.test.ts
 ```
 
 The native guest and one-shot host tests additionally require locally

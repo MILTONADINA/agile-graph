@@ -1,7 +1,4 @@
-import type {
-  ProjectConfig,
-  ProjectPolicy,
-} from "@graph-engineering/contracts";
+import type { ProjectConfig, ProjectPolicy } from "@agile-graph/contracts";
 import { command, checked, hash } from "../util.js";
 import { constants } from "node:fs";
 import {

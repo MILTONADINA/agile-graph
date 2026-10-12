@@ -2,7 +2,7 @@ import {
   assertProjectPolicy,
   type DecisionRecord,
   type ProjectPolicy,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { z } from "zod";
 import {
   decisionProviderSchema,

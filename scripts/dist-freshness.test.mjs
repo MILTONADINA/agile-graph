@@ -1,4 +1,4 @@
-// Runs the built engine, so it needs `npm run build -w @graph-engineering/engine`
+// Runs the built engine, so it needs `npm run build -w @agile-graph/engine`
 // first (CI runs it after `npm run check`). It copies dist/, src/ and
 // package.json into temporary directories under packages/engine, where the
 // copies resolve the workspace's dependencies as the real dist does, edits one
@@ -122,13 +122,13 @@ before(async () => {
   const buildSource = path.join(engineDir, "dist", "build-source.js");
   if (!existsSync(builtCli) || !existsSync(buildSource))
     throw new Error(
-      "packages/engine/dist is missing; run npm run build -w @graph-engineering/engine first",
+      "packages/engine/dist is missing; run npm run build -w @agile-graph/engine first",
     );
   const { checkDistFreshness } = await import(pathToFileURL(buildSource).href);
   const status = checkDistFreshness().status;
   if (status !== "fresh")
     throw new Error(
-      `packages/engine/dist is ${status}, not built from the current src; run npm run build -w @graph-engineering/engine first`,
+      `packages/engine/dist is ${status}, not built from the current src; run npm run build -w @agile-graph/engine first`,
     );
 
   // The long path: hosted Windows TEMP may be an 8.3 alias such as RUNNER~1.

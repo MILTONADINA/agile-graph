@@ -14,11 +14,7 @@ import {
   localProcessOwner,
   localProcessOwnerReady,
 } from "../src/process-owner.js";
-import type {
-  ExecutionPlan,
-  RunRecord,
-  Usage,
-} from "@graph-engineering/contracts";
+import type { ExecutionPlan, RunRecord, Usage } from "@agile-graph/contracts";
 
 const directories: string[] = [];
 const stores: RunStore[] = [];

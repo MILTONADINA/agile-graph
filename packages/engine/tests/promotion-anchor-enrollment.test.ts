@@ -26,7 +26,7 @@ import {
   DEFAULT_POLICY,
   SCHEMA_VERSION,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import { backupProject } from "../src/operations.js";
 import { initializeProject, projectDataDir } from "../src/project.js";

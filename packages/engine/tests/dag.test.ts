@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import {
-  DEFAULT_POLICY,
-  type ExecutionStep,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ExecutionStep } from "@agile-graph/contracts";
 import {
   applyRepair,
   DagReconciliationError,

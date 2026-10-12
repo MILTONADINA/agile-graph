@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { z } from "zod";
-import type { GraphEdge } from "@graph-engineering/contracts";
+import type { GraphEdge } from "@agile-graph/contracts";
 import { command } from "../util.js";
 import { hash, type ParsedFile } from "./parser.js";
 import type { SemanticResult } from "./semantic.js";

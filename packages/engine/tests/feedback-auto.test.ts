@@ -10,10 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import {
-  DEFAULT_POLICY,
-  type ProjectPolicy,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ProjectPolicy } from "@agile-graph/contracts";
 import {
   automaticFeedbackNotice,
   readAutomaticFeedbackSettings,

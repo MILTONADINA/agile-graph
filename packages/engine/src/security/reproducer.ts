@@ -1,9 +1,6 @@
 import path from "node:path";
 import { z } from "zod";
-import type {
-  ProjectConfig,
-  ProjectPolicy,
-} from "@graph-engineering/contracts";
+import type { ProjectConfig, ProjectPolicy } from "@agile-graph/contracts";
 import {
   containsSecret,
   globAllowlist,

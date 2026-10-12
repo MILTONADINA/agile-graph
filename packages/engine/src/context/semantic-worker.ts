@@ -6,7 +6,7 @@ import type {
   CodeSymbol,
   GraphEdge,
   SourceReference,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import type { ParsedFile } from "./parser.js";
 import type { SemanticResult } from "./semantic.js";
 const { createSnapshotResolver, isModuleConfig } = (await import(

@@ -5,10 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import {
-  SCHEMA_VERSION,
-  type ExecutionPlan,
-} from "@graph-engineering/contracts";
+import { SCHEMA_VERSION, type ExecutionPlan } from "@agile-graph/contracts";
 import { readPlanStatus, RunStore } from "../src/store.js";
 
 const directories: string[] = [];

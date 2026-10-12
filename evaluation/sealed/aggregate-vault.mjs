@@ -41,7 +41,7 @@ const snapshot = (store, collectionId) => {
 
 /**
  * Inspect exact originals through local private stores. The engine must first
- * be built (`npm run build -w @graph-engineering/engine`); the aggregate engine
+ * be built (`npm run build -w @agile-graph/engine`); the aggregate engine
  * import uses its compiled JS. The existing sealed schema adapter still loads
  * source TypeScript through `tsx`, so that dependency and source tree must also
  * be installed. Every successful result remains analysis-only and contains no

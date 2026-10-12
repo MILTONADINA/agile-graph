@@ -4,7 +4,7 @@ import type {
   ProjectPolicy,
   ProviderConfig,
   RunEvent,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   decideBatch,
   type DecisionBudget,

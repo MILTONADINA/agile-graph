@@ -17,7 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { tsImport } from "tsx/esm/api";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ContextEngine } from "../packages/engine/dist/context/index.js";
 import { ArtifactStore } from "./sealed/artifacts.mjs";
 import {

@@ -7,7 +7,7 @@ import type {
   ExecutionPlan,
   ProjectConfig,
   VerificationCheck,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import {
   configureProvider,

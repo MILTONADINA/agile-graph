@@ -9,7 +9,7 @@ import {
   DEFAULT_POLICY,
   type CodeSymbol,
   type GraphEdge,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import { parseFile } from "../src/context/parser.js";
 

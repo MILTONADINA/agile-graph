@@ -4,7 +4,7 @@ import type {
   ContextPacket,
   DecisionRecord,
   RunEvent,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { estimateTokens, tokensForBytes } from "./tokens.js";
 
 /** What one delivered worker packet cost against sending whole files. */

@@ -10,7 +10,7 @@ import {
   type InstalledWorkerBinding,
   type InstalledWorkerIdentity,
   type ProviderConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 
 export type { InstalledKind };
 

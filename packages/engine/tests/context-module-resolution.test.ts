@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import ts from "typescript";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { parseFile } from "../src/context/parser.js";
 import { analyzeSnapshot } from "../src/context/semantic-worker.js";
 import { resolveSnapshotBindings } from "../src/context/semantic.js";

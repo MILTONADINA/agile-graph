@@ -7,7 +7,7 @@ import {
   DEFAULT_POLICY,
   SCHEMA_VERSION,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import { RunStore } from "../src/store.js";
 import { backupProject, restoreProject } from "../src/operations.js";

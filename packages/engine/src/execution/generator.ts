@@ -18,7 +18,7 @@ import {
   isGeneratorCredentialPath,
   type GeneratorRegistration,
   type ProjectPolicy,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   containsSecret,
   globAllowlist,

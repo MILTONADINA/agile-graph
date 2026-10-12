@@ -15,7 +15,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { tsImport } from "tsx/esm/api";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ArtifactStore } from "../artifacts.mjs";
 import { SealedPublicPacketBridge } from "../public-packet.mjs";
 import {

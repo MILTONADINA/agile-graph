@@ -1,5 +1,5 @@
 {
-  "name": "graph-engineering-workspace",
+  "name": "agile-graph-workspace",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
@@ -9,8 +9,8 @@
     "node": ">=24 <27"
   },
   "scripts": {
-    "build": "npm run build -w @graph-engineering/contracts && npm run build -w @graph-engineering/engine && npm run build -w @graph-engineering/dashboard",
-    "build:dependencies": "npm run build -w @graph-engineering/contracts",
+    "build": "npm run build -w @agile-graph/contracts && npm run build -w @agile-graph/engine && npm run build -w @agile-graph/dashboard",
+    "build:dependencies": "npm run build -w @agile-graph/contracts",
     "typecheck": "npm run build:dependencies && npm run typecheck --workspaces --if-present",
     "test": "npm run build:dependencies && npm run test --workspaces --if-present",
     "check": "npm run typecheck && npm run test && npm run build",
@@ -18,7 +18,7 @@
     "graph:local": "node scripts/local-engine.mjs",
     "laya:serve": "node scripts/local-engine.mjs --serve-laya",
     "verify:image": "docker build -f infra/verification.Dockerfile -t graph-engineering-verify:local .",
-    "dev": "npm run dev -w @graph-engineering/dashboard",
+    "dev": "npm run dev -w @agile-graph/dashboard",
     "setup:git": "node scripts/setup-git.mjs",
     "format": "prettier --write packages scripts evaluation .github .graph/project.json package.json tsconfig.base.json eslint.config.mjs README.md CONTRIBUTING.md docs specs",
     "format:check": "prettier --check packages scripts evaluation .github .graph/project.json package.json tsconfig.base.json eslint.config.mjs README.md CONTRIBUTING.md docs specs",

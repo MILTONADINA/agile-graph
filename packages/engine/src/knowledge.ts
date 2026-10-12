@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import type { MemoryRecord, ProjectPolicy } from "@graph-engineering/contracts";
+import type { MemoryRecord, ProjectPolicy } from "@agile-graph/contracts";
 import type { ContextEngine } from "./context/index.js";
 import { containsSecret } from "./policy.js";
 import { hash, lineCount, now } from "./util.js";

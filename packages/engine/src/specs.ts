@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { safePath, wholeRepository } from "./policy.js";
-import type { ProjectPolicy } from "@graph-engineering/contracts";
+import type { ProjectPolicy } from "@agile-graph/contracts";
 
 /** Feature specs live here, one Markdown file per feature, grouped by area. */
 export const SPECS_DIR = "specs";

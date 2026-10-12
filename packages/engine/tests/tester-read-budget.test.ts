@@ -8,7 +8,7 @@ import {
   DEFAULT_POLICY,
   readTurnBudget,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import {
   configureProvider,

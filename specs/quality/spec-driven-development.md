@@ -8,7 +8,7 @@
 ## Problem
 
 A team builds what was agreed and can show that it works. Every feature of
-Graph Engineering, and of a project that uses it, is written as a spec
+Agile Graph, and of a project that uses it, is written as a spec
 before it is built: the problem, acceptance criteria, and a link from each
 criterion to the test that proves it. A checker keeps the links honest, CI
 runs it, and plans can be created straight from a ready spec.

@@ -2,7 +2,7 @@ import {
   isInstalledKind,
   type ProjectPolicy,
   type ProviderKind,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 
 /** null deliberately means completion-driven, never a missing default. */
 export function installedWorkerTimeoutMs(policy: ProjectPolicy): number | null {

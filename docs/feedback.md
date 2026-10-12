@@ -22,7 +22,7 @@ directory. `feedback-config on` cannot override the environment opt-out.
 
 - When an eligible CLI command, or a run it waits for, fails, the graph
   records its fixed difficulty kind locally. If reporting is enabled, it can
-  submit a metadata-only issue to `MILTONADINA/graph-engineering` without a
+  submit a metadata-only issue to `MILTONADINA/agile-graph` without a
   per-report prompt, including from an unattended CLI script.
 - Submission requires a valid project policy with `inference: "allowlisted"`,
   `network: "allowlisted"` and the exact `api.github.com` allowed host. Offline,

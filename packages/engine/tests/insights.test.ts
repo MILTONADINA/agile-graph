@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DecisionRecord, RunOutcome } from "@graph-engineering/contracts";
+import type { DecisionRecord, RunOutcome } from "@agile-graph/contracts";
 import { summarizeOutcomes } from "../src/insights.js";
 
 const outcome = (

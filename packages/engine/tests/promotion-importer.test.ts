@@ -15,7 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import * as promotionAuthority from "../src/promotion-authority.js";
 import { inspectPromotionImportPreflight } from "../src/promotion-authority.js";
 import {

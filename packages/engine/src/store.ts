@@ -9,7 +9,7 @@ import type {
   RunOutcome,
   RunRecord,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { hash, id, now } from "./util.js";
 
 /** The SHA-256 of a plan's stored content, which an approval binds. */

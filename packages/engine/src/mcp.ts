@@ -12,7 +12,7 @@ import { z } from "zod";
 import {
   MAX_VERIFICATION_SELECTION,
   VERIFICATION_CHECK_ID_PATTERN,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import type { GraphEngine } from "./service.js";
 import { estimateTokens } from "./context/index.js";
 import { canonicalJson } from "./context/intelligence.js";

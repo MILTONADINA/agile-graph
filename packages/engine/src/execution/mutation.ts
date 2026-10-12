@@ -1,8 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type {
-  ProjectConfig,
-  ProjectPolicy,
-} from "@graph-engineering/contracts";
+import type { ProjectConfig, ProjectPolicy } from "@agile-graph/contracts";
 import { safePath } from "../policy.js";
 import type { AddedFile, verifyInContainer } from "./docker.js";
 import { generateMutants, type Mutant } from "./mutants.js";

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { decideBatch } from "../src/decision-batch.js";
 import type { DecisionProvider, PromotionEvidence } from "../src/decisions.js";
 import * as promotionAuthority from "../src/promotion-authority.js";

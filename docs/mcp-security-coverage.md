@@ -1,6 +1,6 @@
 # MCP security coverage against the OWASP MCP Top 10
 
-This page maps Graph Engineering's MCP guards and its `agent-config` scanner
+This page maps Agile Graph's MCP guards and its `agent-config` scanner
 rules to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/)
 (2025, beta). It covers two surfaces: the MCP server this engine runs
 (`graph-engine mcp`), and the agent configuration in a scanned repository

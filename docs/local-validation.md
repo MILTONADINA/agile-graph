@@ -71,7 +71,7 @@ claims, independent labels or promotion approvals are supplied by this proof.
 ## Real local inference
 
 On 2026-09-23 the existing oMLX server reported model alias `qwen-local` at
-`127.0.0.1:1234/v1`. A focused live call through Graph Engineering's actual
+`127.0.0.1:1234/v1`. A focused live call through Agile Graph's actual
 worker adapter, with thinking disabled and a no-change objective, returned a
 schema-valid proposal with empty `changes` and `requests`: 273 input tokens,
 18 output tokens, and $0 estimated marginal API cost. This is adapter
@@ -175,7 +175,7 @@ tokens combined, with no marginal metered API charge. Neither patch entered
 the feature branch, neither run was promoted, and no full-suite claim is made for
 either run. The branch's separately reviewed fix remained green under the full
 local check and the fork's nine-job CI run
-[`35915333328`](https://github.com/MILTONADINA/graph-engineering/actions/runs/35915333328).
+[`35915333328`](https://github.com/MILTONADINA/agile-graph/actions/runs/35915333328).
 
 Two further one-attempt local Qwen replays used a fresh detached pre-fix
 worktree and an offline verifier image refreshed only with the current
@@ -707,7 +707,7 @@ No paid inference, generated confidence, human labels or promotion was involved.
 
 The subsequent `97d25f0` checkpoint passed all six fork CI jobs, including
 Windows and the expanded Linux integrations
-([run 35715070589](https://github.com/MILTONADINA/graph-engineering/actions/runs/35715070589)).
+([run 35715070589](https://github.com/MILTONADINA/agile-graph/actions/runs/35715070589)).
 
 ## Isolated generated-candidate verification
 
@@ -749,7 +749,7 @@ behavior, full program correctness, human review, or production promotion.
 
 That isolated-budget checkpoint (`d87200f`) subsequently passed all six fork
 CI jobs, including real Linux x64 guest execution and Windows protocol checks
-([run 35717354713](https://github.com/MILTONADINA/graph-engineering/actions/runs/35717354713)).
+([run 35717354713](https://github.com/MILTONADINA/agile-graph/actions/runs/35717354713)).
 
 The next portable-npm extension has a separate
 [fixture receipt](../evaluation/isolated-portable-fixture-validation.json):
@@ -773,16 +773,16 @@ probes the exact trusted callers' captured `npm`/`npm.cmd` executable choices,
 the recorded helper with real `npm --version`, and fixed argv/path boundaries.
 It performs no generated-candidate/native application build and does not supply
 calibration labels or promotion authority. It passed on native Windows in fork
-[run 35837484276](https://github.com/MILTONADINA/graph-engineering/actions/runs/35837484276).
+[run 35837484276](https://github.com/MILTONADINA/agile-graph/actions/runs/35837484276).
 The Windows platform job now also runs the existing generated-app smoke script:
 three current-scaffolder projects each install dependencies, build and test on
 the native runner. Its first attempt in fork
-[run 35843049416](https://github.com/MILTONADINA/graph-engineering/actions/runs/35843049416)
+[run 35843049416](https://github.com/MILTONADINA/agile-graph/actions/runs/35843049416)
 installed and built the frontend, then Vitest failed to reload its test file:
 the hosted runner supplied an 8.3 `RUNNER~1` temp path while Vite resolved the
 long `runneradmin` path. Setting all temp variables to the runner's canonical
 temp directory made the native Windows platform job pass in fork
-[run 35844198661](https://github.com/MILTONADINA/graph-engineering/actions/runs/35844198661).
+[run 35844198661](https://github.com/MILTONADINA/agile-graph/actions/runs/35844198661).
 The same run's Ubuntu generated-app job failed before execution on an ONNX
 Runtime postinstall network timeout; that separate root install now has one
 bounded retry. Native Windows generated-app acceptance remains a
@@ -841,7 +841,7 @@ was active; a subsequent isolated run passed in about 1.2 seconds. This is a
 load-sensitive local observation, not a claim that every runtime deadline is
 adequate under contention.
 
-The prior pushed fork workflow [run 35814725693](https://github.com/MILTONADINA/graph-engineering/actions/runs/35814725693)
+The prior pushed fork workflow [run 35814725693](https://github.com/MILTONADINA/agile-graph/actions/runs/35814725693)
 passed on retry after Linux x64 `onnxruntime-node` postinstall timed out once.
 The new relay, oracle and signature-verification stack has not yet been
 validated by its own fork CI run at this checkpoint. A security review found
@@ -887,7 +887,7 @@ only because a Windows test fixture attempted to remove an open SQLite file;
 that cleanup order was corrected and its subsequent Windows job passed. The
 call-bound/aggregate checkpoint `fb2b7d1` subsequently passed all nine fork
 jobs, including Windows, both native sealed jobs and the long Linux x64 matrix
-([run 35819382189](https://github.com/MILTONADINA/graph-engineering/actions/runs/35819382189)).
+([run 35819382189](https://github.com/MILTONADINA/agile-graph/actions/runs/35819382189)).
 
 ## Vault-backed aggregate development checkpoint — 2026-09-23 UTC
 

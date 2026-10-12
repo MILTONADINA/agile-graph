@@ -3,7 +3,7 @@ import type {
   MemoryAssertion,
   MemoryRecord,
   ReviewedMemoryAssertions,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { containsSecret } from "../policy.js";
 
 const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);

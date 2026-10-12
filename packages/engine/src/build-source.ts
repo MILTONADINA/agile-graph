@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 export const BUILD_SOURCE_FILE = "build-source.json";
 export const STALE_DIST_MESSAGE =
-  "engine dist is stale; run npm run build -w @graph-engineering/engine";
+  "engine dist is stale; run npm run build -w @agile-graph/engine";
 
 export interface BuildSourceManifest {
   algorithm: "sha256";

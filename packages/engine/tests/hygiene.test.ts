@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import { trackedFiles } from "../src/execution/workspace.js";
 import { packAgeDays, reviewKnowledgePacks } from "../src/knowledge.js";
