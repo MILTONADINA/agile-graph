@@ -10,12 +10,15 @@
 When a run's checks fail, the worker tries again with the latest failure's
 output and nothing else. It is never told that it is retrying, that its last
 change did not reach the cause, or that it changed nothing at all, so it can
-resubmit the same approach until the attempt budget runs out. The baseline
-retro (`docs/ops/retros/round-000.md`) measured this: in the one run that
-needed several attempts, two verifications in a row failed exactly as the
-one before. A strong team never answers a repeated failure by doing the same
-thing again; it changes approach, and when the same failure keeps coming
-back it stops and asks for a decision instead of burning more time.
+resubmit the same approach until the attempt budget runs out. The owner has
+seen exactly that in another project. This project's own baseline
+(`docs/ops/retros/round-000.md`) does not show it yet: in its one
+multi-attempt run every retry failed differently. So this is a cheap guard
+rather than a measured fix: it changes nothing until a failure actually
+repeats, and later retros count how often it fires. A strong team never
+answers a repeated failure by doing the same thing again; it changes
+approach, and when the same failure keeps coming back it stops and asks for
+a decision instead of burning more time.
 
 ## Acceptance criteria
 
