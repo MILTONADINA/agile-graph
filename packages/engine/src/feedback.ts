@@ -63,6 +63,26 @@ export const ERROR_KINDS = [
     description: "A run's workspace needed reconciliation",
   },
   {
+    kind: "scope",
+    pattern: /outside allowed project scope|outside the allowed scope/,
+    description: "A path fell outside the project's allowed scope",
+  },
+  {
+    kind: "missing-file",
+    pattern: /ENOENT|no such file or directory/,
+    description: "A file the run needed was missing",
+  },
+  {
+    kind: "patch-secret",
+    pattern: /potential secret/,
+    description: "A proposed change held a potential secret",
+  },
+  {
+    kind: "aborted",
+    pattern: /operation was aborted|aborted due to timeout/,
+    description: "An operation was aborted or timed out",
+  },
+  {
     kind: "context-budget",
     pattern: /context budget|exceeds configured context/,
     description: "The context budget was too small",

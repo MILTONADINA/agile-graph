@@ -60,6 +60,27 @@ a person decides.
   (and, later, the local dashboard), never over MCP: a connected AI client
   accepting its own run would be approving its own work.
 
+## Delivery retro
+
+`graph-engine retro [--since <date>]` looks back at where runs spent their
+time and what kept failing, so improvements can be measured before and
+after. For each run and in total it reports:
+
+- minutes from the first event to the last stop or success, split into
+  worker, verification, review and security phases, time stopped before a
+  resume, and the rest as waiting;
+- worker attempts and verifications, verifications that failed exactly as
+  the same step's previous one did (the change in between fixed nothing),
+  and verifications of an unchanged snapshot;
+- the first-pass verification rate;
+- stop reasons as fixed error kinds, such as `scope`, `missing-file`,
+  `context-budget` or `worker-no-progress`.
+
+It is read-only and local, like `outcomes`: run IDs, counts, minutes and
+kinds only, never check output, messages, paths or memory text, and no MCP
+tool returns it. The project's own retros are kept under
+[`docs/ops/retros/`](ops/retros/).
+
 ## Limits
 
 - Outcomes stay local. They are not exposed over MCP, including to cloud
