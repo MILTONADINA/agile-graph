@@ -21,7 +21,7 @@ back it stops and asks for a decision instead of burning more time.
 
 - AC1: Every retry after a check failure is told, before the failure output, which attempt failed and to change approach rather than resubmit the same change; the notice is fixed sentences with no project data, so every worker kind receives it, and the first attempt gets none.
   - Test: packages/engine/tests/repeat-failure.test.ts :: tells every retry after a check failure to change approach, and names a repeated failure
-- AC2: When an attempt's checks fail exactly as the previous attempt's did (the same failing checks with the same exit codes, never their output), the next attempt is told so, and the run records an `attempt.repeated_failure` event with the attempt, a truncated failure signature, the number of repeats in a row and whether the checked files were unchanged.
+- AC2: When an attempt's checks fail exactly as the previous attempt's did (the same failing checks with the same exit codes and the same normalized output tail, compared by a truncated hash so the output is never kept), the next attempt is told so, and the run records an `attempt.repeated_failure` event with the attempt, a truncated failure signature, the number of repeats in a row and whether the checked files were unchanged.
   - Test: packages/engine/tests/repeat-failure.test.ts :: tells every retry after a check failure to change approach, and names a repeated failure
 - AC3: When the checks fail the same way on three attempts in a row, the run stops with a `repeated-failure` stop kind instead of spending further attempts, whatever attempt budget remains.
   - Test: packages/engine/tests/repeat-failure.test.ts :: stops when the checks fail the same way three times in a row instead of spending another attempt
@@ -29,6 +29,8 @@ back it stops and asks for a decision instead of burning more time.
   - Test: packages/engine/tests/repeat-failure.test.ts :: starts the count again when a retry fails differently
 - AC5: When an attempt left the checked files exactly as they were, the next attempt is told so.
   - Test: packages/engine/tests/repeat-failure.test.ts :: tells the worker when its last change left the checked files as they were
+- AC6: A multi-step plan's repair, and a retry after a reused solution failed its checks, starts from that failed verification: the first retry is told the previous attempt failed, and its failure counts towards a repeat.
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: tells the first repair that the combined checks failed, and stops when the repairs repeat that failure
 
 ## Security considerations
 

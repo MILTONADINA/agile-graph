@@ -943,6 +943,53 @@ describe("managed DAG safety boundaries", () => {
     ).toContain("= 3");
   });
 
+  it("tells the first repair that the combined checks failed, and stops when the repairs repeat that failure", async () => {
+    const { root } = await fixture((value) => {
+      value.policy.maxTurns = 8;
+      value.policy.maxAttempts = 5;
+    });
+    const verify = vi.fn<NonNullable<EngineDependencies["verify"]>>(
+      async (_workspace, checks, _policy, snapshotHash) =>
+        checks.map((check) => ({
+          ...check,
+          code: 1,
+          stdout: "",
+          stderr: "expected second to be 5",
+          snapshotHash,
+        })),
+    );
+    const repairs: (string | undefined)[] = [];
+    const worker = vi.fn(async (input: WorkerInput) => {
+      if (!input.objective.startsWith("Repair")) return result(input.objective);
+      repairs.push(input.feedback);
+      return {
+        ...result("two"),
+        proposal: {
+          summary: "Fix second",
+          requests: [],
+          changes: [
+            {
+              path: "second.js",
+              before: `= ${3 + repairs.length}`,
+              after: `= ${4 + repairs.length}`,
+            },
+          ],
+        },
+      };
+    });
+    const engine = await open(root, { worker, verify });
+    const planned = await plan(engine, [step("one"), step("two", ["one"])]);
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(repairs[0]).toContain(
+      "The previous attempt failed its required checks",
+    );
+    expect(repairs[1]).toContain("failed exactly as they did");
+    // The combined result and two repairs failed the same way.
+    expect(repairs).toHaveLength(2);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("on three attempts in a row");
+  });
+
   it("resumes a repaired plan after its verifier failed, and repeats repairs within maxAttempts", async () => {
     const { root } = await fixture((value) => {
       value.policy.maxTurns = 8;
