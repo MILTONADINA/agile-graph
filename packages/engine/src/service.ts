@@ -4266,6 +4266,10 @@ export class GraphEngine {
           throw new Error("The planned provider is no longer configured");
         let stepPacket: ContextPacket =
           step.id === DAG_REPAIR_STEP ? await currentContext() : packet;
+        // A repair starts from the combined result's failed verification,
+        // and a reused solution's failed check counts as an attempt too: the
+        // first retry is told so, and compares its failure with that one.
+        let seeded = step.id === DAG_REPAIR_STEP;
         const solutionInput = {
           key: `worker:${hash({ objective: step.objective, acceptance: run.plan.acceptance })}`,
           inputs: {
@@ -4313,14 +4317,22 @@ export class GraphEngine {
             step.id,
           );
           if (await verify(step.id)) continue;
+          seeded = true;
           stepPacket = await currentContext();
         }
         // The previous attempt's check failure and snapshot, so a retry
         // that repeats it is told so, and a third in a row stops the run.
-        let previousFailure: string | null = null;
-        let previousCheckedHash: string | undefined;
+        let previousFailure: string | null = seeded ? checkFailure : null;
+        let previousCheckedHash = seeded ? checkedHash : undefined;
         let repeats = 0;
-        let retryNotice = "";
+        let retryNotice =
+          seeded && checkFailure
+            ? retryNoticeFor({
+                maxAttempts: this.config.policy.maxAttempts,
+                repeated: false,
+                unchanged: false,
+              })
+            : "";
         for (
           let attempt = firstAttempt;
           attempt <= this.config.policy.maxAttempts;
@@ -5267,13 +5279,18 @@ function patchErrorFeedback(
  * fixed sentences with no project data, so a cloud worker may receive them.
  */
 function retryNoticeFor(input: {
-  attempt: number;
+  /** Absent for the verification a repair or reused solution starts from. */
+  attempt?: number;
   maxAttempts: number;
   repeated: boolean;
   unchanged: boolean;
 }): string {
   return [
-    `Attempt ${input.attempt} of ${input.maxAttempts} failed its required checks. Do not resubmit the same change: find the cause in the failure and change your approach.`,
+    `${
+      input.attempt === undefined
+        ? "The previous attempt"
+        : `Attempt ${input.attempt} of ${input.maxAttempts}`
+    } failed its required checks. Do not resubmit the same change: find the cause in the failure and change your approach.`,
     input.repeated
       ? "The required checks failed exactly as they did on the previous attempt (the same checks with the same exit codes), so the last change did not reach the cause. Try a different approach instead of adjusting the same lines; if the cause lies outside the files you may change, say so in your summary."
       : "",
