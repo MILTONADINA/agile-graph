@@ -31,6 +31,12 @@ export const ERROR_KINDS = [
     description: "A worker stopped making progress",
   },
   {
+    // Before checks-failed, whose words its message starts with.
+    kind: "repeated-failure",
+    pattern: /failed the same way on three attempts/,
+    description: "Checks kept failing the same way, so the run stopped",
+  },
+  {
     kind: "checks-failed",
     pattern:
       /Required checks failed|DAG checks failed|recovery controller stopped/,
