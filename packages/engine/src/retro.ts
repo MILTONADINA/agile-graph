@@ -3,10 +3,12 @@ import type { RunEvent, RunRecord } from "@agile-graph/contracts";
 import { classifyError, type ErrorKind } from "./feedback.js";
 
 /**
- * Where one run's time went, in minutes from its event timestamps. Active
- * phases are paired start and finish events; `stopped` is the time between
- * a stop and the next resume; `waiting` is the rest (queues, context,
- * patching and anything not yet paired).
+ * Where one run's time went, in minutes from its event timestamps. A phase
+ * is the wall-clock time at least one of its spans (a start event paired
+ * with the same step's finish) was open, so concurrent DAG steps are not
+ * counted twice; `stopped` is the time between a stop and the next resume;
+ * `waiting` is the time no phase was open and the run was not stopped
+ * (queues, context, patching and anything not paired).
  */
 export interface RetroMinutes {
   total: number;
@@ -22,7 +24,6 @@ export interface RetroMinutes {
 export interface RunRetro {
   runId: string;
   status: RunRecord["status"];
-  createdAt: string;
   minutes: RetroMinutes;
   /** Worker attempts started, counting the attempts of each resume. */
   attempts: number;
@@ -71,6 +72,19 @@ const minutesBetween = (from: string, to: string) =>
   Math.max(0, Date.parse(to) - Date.parse(from)) / 60_000;
 const round = (minutes: number) => Math.round(minutes * 10) / 10;
 
+type Span = [start: number, end: number];
+/** Minutes covered by at least one span. */
+function unionMinutes(spans: readonly Span[]): number {
+  let covered = 0;
+  let end = -Infinity;
+  for (const [start, stop] of [...spans].sort((a, b) => a[0] - b[0])) {
+    if (stop <= end) continue;
+    covered += stop - Math.max(start, end);
+    end = stop;
+  }
+  return covered / 60_000;
+}
+
 interface CheckResult {
   checkId?: unknown;
   argv?: unknown;
@@ -109,17 +123,21 @@ export function runRetro(
   );
   const lastEnd = ordered.findLastIndex((event) => ENDS.has(event.type));
   const inRun = lastEnd < 0 ? ordered : ordered.slice(0, lastEnd + 1);
-  const minutes: RetroMinutes = {
-    total: 0,
-    worker: 0,
-    verification: 0,
-    review: 0,
-    security: 0,
-    stopped: 0,
-    waiting: 0,
+  const spans: Record<Phase | "stopped", Span[]> = {
+    worker: [],
+    verification: [],
+    review: [],
+    security: [],
+    stopped: [],
   };
-  const open = new Map<Phase, string>();
-  let stoppedAt: string | undefined;
+  // Open spans by phase and step, in the order they opened.
+  const open = new Map<string, { phase: Phase; start: number }>();
+  const close = (key: string, at: number) => {
+    const span = open.get(key)!;
+    spans[span.phase].push([span.start, at]);
+    open.delete(key);
+  };
+  let stoppedAt: number | undefined;
   let attempts = 0;
   let verifications = 0;
   let repeatedFailures = 0;
@@ -128,32 +146,47 @@ export function runRetro(
   const lastSnapshot = new Map<string, string>();
   const lastSignature = new Map<string, string | null>();
   let firstVerificationPassed: boolean | null = null;
+  let firstVerificationOpen = false;
   const stopKinds: ErrorKind[] = [];
   for (const event of inRun) {
+    const at = Date.parse(event.at);
+    const step = event.stepId ?? "";
     const opens = PHASES[event.type as keyof typeof PHASES];
-    if (opens) open.set(opens[0], event.at);
-    const closes = CLOSERS.get(event.type);
-    if (closes && open.has(closes)) {
-      minutes[closes] += minutesBetween(open.get(closes)!, event.at);
-      open.delete(closes);
+    if (opens) {
+      const key = `${opens[0]}\u0000${step}`;
+      // A new start for a step whose span is still open ends that span.
+      if (open.has(key)) close(key, at);
+      open.set(key, { phase: opens[0], start: at });
     }
-    if (event.type === "run.started" && stoppedAt) {
-      minutes.stopped += minutesBetween(stoppedAt, event.at);
+    const closes = CLOSERS.get(event.type);
+    if (closes) {
+      const key = `${closes}\u0000${step}`;
+      // A finish without the start's step closes that phase's latest span.
+      const latest = [...open]
+        .filter(([, span]) => span.phase === closes)
+        .at(-1)?.[0];
+      const match = open.has(key) ? key : step ? undefined : latest;
+      if (match) close(match, at);
+    }
+    if (event.type === "run.started" && stoppedAt !== undefined) {
+      spans.stopped.push([stoppedAt, at]);
       stoppedAt = undefined;
     }
     if (event.type === "run.stopped") {
-      // A stop ends every open phase; time stopped is not phase time.
-      for (const [phase, since] of open)
-        minutes[phase] += minutesBetween(since, event.at);
-      open.clear();
-      stoppedAt = event.at;
+      // A stop ends every open span; time stopped is not phase time.
+      for (const key of [...open.keys()]) close(key, at);
+      stoppedAt = at;
       if (typeof event.data.error === "string")
         stopKinds.push(classifyError(event.data.error));
     }
     if (event.type === "attempt.started") attempts++;
-    const step = event.stepId ?? "";
     if (event.type === "verification.started") {
       verifications++;
+      // Reaching a first verification counts even if it never finishes.
+      if (firstVerificationPassed === null) {
+        firstVerificationPassed = false;
+        firstVerificationOpen = true;
+      }
       const snapshot = event.data.snapshotHash;
       if (typeof snapshot === "string") {
         if (lastSnapshot.get(step) === snapshot) unchangedReverifications++;
@@ -162,26 +195,32 @@ export function runRetro(
     }
     if (event.type === "verification.completed") {
       const signature = failureSignature(event.data.checks);
-      if (firstVerificationPassed === null)
+      if (firstVerificationOpen) {
         firstVerificationPassed = signature === null;
+        firstVerificationOpen = false;
+      }
       if (signature && lastSignature.get(step) === signature)
         repeatedFailures++;
       lastSignature.set(step, signature);
     }
   }
-  if (inRun.length > 1)
-    minutes.total = minutesBetween(inRun[0]!.at, inRun.at(-1)!.at);
-  const active =
-    minutes.worker +
-    minutes.verification +
-    minutes.review +
-    minutes.security +
-    minutes.stopped;
-  minutes.waiting = Math.max(0, minutes.total - active);
+  const minutes: RetroMinutes = {
+    total:
+      inRun.length > 1 ? minutesBetween(inRun[0]!.at, inRun.at(-1)!.at) : 0,
+    worker: unionMinutes(spans.worker),
+    verification: unionMinutes(spans.verification),
+    review: unionMinutes(spans.review),
+    security: unionMinutes(spans.security),
+    stopped: unionMinutes(spans.stopped),
+    waiting: 0,
+  };
+  minutes.waiting = Math.max(
+    0,
+    minutes.total - unionMinutes(Object.values(spans).flat()),
+  );
   return {
     runId: run.id,
     status: run.status,
-    createdAt: run.createdAt,
     minutes: Object.fromEntries(
       Object.entries(minutes).map(([key, value]) => [key, round(value)]),
     ) as unknown as RetroMinutes,
@@ -194,17 +233,21 @@ export function runRetro(
   };
 }
 
-/** Total run retros, optionally only runs created on or after `since`. */
-export function summarizeRetro(
-  retros: readonly RunRetro[],
-  options: { since?: string } = {},
-): RetroSummary {
-  const since = options.since ? Date.parse(options.since) : undefined;
-  if (since !== undefined && Number.isNaN(since))
+/** Runs created on or after `since` (every run without it). */
+export function runsCreatedSince<Run extends { createdAt: string }>(
+  runs: readonly Run[],
+  since?: string,
+): Run[] {
+  if (since === undefined) return [...runs];
+  const from = Date.parse(since);
+  if (Number.isNaN(from))
     throw new Error("--since must be an ISO 8601 date or time");
-  const perRun = retros.filter(
-    (retro) => since === undefined || Date.parse(retro.createdAt) >= since,
-  );
+  return runs.filter((run) => Date.parse(run.createdAt) >= from);
+}
+
+/** Total run retros. */
+export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
+  const perRun = [...retros];
   const sum = (pick: (retro: RunRetro) => number) =>
     round(perRun.reduce((total, retro) => total + pick(retro), 0));
   const totals = perRun
