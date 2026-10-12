@@ -523,7 +523,7 @@ describe("command line", () => {
     expect(text).toContain("worker-unavailable x1");
     expect(text).toContain("Planning was clear");
     expect(issue).toMatch(
-      /^https:\/\/github\.com\/MILTONADINA\/graph-engineering\/issues\/new\?/,
+      /^https:\/\/github\.com\/MILTONADINA\/agile-graph\/issues\/new\?/,
     );
     expect((await graph("feedback-log", "--clear")).stdout).toContain(
       '"kinds": {}',
@@ -1916,7 +1916,7 @@ describe("command line", () => {
     const missing = await graph("tester");
     expect(missing.code).toBe(1);
     expect(missing.stderr).toContain(
-      `No Graph Engineering project at ${root}: run graph-engine init there, or pass -C <project root> before the command`,
+      `No Agile Graph project at ${root}: run graph-engine init there, or pass -C <project root> before the command`,
     );
     expect(missing.stderr).not.toContain("ENOENT");
     expect((await graph("init")).code).toBe(0);
@@ -2484,7 +2484,7 @@ describe("command line", () => {
       expect(statement).toMatchObject({
         _type: "https://in-toto.io/Statement/v1",
         predicateType:
-          "https://github.com/MILTONADINA/graph-engineering/provenance/run/v1",
+          "https://github.com/MILTONADINA/agile-graph/provenance/run/v1",
         subject: [
           {
             name: "graph-engineering+workspace-snapshot",

@@ -1,4 +1,4 @@
-import type { DecisionRecord, RunOutcome } from "@graph-engineering/contracts";
+import type { DecisionRecord, RunOutcome } from "@agile-graph/contracts";
 
 /** How runs with one property ended, counted from their latest outcome. */
 export interface OutcomeTally {

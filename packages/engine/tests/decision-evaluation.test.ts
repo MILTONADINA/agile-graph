@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { DecisionRecord } from "@graph-engineering/contracts";
+import type { DecisionRecord } from "@agile-graph/contracts";
 import {
   canPromote,
   evaluateDecisions,

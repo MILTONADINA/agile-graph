@@ -3,25 +3,25 @@
 Designed on 2026-09-30 against fork `dev` at `96cf8b2`. Current delivery status:
 
 - The independent approval/worker-controls release merged through
-  [PR #118](https://github.com/MILTONADINA/graph-engineering/pull/118) into
+  [PR #118](https://github.com/MILTONADINA/agile-graph/pull/118) into
   fork `dev` at `d22d69ad0f08bbc95fa2209d42171234817f780d` after all nine
   exact-head checks and scoped source/contract review passed. It contains no
   Dart or generator implementation, and approval adoption requires neither.
   Included PRs #112/#113 are closed.
   The separate automatic post-merge
-  [run 36762274094](https://github.com/MILTONADINA/graph-engineering/actions/runs/36762274094)
+  [run 36762274094](https://github.com/MILTONADINA/agile-graph/actions/runs/36762274094)
   (attempt 1 on `d22d69a`) ended cancelled, with eight jobs passing and Linux
   x64 cancelled during `npm run check`; no test failure or cancellation cause
   was recorded, and this session did not cancel or rerun it. This is not green
   post-merge evidence; the nine-job checked-head run and identical-tree merge
   recorded in the handover remain the approval-release evidence.
 - The Dart syntax, model-role, generator and analyzer changes from PRs
-  #114–#117 merged through [PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119)
+  #114–#117 merged through [PR #119](https://github.com/MILTONADINA/agile-graph/pull/119)
   into fork `dev` at `09427fe33a273f8426580b806eafdb5717e702a7` on
   2026-09-30 at 21:33:03 UTC. Exact checked head
   `84dcbbe162e4cf90883a5095c2ac912fce74ffd4` and the merged commit share tree
   `76d24aebb95eeb1d431fc23d0973220846d8b37b`.
-  [CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+  [CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
   attempt 1, passed all nine required jobs, including native Dart and generator
   integration checks in Linux x64 job `110097698965`. Independent scoped
   agent review and main-session review found no blockers; no external human
@@ -44,7 +44,7 @@ Designed on 2026-09-30 against fork `dev` at `96cf8b2`. Current delivery status:
   over 121 files; scoped runtime-port review found no blockers. The live AOT
   empty-environment and bounded-timeout cases passed in run 36768502119,
   but direct/imported binding returned zero analyzed files. Focused diagnostic
-  [run 36772700675](https://github.com/MILTONADINA/graph-engineering/actions/runs/36772700675)
+  [run 36772700675](https://github.com/MILTONADINA/agile-graph/actions/runs/36772700675)
   then identified a memory-monitor failure before initialization. A second
   diagnostic-only run, 36773291042, passed binding without a runtime change;
   this showed the failure was intermittent, not that it was fixed. The CLI's
@@ -54,7 +54,7 @@ Designed on 2026-09-30 against fork `dev` at `96cf8b2`. Current delivery status:
   malformed-sample rejection and output limits unchanged. Resolver identity 3
   invalidates only Dart-bearing snapshot caches. Three focused fake-clock
   regressions pass through the real command helper or LSP deadline. Native
-  [run 36774307816](https://github.com/MILTONADINA/graph-engineering/actions/runs/36774307816)
+  [run 36774307816](https://github.com/MILTONADINA/agile-graph/actions/runs/36774307816)
   then caught the exact startup race: Docker reported a missing container,
   followed by `0B / 0B`, without either sample exhausting its deadline.
   The follow-up maps only that anchored empty-stats sentinel to the existing
@@ -72,7 +72,7 @@ Designed on 2026-09-30 against fork `dev` at `96cf8b2`. Current delivery status:
   `cb2878c24080100d101056e23b1db9f404d6b00ac37b99c8ede37bb67ea4e07b`
   over 121 files. The combined corrections passed the direct/imported native
   binding regression on `d7612cd08b5eeabd6a6d7cd374c3924a464c1ce4` in
-  [run 36776596177](https://github.com/MILTONADINA/graph-engineering/actions/runs/36776596177),
+  [run 36776596177](https://github.com/MILTONADINA/agile-graph/actions/runs/36776596177),
   job `110095953506`. That focused evidence preceded the completed final
   nine-check CI and review above, including native binding/provenance,
   empty-AOT-environment and real bounded-timeout cases. The

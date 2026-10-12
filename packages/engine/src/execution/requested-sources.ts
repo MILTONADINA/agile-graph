@@ -4,7 +4,7 @@ import type {
   ContextItem,
   ContextPacket,
   SourceReference,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { excludedFromIndex } from "../context/index.js";
 import { gitFiles } from "./workspace.js";
 import { parseFile } from "../context/parser.js";

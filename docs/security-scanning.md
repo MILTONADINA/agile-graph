@@ -1,6 +1,6 @@
 # Security scanning
 
-Graph Engineering chooses security tools for a repository and explains each
+Agile Graph chooses security tools for a repository and explains each
 choice, instead of running every scanner it knows. The offline scanners run
 against a private copy of the tracked files with the network disabled, and a
 scan fails only on findings the team has not reviewed: every existing
@@ -35,7 +35,7 @@ prints every catalog tool as `selected` (with the reason it applies) or
 
 ## Scanning
 
-Build the scanner image once, from the Graph Engineering repository. Building
+Build the scanner image once, from the Agile Graph repository. Building
 needs network access. The base image is pinned by digest, the Gitleaks and
 Hadolint binaries by version and SHA-256, Semgrep and Checkov by version, and
 the rules by commit. The rules use the Semgrep Rules License v1.0, which
@@ -176,7 +176,7 @@ each unscanned path under `toolExecutionNotifications`, so a tool reading
 the log cannot take an incomplete scan for a clean one.
 
 With the image built, `GRAPH_ENGINE_SECURITY_IMAGE=1 npm test -w
-@graph-engineering/engine -- tests/security-catalog.test.ts` scans planted
+@agile-graph/engine -- tests/security-catalog.test.ts` scans planted
 findings, scanner configuration and suppressions and checks the baseline.
 
 ## Managed runs
@@ -344,7 +344,7 @@ content.
 The owner authorized it on 2026-09-27.
 
 With Docker running, `GRAPH_ENGINE_LIVE_SCAN_TESTS=1 npm test -w
-@graph-engineering/engine -- tests/security-live.test.ts` scans Juice Shop
+@agile-graph/engine -- tests/security-live.test.ts` scans Juice Shop
 end to end and checks that no container with the scan's ID label is left,
 and probes a loopback-only namespace to show that the Docker bridge gateway
 and 1.1.1.1 are unreachable from it; CI runs these in the scanner job.

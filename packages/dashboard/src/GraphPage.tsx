@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CodeSymbol, GraphEdge } from "@graph-engineering/contracts";
+import type { CodeSymbol, GraphEdge } from "@agile-graph/contracts";
 import type { Api } from "./api";
 import {
   Badge,

@@ -13,19 +13,19 @@ from deterministic tools or API workers, widening worker permissions, or making
 Claude Code orchestration depend on a Codex session.
 
 The narrow approval/repair/deadline release merged through
-[PR #118](https://github.com/MILTONADINA/graph-engineering/pull/118) at
+[PR #118](https://github.com/MILTONADINA/agile-graph/pull/118) at
 `d22d69ad0f08bbc95fa2209d42171234817f780d`. All nine required jobs passed on
 checked head `e25565b09aa974dd657f1b273a570a6cac903d10` in
-[CI run 36759128007](https://github.com/MILTONADINA/graph-engineering/actions/runs/36759128007),
+[CI run 36759128007](https://github.com/MILTONADINA/agile-graph/actions/runs/36759128007),
 attempt 1, and scoped source/contract review found no blockers before the
 identical-tree merge. Its 42 focused local cases and dependency/engine builds
 are separate evidence, not live provider inference. AC3 now additionally
 covers the generator kind while preserving API/local coverage. That expansion
-merged through [PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119)
+merged through [PR #119](https://github.com/MILTONADINA/agile-graph/pull/119)
 at `09427fe33a273f8426580b806eafdb5717e702a7` on 2026-09-30 at 21:33:03 UTC.
 All nine required jobs passed on exact checked head
 `84dcbbe162e4cf90883a5095c2ac912fce74ffd4` in
-[CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+[CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
 attempt 1, with independent scoped agent and main-session review finding no
 blockers. Checked and merged commits share tree
 `76d24aebb95eeb1d431fc23d0973220846d8b37b`; source manifest

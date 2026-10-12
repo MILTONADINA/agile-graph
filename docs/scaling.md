@@ -1,6 +1,6 @@
 # Scaling with repository size
 
-Graph Engineering serves a first project with a few files and a platform
+Agile Graph serves a first project with a few files and a platform
 repository with hundreds of thousands. It scales in three ways, each inside
 the limits the owner sets in `.graph/project.json`.
 

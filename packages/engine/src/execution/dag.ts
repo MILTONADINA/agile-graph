@@ -3,7 +3,7 @@ import type {
   ProjectPolicy,
   ProviderKind,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import path from "node:path";
 import { z } from "zod";
 import { hash, now } from "../util.js";

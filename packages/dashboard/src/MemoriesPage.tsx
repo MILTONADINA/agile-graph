@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { MemoryKind, MemoryRecord } from "@graph-engineering/contracts";
+import type { MemoryKind, MemoryRecord } from "@agile-graph/contracts";
 import type { Api } from "./api";
 import {
   Badge,

@@ -1,9 +1,6 @@
 import { expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import {
-  DEFAULT_POLICY,
-  type ContextPacket,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ContextPacket } from "@agile-graph/contracts";
 import { containsSecret, contextForProvider } from "../src/policy.js";
 
 it("keeps private diagnostic paths out of cloud packets while preserving local diagnostics", () => {

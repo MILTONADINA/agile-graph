@@ -6,7 +6,7 @@ the engine's MCP server and calls its tools. This is separate from Graph
 Engineering launching an AI as a managed worker; see
 [which AI can do what](installed-workers.md#which-ai-can-do-what) for that.
 
-In the examples, `<path-to-repo>` is your Graph Engineering checkout and
+In the examples, `<path-to-repo>` is your Agile Graph checkout and
 `<path-to-project>` is the project the server reads (the same directory when
 you use the graph on this repository). Use absolute paths.
 
@@ -17,7 +17,7 @@ Build the engine once, and again after pulling engine changes:
 ```sh
 npm ci
 npm run build:dependencies
-npm run build -w @graph-engineering/engine
+npm run build -w @agile-graph/engine
 ```
 
 The server runs `packages/engine/dist`. A dist built with the freshness check

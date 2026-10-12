@@ -4,7 +4,7 @@ This documentation-only toy supplies a small Flutter package for the
 [verification-image recipe](verification-images.md#flutter). It is not an
 installed application, generated platform scaffold, or checked native runtime
 fixture. These snippets and that image recipe have not been exercised end to
-end; they are not evidence that Flutter checks pass in Graph Engineering.
+end; they are not evidence that Flutter checks pass in Agile Graph.
 They add no dependency to this repository and use no other project's data.
 
 ## Package contents

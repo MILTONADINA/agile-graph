@@ -1,4 +1,4 @@
-import type { RunStatus } from "@graph-engineering/contracts";
+import type { RunStatus } from "@agile-graph/contracts";
 
 /**
  * The exit code of a command that waits for a run to stop (`run`, `resume`

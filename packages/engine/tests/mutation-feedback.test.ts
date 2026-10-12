@@ -6,7 +6,7 @@ import {
   assertProjectPolicy,
   DEFAULT_POLICY,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import {
   configureProvider,

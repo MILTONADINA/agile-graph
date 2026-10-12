@@ -1,6 +1,6 @@
 # Agent handover — 2026-10-01
 
-This is a continuation brief for the **Graph Engineering repository in this
+This is a continuation brief for the **Agile Graph repository in this
 workspace only**. It records the owner's requirements, the implemented state,
 the evidence limits, and the next actions for the coding agent working here,
 whether Codex or Claude Code; [`AGENTS.md`](../AGENTS.md) holds the rules
@@ -94,11 +94,11 @@ Release source manifest:
 `074f05032abcdea629ab648c4a1bfc6e3c32f0c55cc23c1e86326af9ea557d22`
 over 123 files. Local tests used synthetic transports/streams/clocks, not live
 provider or promotion evidence. Both deadline settings released through
-[PR #125](https://github.com/MILTONADINA/graph-engineering/pull/125) at
+[PR #125](https://github.com/MILTONADINA/agile-graph/pull/125) at
 `5b88af9787f9da00e312268847aee27053be8555` on 2026-10-01 at 19:30:15 UTC.
 Exact checked head `5e88db1ab7fbd3083e9a9094848a78f26781341d` and merged
 commit share tree `2dc4d731790e190e1c3fc0a7d18910eb60605c49`.
-[CI run 36911129917](https://github.com/MILTONADINA/graph-engineering/actions/runs/36911129917),
+[CI run 36911129917](https://github.com/MILTONADINA/agile-graph/actions/runs/36911129917),
 attempt 1, passed all nine required jobs. PR #124 was closed as included.
 The exact pin and CI/build evidence were delivered for consumer-owned adoption,
 which is separate from the GE release. The PR's Verification record has job
@@ -140,11 +140,11 @@ checked-in policy, provider, budget, export or consumer repository is changed.
 
 The separate `feat/plan-verification-selection` follow-on adds operator-owned
 check IDs and explicit optional-check selection. It released through
-[PR #123](https://github.com/MILTONADINA/graph-engineering/pull/123) at
+[PR #123](https://github.com/MILTONADINA/agile-graph/pull/123) at
 `104accacf0c4389699bfab3f32140095e13654fa` on 2026-10-01 at 06:11:04 UTC.
 Exact checked head `37ffe9ca190dab56864efa99b60110c262225edd` and merged
 commit share tree `edd348f0ea2a5d5db62857ed8876633459ded732`.
-[CI run 36820953784](https://github.com/MILTONADINA/graph-engineering/actions/runs/36820953784),
+[CI run 36820953784](https://github.com/MILTONADINA/agile-graph/actions/runs/36820953784),
 attempt 1, passed all nine required jobs. The source manifest is
 `b3857f3ecdcd469b05bf53280ca429cb1c1e5eb268498647cfe57b9fddc9119f`
 over 123 files. Scoped source reviews found no blockers. The PR records every
@@ -174,12 +174,12 @@ controls and security/reviewer gates are separate and remain enforced.
 
 ### Installed-worker identity — released
 
-[PR #122](https://github.com/MILTONADINA/graph-engineering/pull/122) released
+[PR #122](https://github.com/MILTONADINA/agile-graph/pull/122) released
 opt-in reviewed native executable identity into fork `dev` at
 `40cfd318d5c79830ab02b3c84d260061f873b627` on 2026-10-01 at 05:10:21 UTC.
 Its exact checked head `d4251b2e985ab7c7eeba9c411f1450610a9263e8` shares
 Git tree `0327de3ed99db95a08798f697ae33e657e2b5eae` with the merged commit.
-[CI run 36816489588](https://github.com/MILTONADINA/graph-engineering/actions/runs/36816489588),
+[CI run 36816489588](https://github.com/MILTONADINA/agile-graph/actions/runs/36816489588),
 attempt 1, passed all nine required jobs. PR verification records every job ID.
 The engine source manifest is
 `0d61e07ddf6e8cf5bf576457fab2dbdb97f3e6d742a094db3a159e70e17ef6c2`
@@ -230,7 +230,7 @@ part of the identity-release pin.
 ### Narrow approval and worker-controls release
 
 This checkpoint supersedes the preparation snapshot below.
-[PR #118](https://github.com/MILTONADINA/graph-engineering/pull/118) was
+[PR #118](https://github.com/MILTONADINA/agile-graph/pull/118) was
 rebase-merged into fork `dev` on 2026-09-30 at 18:57:27 UTC. The reviewed
 merged approval-release pin is
 `d22d69ad0f08bbc95fa2209d42171234817f780d`, not an unmerged feature head.
@@ -240,13 +240,13 @@ implementation stack. Approval adoption requires no Dart toolchain.
 The exact checked head was `e25565b09aa974dd657f1b273a570a6cac903d10`;
 it and the merged commit have the same Git tree,
 `cd9a497d0370642f7b5f92063bdd0317441f9bd2`.
-[CI run 36759128007](https://github.com/MILTONADINA/graph-engineering/actions/runs/36759128007),
+[CI run 36759128007](https://github.com/MILTONADINA/agile-graph/actions/runs/36759128007),
 attempt 1, passed all nine required jobs on that checked head. Independent
 scoped source and contract review found no blockers; no new external human
 approval is claimed. The engine source manifest is
 `4ed70d6151eabd434a05994bc381d5f7f661a5b05215acac44b27ff02213f120`
 over 116 files. The separate automatic post-merge
-[run 36762274094](https://github.com/MILTONADINA/graph-engineering/actions/runs/36762274094),
+[run 36762274094](https://github.com/MILTONADINA/agile-graph/actions/runs/36762274094),
 attempt 1 on `d22d69a`, ended cancelled: eight jobs passed and Linux x64 was
 cancelled during `npm run check`, with no recorded test failure or known
 cancellation cause. This session did not cancel or rerun it. The required
@@ -300,7 +300,7 @@ do not require a Codex app, session or service for runtime orchestration.
 No live provider calls or credential changes are part of this release.
 
 The previous combined PR #117 run
-[36753445086](https://github.com/MILTONADINA/graph-engineering/actions/runs/36753445086)
+[36753445086](https://github.com/MILTONADINA/agile-graph/actions/runs/36753445086)
 at `8b586cf` ended with seven jobs passing and two failing. Its Windows
 privacy test exceeded the unchanged 30-second allowance while running four
 fixtures serially; this release splits creation/edit into separate paired
@@ -327,13 +327,13 @@ release remains independently adoptable.
 
 ### Dart and generator release
 
-[PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119) merged
+[PR #119](https://github.com/MILTONADINA/agile-graph/pull/119) merged
 the Dart syntax, model-role, generator and analyzer stack into fork `dev` on
 2026-09-30 at 21:33:03 UTC. The reviewed runtime-release pin is
 `09427fe33a273f8426580b806eafdb5717e702a7`. Its exact checked head,
 `84dcbbe162e4cf90883a5095c2ac912fce74ffd4`, shares Git tree
 `76d24aebb95eeb1d431fc23d0973220846d8b37b` with the merged commit.
-[CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+[CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
 attempt 1, passed all nine required jobs on that checked head. Independent
 scoped agent review and main-session review found no blockers; this is not
 an external human approval claim. The source manifest is
@@ -359,7 +359,7 @@ approval-only release; consumers do not need Dart or generators to adopt it.
 
 #### Post-release Windows fixture follow-up
 
-The later automatic push [run 36783841908](https://github.com/MILTONADINA/graph-engineering/actions/runs/36783841908)
+The later automatic push [run 36783841908](https://github.com/MILTONADINA/agile-graph/actions/runs/36783841908)
 on documentation commit `d21761eeca1bd954a4db734caad73229ee5ebcc9` failed one
 Windows MCP privacy case; the other eight jobs passed. Job `110120379256`
 expected a missing-verification-image refusal but received
@@ -368,7 +368,7 @@ so the exact termination cause is not claimed. The required PR runs above
 remain successful historical evidence, not proof that this push run passed.
 
 The test relied on an extensionless Unix shell script in `PATH` to replace
-Docker. The [fixture correction](https://github.com/MILTONADINA/graph-engineering/commit/171630f0f2c72253ad112eb4a91f5a3430809f94)
+Docker. The [fixture correction](https://github.com/MILTONADINA/agile-graph/commit/171630f0f2c72253ad112eb4a91f5a3430809f94)
 uses a platform-independent command double instead, asserts the exact image
 inspection arguments and unchanged 10-second limit for both MCP clients,
 and restores the double in `finally`. Git, the real service refusal path,
@@ -376,7 +376,7 @@ cloud redaction, local pull hint and zero-created-run assertions remain in
 place. No production source, ABI, policy or runtime build identity changes.
 
 The selected local case and scoped review passed. Focused Windows
-[preflight 36799636801](https://github.com/MILTONADINA/graph-engineering/actions/runs/36799636801),
+[preflight 36799636801](https://github.com/MILTONADINA/agile-graph/actions/runs/36799636801),
 job `110170850178`, ran that exact case on `171630f`: one test passed,
 not an all-skipped result. This proves the corrected fixture on Windows,
 not the unidentified cause of the older SIGTERM or native Docker execution.
@@ -408,7 +408,7 @@ generator approval-display spec binding was restored. Earlier metadata and
 public Node-image mechanics probes were not native Dart proof.
 
 PR #119 head `04f49778d76b354f5d24a46c61649154f878625c` subsequently ran
-[CI 36768502119](https://github.com/MILTONADINA/graph-engineering/actions/runs/36768502119),
+[CI 36768502119](https://github.com/MILTONADINA/agile-graph/actions/runs/36768502119),
 attempt 1: eight jobs passed, but Linux x64 job `110068618463` failed in the
 Dart bindings step. The native exact empty-AOT-environment and real bounded
 timeout cases passed. The direct/imported binding case expected two analyzed
@@ -417,11 +417,11 @@ successes do not establish working declaration binding or a green release.
 
 Synthetic-fixture-only failure diagnostics and a separate focused preflight
 were added at `455da45`.
-[Focused run 36772700675](https://github.com/MILTONADINA/graph-engineering/actions/runs/36772700675)
+[Focused run 36772700675](https://github.com/MILTONADINA/agile-graph/actions/runs/36772700675)
 failed during initialization with `Dart analyzer memory monitor failed`.
 A second test-only diagnostic head, `59cc6c7`, passed its one selected native
 binding case in
-[run 36773291042](https://github.com/MILTONADINA/graph-engineering/actions/runs/36773291042).
+[run 36773291042](https://github.com/MILTONADINA/agile-graph/actions/runs/36773291042).
 That head changed no runtime behavior: the intermittent pass is not proof of
 a runtime fix or a green release.
 
@@ -439,7 +439,7 @@ format passed; its historical build source manifest is
 over 121 files.
 
 Native preflight at `209d5426ad9e39338f6feb2fb266385c790aa9b5`,
-[run 36774307816](https://github.com/MILTONADINA/graph-engineering/actions/runs/36774307816),
+[run 36774307816](https://github.com/MILTONADINA/agile-graph/actions/runs/36774307816),
 then passed initialization but failed readiness at the memory monitor. Its
 startup samples were a missing-container response followed by successful
 Docker output `0B / 0B`, not a sampling timeout. The startup correction maps
@@ -455,7 +455,7 @@ source manifest `bfbb3aae905c39009abce526001dd9d68bc55f7dd923490ea67ad20645aa38b
 over 121 files.
 
 Further diagnostic head `b877322c7c7081ddf17197ff53ddb1f1039b2106`,
-[run 36775946203](https://github.com/MILTONADINA/graph-engineering/actions/runs/36775946203),
+[run 36775946203](https://github.com/MILTONADINA/agile-graph/actions/runs/36775946203),
 completed definition responses and confirmed LSP termination, but cleanup
 failed when the matching owned container was already removing itself.
 The correction is `d7612cd08b5eeabd6a6d7cd374c3924a464c1ce4`.
@@ -470,7 +470,7 @@ startup cases above. The current engine build, lint, format and scoped
 source/test review passed, with source manifest
 `cb2878c24080100d101056e23b1db9f404d6b00ac37b99c8ede37bb67ea4e07b`
 over 121 files. No test assertion was relaxed. Corrected-head
-[native preflight 36776596177](https://github.com/MILTONADINA/graph-engineering/actions/runs/36776596177)
+[native preflight 36776596177](https://github.com/MILTONADINA/agile-graph/actions/runs/36776596177)
 passed on exact `d7612cd08b5eeabd6a6d7cd374c3924a464c1ce4`; job
 `110095953506` exercised direct/imported binding with source provenance.
 This focused result is not a replacement for all nine final-head checks;
@@ -671,11 +671,11 @@ is neither durable nor independently governed. It does **not** establish
 anti-rollback authority or enable promotion. The combined changed-file check
 passed all 45 focused tests, engine typecheck and Prettier.
 
-The integration is now verified: [fork PR #16](https://github.com/MILTONADINA/graph-engineering/pull/16)
+The integration is now verified: [fork PR #16](https://github.com/MILTONADINA/agile-graph/pull/16)
 was rebase-merged into the fork's `dev` at
 `02220e2b4f16bf27a7f6d26ab7c6b8d1b5293de8`. The
-[PR checks](https://github.com/MILTONADINA/graph-engineering/actions/runs/36044756710)
-and [post-merge `dev` checks](https://github.com/MILTONADINA/graph-engineering/actions/runs/36047979004)
+[PR checks](https://github.com/MILTONADINA/agile-graph/actions/runs/36044756710)
+and [post-merge `dev` checks](https://github.com/MILTONADINA/agile-graph/actions/runs/36047979004)
 ended with all nine required jobs green. The first PR attempt's Windows job
 hit a newly published AWS SDK tarball 404 during an unchanged unlocked
 generated-app install; one failed-job retry at the same commit passed, with no
@@ -684,7 +684,7 @@ parent-repository, production-key provisioning, paid-Jev, or AWS deployment
 action occurred.
 The initial handover update was prepared on
 `chore/pr16-handover-20260924` and squash-merged into fork `dev` by
-[PR #17](https://github.com/MILTONADINA/graph-engineering/pull/17) at
+[PR #17](https://github.com/MILTONADINA/agile-graph/pull/17) at
 `e871d8ad7f92649c538ad5be8086d4443cb78c1c`. Before continuing, inspect
 the live branch, PR and `dev` tip rather than treating this dated snapshot as
 live status. Before that docs merge, local `dev` and `fork/dev` were both
@@ -694,10 +694,10 @@ live status. Before that docs merge, local `dev` and `fork/dev` were both
 
 Claude Code took over from Codex on 2026-09-25.
 
-[Fork PR #19](https://github.com/MILTONADINA/graph-engineering/pull/19) was
+[Fork PR #19](https://github.com/MILTONADINA/agile-graph/pull/19) was
 rebase-merged into `dev` at `48b28b9` after all nine required checks passed
-on its exact tip ([PR run](https://github.com/MILTONADINA/graph-engineering/actions/runs/36154507467));
-the [post-merge `dev` run](https://github.com/MILTONADINA/graph-engineering/actions/runs/36156777146)
+on its exact tip ([PR run](https://github.com/MILTONADINA/agile-graph/actions/runs/36154507467));
+the [post-merge `dev` run](https://github.com/MILTONADINA/agile-graph/actions/runs/36156777146)
 also passed all nine. It applied a prompt audit for Claude Opus 5.5 (the
 Anthropic API worker requests structured output instead of a forced tool
 call, which Opus 5.5 rejects; code-checked MCP tool contracts; agent-prompt
@@ -710,9 +710,9 @@ zero model calls. `npm run verify:image` needs a rebuild because root
 dependency metadata changed.
 
 Item 1, the cloud export-scope guard, was rebase-merged into `dev` at
-`dae73fa` by [fork PR #20](https://github.com/MILTONADINA/graph-engineering/pull/20)
+`dae73fa` by [fork PR #20](https://github.com/MILTONADINA/agile-graph/pull/20)
 after all nine required checks passed on its exact tip; the
-[post-merge `dev` run](https://github.com/MILTONADINA/graph-engineering/actions/runs/36161179770)
+[post-merge `dev` run](https://github.com/MILTONADINA/agile-graph/actions/runs/36161179770)
 also passed all nine. Export authorization is an operator-only
 record (`memory-export-authorize`, migration 4→5) bound to a memory's ID and
 the SHA-256 of its exact text; sharing alone never authorizes export, and
@@ -726,7 +726,7 @@ tests fail both against an earlier draft that rejected workspace-imported
 text outright (it broke ordinary local runs) and against a version that
 forwarded that text without provenance to a cloud worker.
 
-[Fork PR #21](https://github.com/MILTONADINA/graph-engineering/pull/21)
+[Fork PR #21](https://github.com/MILTONADINA/agile-graph/pull/21)
 (merged at `88267ad`) records the
 [promotion trust boundary](promotion-trust-boundary.md) design (item 3) with
 bypass tripwires and engine-level shadow tests; its owner decisions remain
@@ -736,11 +736,11 @@ Qwen and Laya stack started; the first engine Jev decisions and a failed,
 bounded Qwen pilot are recorded in
 [local validation](local-validation.md#local-stack-pilot-with-jev-routing--2026-09-25-utc).
 
-Later the same day [fork PR #22](https://github.com/MILTONADINA/graph-engineering/pull/22)
+Later the same day [fork PR #22](https://github.com/MILTONADINA/agile-graph/pull/22)
 cleared lint warnings outside hash-pinned files (`d05f551`),
-[fork PR #23](https://github.com/MILTONADINA/graph-engineering/pull/23) added
+[fork PR #23](https://github.com/MILTONADINA/agile-graph/pull/23) added
 `memory-export-revoke` (`857f283`), and
-[fork PR #24](https://github.com/MILTONADINA/graph-engineering/pull/24)
+[fork PR #24](https://github.com/MILTONADINA/agile-graph/pull/24)
 (`83f1bee`) ported the generic fixes from older unmerged side branches:
 decision-provider credentials (built-in names and any `apiKeyEnv` from
 `decisions.json`) are stripped from every engine subprocess, `apiKeyEnv` may
@@ -754,7 +754,7 @@ worktrees removed; nothing else from them is planned.
 Two engine fixes then addressed the recorded Qwen pilot failures, each after
 adversarial review found and removed a defect in its first draft:
 
-- [Fork PR #26](https://github.com/MILTONADINA/graph-engineering/pull/26)
+- [Fork PR #26](https://github.com/MILTONADINA/agile-graph/pull/26)
   (`51969d5`): the worker patch check refused any edit to a file that
   already matched the secret scanner, so run `8f356a3b` could never edit
   `packages/engine/tests/mcp.test.ts`. A patch is now refused only when it
@@ -762,7 +762,7 @@ adversarial review found and removed a defect in its first draft:
   header through its `END` marker) or more copies of one. Export checks still
   scan whole content. The known limits (a credential continued onto a later
   line that is the only one changed) are in the PR.
-- [Fork PR #27](https://github.com/MILTONADINA/graph-engineering/pull/27)
+- [Fork PR #27](https://github.com/MILTONADINA/agile-graph/pull/27)
   (`c820668`): Node's `fetch` stops waiting for provider headers or body data
   after 300 s whatever `timeoutSeconds` allows. Provider calls now use a
   plain `node:http`/`node:https` request bounded only by cancellation and the
@@ -800,38 +800,38 @@ Each PR below passed all nine required checks on its exact tip before a
 rebase merge into `dev`, and each had an adversarial review whose findings
 were fixed before merge; the PR descriptions list them.
 
-- Worker context: the excerpt design and its decisions ([#29](https://github.com/MILTONADINA/graph-engineering/pull/29)
-  `f1b9933`, [#30](https://github.com/MILTONADINA/graph-engineering/pull/30) `a41963a`), one budget measure and progress guard
-  ([#31](https://github.com/MILTONADINA/graph-engineering/pull/31) `3d58376`), and line ranges, outlines and patch feedback
-  ([#32](https://github.com/MILTONADINA/graph-engineering/pull/32) `6a0b73d`). Large files no longer stop a run.
-- [#33](https://github.com/MILTONADINA/graph-engineering/pull/33) (`7c6695d`): MCP `plan_create`, `run_start`, `run_cancel`
+- Worker context: the excerpt design and its decisions ([#29](https://github.com/MILTONADINA/agile-graph/pull/29)
+  `f1b9933`, [#30](https://github.com/MILTONADINA/agile-graph/pull/30) `a41963a`), one budget measure and progress guard
+  ([#31](https://github.com/MILTONADINA/agile-graph/pull/31) `3d58376`), and line ranges, outlines and patch feedback
+  ([#32](https://github.com/MILTONADINA/agile-graph/pull/32) `6a0b73d`). Large files no longer stop a run.
+- [#33](https://github.com/MILTONADINA/agile-graph/pull/33) (`7c6695d`): MCP `plan_create`, `run_start`, `run_cancel`
   (behind `--allow-run`; cloud planning only with publication `none`) and
   `run_list`, `run_events` (local, or cloud with `--allow-run-status`).
   Resuming stays with a person.
-- [#34](https://github.com/MILTONADINA/graph-engineering/pull/34) (`9b21573`): the security tool catalog, `security-plan` and
+- [#34](https://github.com/MILTONADINA/agile-graph/pull/34) (`9b21573`): the security tool catalog, `security-plan` and
   an offline, baseline-aware `security-scan` in a pinned image
   ([security scanning](security-scanning.md)).
-- [#35](https://github.com/MILTONADINA/graph-engineering/pull/35) (`e4cedd7`): multi-step plans repair failed combined checks
+- [#35](https://github.com/MILTONADINA/agile-graph/pull/35) (`e4cedd7`): multi-step plans repair failed combined checks
   with a `dag-repair` step within `maxAttempts`.
-- [#36](https://github.com/MILTONADINA/graph-engineering/pull/36) (`be02781`): managed runs of a project with a committed
+- [#36](https://github.com/MILTONADINA/agile-graph/pull/36) (`be02781`): managed runs of a project with a committed
   security baseline are scanned before they can succeed.
-- [#37](https://github.com/MILTONADINA/graph-engineering/pull/37) (`22e950f`): an optional reviewer provider must approve a
+- [#37](https://github.com/MILTONADINA/agile-graph/pull/37) (`22e950f`): an optional reviewer provider must approve a
   run before it succeeds ([code review](code-review.md)). Its first push of
   the raw-byte review diff failed only on `windows-2025` because it passed
   the platform null device to `git diff --no-index`; empty scratch files
   replaced it.
-- [#38](https://github.com/MILTONADINA/graph-engineering/pull/38)
+- [#38](https://github.com/MILTONADINA/agile-graph/pull/38)
   (`4ee2da5`): working sets and a size profile ([scaling](scaling.md)).
-- [#39](https://github.com/MILTONADINA/graph-engineering/pull/39)
+- [#39](https://github.com/MILTONADINA/agile-graph/pull/39)
   (`2456861`): a planner proposes steps that a person approves
   ([proposed decomposition](decomposition.md)).
-- [#40](https://github.com/MILTONADINA/graph-engineering/pull/40)
+- [#40](https://github.com/MILTONADINA/agile-graph/pull/40)
   (`fc08d47`): run outcomes linked to decisions and memories, and recorded
   human acceptance ([run outcomes](outcomes.md)).
-- [#41](https://github.com/MILTONADINA/graph-engineering/pull/41)
+- [#41](https://github.com/MILTONADINA/agile-graph/pull/41)
   (`f388c95`): the dashboard's live project board
   ([project overview](project-overview.md)).
-- [#42](https://github.com/MILTONADINA/graph-engineering/pull/42)
+- [#42](https://github.com/MILTONADINA/agile-graph/pull/42)
   (`972cc17`): knowledge packs and cited research
   ([knowledge packs](knowledge-packs.md)).
 - #43: the bounded local pilot record (below) and this update.
@@ -882,21 +882,21 @@ on their own tips, #47 as part of #48, and #50–#53 as part of #54, which was
 stacked on them. Each PR had an adversarial review whose findings were fixed
 before merge; the PR descriptions list them.
 
-- [#45](https://github.com/MILTONADINA/graph-engineering/pull/45) (`0d89022`): retries within the attempt budget, per-step
+- [#45](https://github.com/MILTONADINA/agile-graph/pull/45) (`0d89022`): retries within the attempt budget, per-step
   write scopes and time limits, and file counting that matches the index.
-- [#46](https://github.com/MILTONADINA/graph-engineering/pull/46) (`23000c9`): memory rejection with a reason, knowledge pack
+- [#46](https://github.com/MILTONADINA/agile-graph/pull/46) (`23000c9`): memory rejection with a reason, knowledge pack
   ageing, scans of committed files only, and stale doc and lint fixes.
-- [#47](https://github.com/MILTONADINA/graph-engineering/pull/47) (`c46577a`, landed through #48): feature specs in
+- [#47](https://github.com/MILTONADINA/agile-graph/pull/47) (`c46577a`, landed through #48): feature specs in
   `specs/` with acceptance criteria linked to tests, `spec-new`,
   `spec-check` (a CI step) and `plan --spec`.
-- [#48](https://github.com/MILTONADINA/graph-engineering/pull/48) (`6bf82f1`): a tester role that, after the implementing
+- [#48](https://github.com/MILTONADINA/agile-graph/pull/48) (`6bf82f1`): a tester role that, after the implementing
   steps, writes tests for each acceptance criterion that later repairs cannot
   weaken, and a person's hash-bound plan
   approval before an AI-started run can publish.
-- [#49](https://github.com/MILTONADINA/graph-engineering/pull/49) (`206a7e0`): new security findings go back to the worker as
+- [#49](https://github.com/MILTONADINA/agile-graph/pull/49) (`206a7e0`): new security findings go back to the worker as
   feedback, and dependencies are scanned offline with a pinned OSV-Scanner
   and a downloaded database (`security-db-update`).
-- [#50](https://github.com/MILTONADINA/graph-engineering/pull/50)–[#54](https://github.com/MILTONADINA/graph-engineering/pull/54) (landed together through #54, `a08f09e`):
+- [#50](https://github.com/MILTONADINA/agile-graph/pull/50)–[#54](https://github.com/MILTONADINA/agile-graph/pull/54) (landed together through #54, `a08f09e`):
   outcome summaries (`outcomes --summary` and the dashboard's insights,
   counts rather than scores); per-package TypeScript binding for
   repositories over the compiler limits; and the `authorization.roles`,
@@ -908,7 +908,7 @@ before merge; the PR descriptions list them.
 
 A re-audit of that `dev` then checked every upgrade against the code. Its
 three concrete gaps were fixed in
-[#56](https://github.com/MILTONADINA/graph-engineering/pull/56), which landed
+[#56](https://github.com/MILTONADINA/agile-graph/pull/56), which landed
 with this update:
 
 - a managed run that changed a lockfile no longer passes when no OSV
@@ -921,7 +921,7 @@ led by test-first ordering for the tester.
 
 Still for the owner: accepting or rejecting pilot run `ee0166fc` (above),
 reviewing the draft security baseline in
-[#44](https://github.com/MILTONADINA/graph-engineering/pull/44), and the
+[#44](https://github.com/MILTONADINA/agile-graph/pull/44), and the
 owner-gated items listed in the previous update.
 
 ## Continuation update — 2026-09-26 (improvement loop, rounds 2–4)
@@ -970,28 +970,28 @@ real-world pilot, and offer privacy-safe feedback reports.
   - patches in multi-step steps failing whole runs.
 
 All of it landed through
-[#57](https://github.com/MILTONADINA/graph-engineering/pull/57).
+[#57](https://github.com/MILTONADINA/agile-graph/pull/57).
 
 Owner decisions on 2026-09-27, carried out on the owner's instruction:
 
 - the `context/index.ts` refactor run `ee0166fc` is accepted;
 - the reviewed security baseline landed through
-  [#44](https://github.com/MILTONADINA/graph-engineering/pull/44)
+  [#44](https://github.com/MILTONADINA/agile-graph/pull/44)
   (`57472a7`), regenerated on the current `dev` with each new finding
   reviewed, so this repository's own managed runs are now security-gated;
 - the generated OAuth app verifies ID token signatures
-  ([#58](https://github.com/MILTONADINA/graph-engineering/pull/58),
+  ([#58](https://github.com/MILTONADINA/agile-graph/pull/58),
   `7a3072f`), after an adversarial review whose findings were fixed;
 
 Later on 2026-09-27, also on the owner's instruction:
 
 - the owner reviewed the self-built run `80586c65` independently. A person
   can now approve a change in place of the AI reviewer
-  ([#60](https://github.com/MILTONADINA/graph-engineering/pull/60)), and
+  ([#60](https://github.com/MILTONADINA/agile-graph/pull/60)), and
   the run completed as succeeded with its review recorded as approved by a
   person. The owner accepted it.
 - live security targets were chosen and built
-  ([#61](https://github.com/MILTONADINA/graph-engineering/pull/61)). OWASP
+  ([#61](https://github.com/MILTONADINA/agile-graph/pull/61)). OWASP
   Juice Shop and an app built by the `project.node-express` template are
   scanned with the ZAP baseline scan. Each target runs in a loopback-only
   network namespace the scan starts itself, so no traffic reaches systems
@@ -1016,27 +1016,27 @@ and the [custody decision](../specs/decisions/promotion-custody.md).
 
 Merged into fork `dev`, in order:
 
-- [#63](https://github.com/MILTONADINA/graph-engineering/pull/63)
+- [#63](https://github.com/MILTONADINA/agile-graph/pull/63)
   (`fb6791e`): the owner's promotion decisions (anchor, grant lifetime,
   review, model attestation, strict policy hash) as a spec.
-- [#64](https://github.com/MILTONADINA/graph-engineering/pull/64)
+- [#64](https://github.com/MILTONADINA/agile-graph/pull/64)
   (`6c4dba3`, `374f03f`, `6cec6c1`): PR-2 and PR-3 of the design, the live
   per-route check with closed refusal codes, and the verify-only importer
   `graph-engine promotion prepare-grant`, which never signs.
-- [#65](https://github.com/MILTONADINA/graph-engineering/pull/65)
+- [#65](https://github.com/MILTONADINA/agile-graph/pull/65)
   (`29deab7`): the single-custodian amendment.
-- [#66](https://github.com/MILTONADINA/graph-engineering/pull/66)
+- [#66](https://github.com/MILTONADINA/agile-graph/pull/66)
   (`a10f031`, `c0265f3`) and
-  [#67](https://github.com/MILTONADINA/graph-engineering/pull/67)
+  [#67](https://github.com/MILTONADINA/agile-graph/pull/67)
   (`bf6b258`): the owner-run helper for passphrase-encrypted Ed25519 keys and
   its one-step setup with a single combined backup
   ([promotion keys](promotion-keys.md)).
-- [#68](https://github.com/MILTONADINA/graph-engineering/pull/68)
+- [#68](https://github.com/MILTONADINA/agile-graph/pull/68)
   (`d1d0a87`): importer step 5 reads the witness's governance checkpoint.
-- [#69](https://github.com/MILTONADINA/graph-engineering/pull/69)
+- [#69](https://github.com/MILTONADINA/agile-graph/pull/69)
   (`7a0a9e8`): the single-key labeller `npm run label` and the paired-run
   collector ([labelling](labelling.md)).
-- [#70](https://github.com/MILTONADINA/graph-engineering/pull/70)–[#74](https://github.com/MILTONADINA/graph-engineering/pull/74),
+- [#70](https://github.com/MILTONADINA/agile-graph/pull/70)–[#74](https://github.com/MILTONADINA/agile-graph/pull/74),
   landed as one stack through #74 (`dev` tip `23da164`): the read-only Rekor
   v1 witness adapter, a translator not yet in the controller registry
   ([Rekor witness](promotion-rekor-witness.md); `b5f3bfe`, `34a202b`,
@@ -1048,15 +1048,15 @@ Merged into fork `dev`, in order:
   source (`23da164`).
 
 Merged on 2026-09-28 through
-[#76](https://github.com/MILTONADINA/graph-engineering/pull/76) (`dev` tip
+[#76](https://github.com/MILTONADINA/agile-graph/pull/76) (`dev` tip
 `da471a9`):
 
-- [#75](https://github.com/MILTONADINA/graph-engineering/pull/75): PR-4, the
+- [#75](https://github.com/MILTONADINA/agile-graph/pull/75): PR-4, the
   trust anchor (`ed0c323`, `596bb5e`). `promotion anchor-prepare` writes the anchor from the
   owner's public keys and prints the `sudo` commands it never runs,
   `promotion anchor-verify` checks the installed file, and `promotion enroll`
   records the fingerprints and the Rekor high-water mark.
-- [#76](https://github.com/MILTONADINA/graph-engineering/pull/76): tester
+- [#76](https://github.com/MILTONADINA/agile-graph/pull/76): tester
   repair paths matched by normalised path, and why Semgrep skips are not
   counted (`da471a9`).
 
@@ -1178,7 +1178,7 @@ fixture's bytes (`0fe5088`).
 ## Where the work stands
 
 - Workspace: this checkout only; do not expand work into other project folders.
-- Repository: `https://github.com/MILTONADINA/graph-engineering.git` (the
+- Repository: `https://github.com/MILTONADINA/agile-graph.git` (the
   `origin` remote), a standalone project the owner leads. The only authorized
   integration target is its **`dev`** branch. Do not push to `main`.
 - The earlier `cf4245848cab24181b104d5cc3eb36f19a32a9f7` fork-`dev` state
@@ -1202,7 +1202,7 @@ template catalog that snapshot describes was removed on 2026-10-11.
 
 ## What this system is
 
-Graph Engineering is a local-first context and engineering platform. The
+Agile Graph is a local-first context and engineering platform. The
 shared project policy and stores support:
 
 1. Repository syntax/limited static graph, SQLite full-text search, optional
@@ -1326,7 +1326,7 @@ instructions. Preserve the distinction between a **product goal**, an
    push to `main`. No AI co-author trailer or unrelated-project identifier in
    tracked docs, PRs, comments or public artifacts. Keep shared Serena/global
    config and other project work untouched.
-8. **Open-source release governance.** Graph Engineering is open source under
+8. **Open-source release governance.** Agile Graph is open source under
    the owner's MIT [license](../LICENSE). Third-party material keeps its own
    license and is listed in [`NOTICE`](../NOTICE). Publishing to npm is a
    separate owner step described in the [publishing guide](publishing.md).
@@ -1599,7 +1599,7 @@ model. In particular:
    `.serena/` and every ignored private path; do not commit directly on `dev`.
 2. For subsequent changes, fetch/fast-forward `dev`, then create a
    focused `feat/`, `fix/`, or `chore/` branch. Push only to `origin`; PRs target
-   `MILTONADINA/graph-engineering:dev`. The owner explicitly authorized the
+   `MILTONADINA/agile-graph:dev`. The owner explicitly authorized the
    working agent to review the actual diff and exact-tip green CI, then merge
    PRs into fork `dev`; zero GitHub approvals are required there. This is
    **author review**, not independent review or human acceptance. No direct push to
@@ -1639,8 +1639,8 @@ these focused tests (paths are relative to the engine workspace):
 
 ```sh
 npm run build:dependencies
-npm test -w @graph-engineering/engine -- tests/sealed-evidence-readiness.test.ts tests/signed-promotion-approval.test.ts tests/sealed-reference-witness.test.ts tests/sealed-signed-current-witness.test.ts tests/sealed-governance-witness.test.ts tests/promotion-authority.test.ts tests/promotion-bypass-invariants.test.ts tests/promotion-service-shadow.test.ts tests/promotion-import-preflight.test.ts tests/promotion-route.test.ts tests/promotion-importer.test.ts tests/promotion-importer-steps.test.ts tests/promotion-anchor-enrollment.test.ts tests/promotion-rekor-witness.test.ts tests/full-cohort-evaluation.test.ts
-npm run typecheck -w @graph-engineering/engine
+npm test -w @agile-graph/engine -- tests/sealed-evidence-readiness.test.ts tests/signed-promotion-approval.test.ts tests/sealed-reference-witness.test.ts tests/sealed-signed-current-witness.test.ts tests/sealed-governance-witness.test.ts tests/promotion-authority.test.ts tests/promotion-bypass-invariants.test.ts tests/promotion-service-shadow.test.ts tests/promotion-import-preflight.test.ts tests/promotion-route.test.ts tests/promotion-importer.test.ts tests/promotion-importer-steps.test.ts tests/promotion-anchor-enrollment.test.ts tests/promotion-rekor-witness.test.ts tests/full-cohort-evaluation.test.ts
+npm run typecheck -w @agile-graph/engine
 ```
 
 Run the sealed JavaScript tests (`node --test evaluation/sealed/tests/*.test.mjs`)

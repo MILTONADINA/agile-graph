@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { Parser, Language, type Node } from "web-tree-sitter";
 import { z } from "zod";
-import type { GraphEdge } from "@graph-engineering/contracts";
+import type { GraphEdge } from "@agile-graph/contracts";
 import { hash, type ParsedFile } from "./parser.js";
 
 export const RUST_LIMITS = {

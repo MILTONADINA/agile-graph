@@ -4,7 +4,7 @@ import {
   DEFAULT_POLICY,
   type ProjectPolicy,
   type ProviderKind,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { hash } from "../src/util.js";
 import {
   installedWorkerTimeoutMs,

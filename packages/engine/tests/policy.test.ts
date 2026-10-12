@@ -14,7 +14,7 @@ import {
   assertProjectConfig,
   DEFAULT_POLICY,
   type ContextPacket,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   assertEndpoint,
   assertProvider,

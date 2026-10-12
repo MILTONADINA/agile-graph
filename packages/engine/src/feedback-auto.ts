@@ -4,7 +4,7 @@ import path from "node:path";
 import {
   assertProjectPolicy,
   type ProjectPolicy,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   AUTOMATIC_FEEDBACK_COMMANDS,
   buildFeedbackReport,

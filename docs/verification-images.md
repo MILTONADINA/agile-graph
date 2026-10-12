@@ -26,7 +26,7 @@ any `check-add` cannot run, and you create a new plan once checks exist.
 ## Selecting optional checks for one plan
 
 Per-plan selection was released in
-[PR #123](https://github.com/MILTONADINA/graph-engineering/pull/123) at
+[PR #123](https://github.com/MILTONADINA/agile-graph/pull/123) at
 `104accacf0c4389699bfab3f32140095e13654fa`; its verification record contains
 the exact checked head, matching merged tree and all nine passing CI jobs.
 

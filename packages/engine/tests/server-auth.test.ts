@@ -7,7 +7,7 @@ import type {
   ExecutionPlan,
   GeneratorRegistration,
   RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { GraphEngine } from "../src/service.js";
 import { initializeProject, PROJECT_FILE } from "../src/project.js";
 import { createServer } from "../src/server.js";

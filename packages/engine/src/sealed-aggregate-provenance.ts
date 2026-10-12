@@ -2472,7 +2472,7 @@ function evaluationModule(name: string): string {
   const checkout = sourceCheckoutRoot();
   if (!checkout)
     throw new Error(
-      "Checking call-bound evidence needs a Graph Engineering source checkout; an installed package does not include the evaluation harness",
+      "Checking call-bound evidence needs a Agile Graph source checkout; an installed package does not include the evaluation harness",
     );
   return pathToFileURL(
     path.join(checkout, "evaluation", "sealed", "worker-runtime", name),

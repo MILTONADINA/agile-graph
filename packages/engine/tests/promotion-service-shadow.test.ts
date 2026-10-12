@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { DecisionRecord } from "@graph-engineering/contracts";
+import type { DecisionRecord } from "@agile-graph/contracts";
 import { GraphEngine } from "../src/service.js";
 import {
   configureProvider,

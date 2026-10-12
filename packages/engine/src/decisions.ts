@@ -1,7 +1,4 @@
-import type {
-  DecisionRecord,
-  ProjectPolicy,
-} from "@graph-engineering/contracts";
+import type { DecisionRecord, ProjectPolicy } from "@agile-graph/contracts";
 import { z } from "zod";
 import path from "node:path";
 import { hash, readJson, registerDecisionCredentialEnvNames } from "./util.js";

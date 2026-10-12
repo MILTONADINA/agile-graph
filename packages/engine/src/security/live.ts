@@ -15,7 +15,7 @@ import { constants } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, open, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { LiveTarget, ProjectConfig } from "@graph-engineering/contracts";
+import type { LiveTarget, ProjectConfig } from "@agile-graph/contracts";
 import { redact, redactTail } from "../policy.js";
 import { command } from "../util.js";
 import {

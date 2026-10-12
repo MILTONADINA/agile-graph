@@ -5,10 +5,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import {
-  DEFAULT_POLICY,
-  type ContextPacket,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ContextPacket } from "@agile-graph/contracts";
 import { invokeApiWorker } from "../src/workers/api.js";
 
 const packet: ContextPacket = {

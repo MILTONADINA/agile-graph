@@ -1,8 +1,5 @@
 import { posix } from "node:path";
-import type {
-  MemoryRecord,
-  SourceReference,
-} from "@graph-engineering/contracts";
+import type { MemoryRecord, SourceReference } from "@agile-graph/contracts";
 import { hash, type ParsedFile } from "./parser.js";
 import {
   memoryExpiresAt,

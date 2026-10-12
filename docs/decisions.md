@@ -1,6 +1,6 @@
 # Local decisions, evaluation, and promotion
 
-Graph Engineering keeps deterministic policy checks authoritative. Laya and Jev
+Agile Graph keeps deterministic policy checks authoritative. Laya and Jev
 rank an explicit set of permitted actions. In the default `shadow` mode their
 answers are recorded but never replace the deterministic baseline. A provider
 failure, unsupported answer, oversized state, low confidence, or mismatched

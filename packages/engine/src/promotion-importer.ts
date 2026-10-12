@@ -16,7 +16,7 @@
 import { createHash, createPublicKey, randomBytes } from "node:crypto";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
-import type { ProjectPolicy } from "@graph-engineering/contracts";
+import type { ProjectPolicy } from "@agile-graph/contracts";
 import { z } from "zod";
 import { decisionProviders } from "./decisions.js";
 import {

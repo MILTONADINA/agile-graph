@@ -91,11 +91,11 @@ worker's patch.
 
 ## Evidence
 
-[PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119) merged
+[PR #119](https://github.com/MILTONADINA/agile-graph/pull/119) merged
 into fork `dev` at `09427fe33a273f8426580b806eafdb5717e702a7` on
 2026-09-30 at 21:33:03 UTC. Exact checked head
 `84dcbbe162e4cf90883a5095c2ac912fce74ffd4` passed all nine required jobs in
-[CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+[CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
 attempt 1, including native generator isolation/capture in Linux x64 job
 `110097698965`. Independent scoped agent and main-session review found no
 blockers; no external human approval is claimed. Checked and merged commits
@@ -110,7 +110,7 @@ The local implementation's focused pure tests pass. The earlier owner-socket
 blocker was lifted, and 12 previously blocked managed-service, HTTP and CLI
 cases passed in the private continuation. The opt-in native generator case
 was skipped locally but ran in the successful Docker execution integration
-step of [CI run 36768502119](https://github.com/MILTONADINA/graph-engineering/actions/runs/36768502119)
+step of [CI run 36768502119](https://github.com/MILTONADINA/agile-graph/actions/runs/36768502119)
 (attempt 1, Linux x64 job 110068618463, step 27) on feature head
 `04f49778d76b354f5d24a46c61649154f878625c`, with
 `GRAPH_ENGINE_DOCKER_TESTS=1`. That job later failed the separate native Dart

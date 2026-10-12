@@ -9,7 +9,7 @@ import {
   type ProjectPolicy,
   type ProviderConfig,
   type Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { assertProvider, containsSecret } from "../policy.js";
 import {
   AUDIT_OUTPUT_TOKENS,

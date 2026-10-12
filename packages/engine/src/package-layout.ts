@@ -25,7 +25,7 @@ export const ENGINE_VERSION = (() => {
 })();
 
 /**
- * The repository root when the engine runs from a Graph Engineering source
+ * The repository root when the engine runs from a Agile Graph source
  * checkout, or null when it runs as an installed package. Paths outside the
  * package are only ever resolved against a checkout: next to an installed
  * package, a relative path would reach into whatever else is installed.
@@ -40,7 +40,7 @@ export function sourceCheckoutRoot(
     const manifest = JSON.parse(
       readFileSync(path.join(root, "package.json"), "utf8"),
     ) as { name?: unknown };
-    return manifest.name === "graph-engineering-workspace" ? root : null;
+    return manifest.name === "agile-graph-workspace" ? root : null;
   } catch {
     return null;
   }

@@ -4,14 +4,14 @@ This checkout is configured for the owner's repository and local inference.
 Create a focused feature branch from the current `dev`; the older
 `feat/engineering-platform` branch is historical, not a continuation target.
 Never work directly on `main` or protected `dev`. When ready, PR review and
-merges target `MILTONADINA/graph-engineering:dev`. Commits use the configured
+merges target `MILTONADINA/agile-graph:dev`. Commits use the configured
 human identity, without AI co-author trailers.
 
 ## Initial AI integrations
 
 Cursor, Claude Code, Codex, and the existing oMLX Qwen are the four intended
-starting AIs. An AI using Graph Engineering's MCP context tools is different
-from Graph Engineering launching it as a managed proposal worker. Their current
+starting AIs. An AI using Agile Graph's MCP context tools is different
+from Agile Graph launching it as a managed proposal worker. Their current
 verification is deliberately reported separately:
 
 | AI          | Context / worker path                                                                           | Current local evidence                                                                                                                                                                                                                              |
@@ -51,7 +51,7 @@ Check `http://127.0.0.1:1234/v1/models` before a run. The endpoint is
 provider ID `qwen`, model alias `qwen-local`, and reported loaded model
 `Qwen3.8-27B-8bit`. The configured provider disables thinking for bounded JSON
 patch proposals. This is a local-server option, not a portable cloud effort
-setting. Graph Engineering does not start or stop the user's Qwen server.
+setting. Agile Graph does not start or stop the user's Qwen server.
 
 Laya's pinned Python environment and English weights are under ignored
 `.graph/local`. If the sidecar is not already listening on port 7337:

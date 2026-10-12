@@ -103,7 +103,7 @@ test("dry-run preserves branch-specific fork protections", () => {
   );
   assert.equal(result.status, 0, result.stderr);
   const printed = JSON.parse(result.stdout);
-  assert.equal(printed.repository, "MILTONADINA/graph-engineering");
+  assert.equal(printed.repository, "MILTONADINA/agile-graph");
   assert.deepEqual(printed.protections.main.required_status_checks.contexts, [
     ...platformChecks,
     "sealed-oracle",

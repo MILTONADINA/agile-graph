@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  assertProjectConfig,
-  DEFAULT_POLICY,
-} from "@graph-engineering/contracts";
+import { assertProjectConfig, DEFAULT_POLICY } from "@agile-graph/contracts";
 import { hash } from "../src/util.js";
 import {
   installedWorkerTimeoutMs,

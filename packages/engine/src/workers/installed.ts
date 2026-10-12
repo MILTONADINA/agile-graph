@@ -8,13 +8,13 @@ import {
   INSTALLED_KINDS,
   isInstalledKind,
   type InstalledKind,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import type {
   InstalledWorkerIdentity,
   ProjectPolicy,
   ProviderConfig,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   assertEndpoint,
   assertProvider,

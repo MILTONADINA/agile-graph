@@ -9,7 +9,7 @@ import {
   type DecisionRecord,
   type ProjectPolicy,
   type RunEvent,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   contextSelectionCandidates,
   selectContext,

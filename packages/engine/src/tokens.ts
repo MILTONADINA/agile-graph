@@ -1,7 +1,4 @@
-import type {
-  ProjectPolicy,
-  ProviderConfig,
-} from "@graph-engineering/contracts";
+import type { ProjectPolicy, ProviderConfig } from "@agile-graph/contracts";
 
 // The one estimate of how many model tokens a serialized request uses, for
 // every comparison of request size with a token budget (maxContextTokens,

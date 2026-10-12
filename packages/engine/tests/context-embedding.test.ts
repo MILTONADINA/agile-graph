@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 
 // Explicit opt-in integration test: downloads a pinned ~642 MB ONNX model.

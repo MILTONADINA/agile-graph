@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 import ts from "typescript";
-import type { SourceReference } from "@graph-engineering/contracts";
+import type { SourceReference } from "@agile-graph/contracts";
 import type { ParsedFile } from "./parser.js";
 
 export const SNAPSHOT_ROOT = "/snapshot/";

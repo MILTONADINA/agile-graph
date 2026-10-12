@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import { SUMMARY_VERSION } from "../src/context/intelligence.js";
 import { parseFile } from "../src/context/parser.js";

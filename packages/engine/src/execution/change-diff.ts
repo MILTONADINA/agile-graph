@@ -8,7 +8,7 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ProjectPolicy, RunEvent } from "@graph-engineering/contracts";
+import type { ProjectPolicy, RunEvent } from "@agile-graph/contracts";
 import { safePath } from "../policy.js";
 import { command } from "../util.js";
 import { checkpointPaths, type DagCheckpoint } from "./dag.js";

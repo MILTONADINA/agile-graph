@@ -6,7 +6,7 @@ import { command } from "../util.js";
 import { PYTHON_HELPER } from "./python-helper.js";
 import { hash, type ParsedFile } from "./parser.js";
 import type { SemanticResult } from "./semantic.js";
-import type { SourceReference } from "@graph-engineering/contracts";
+import type { SourceReference } from "@agile-graph/contracts";
 
 export const PYTHON_VERSION = "snapshot-cpython-bindings:3";
 export const PYTHON_LIMITS = {

@@ -9,10 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  DEFAULT_POLICY,
-  type ProjectPolicy,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ProjectPolicy } from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import {
   addKnowledgePack,

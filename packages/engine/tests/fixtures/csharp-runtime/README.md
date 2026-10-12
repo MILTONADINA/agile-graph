@@ -14,7 +14,7 @@ Preprovision `graph-engineering-verify:local` and this exact SDK image. The fixt
 
 ```sh
 docker pull mcr.microsoft.com/dotnet/sdk@sha256:78235e09001f52b6592c458ac010775ebac6725422e80cd0c1650590f67b2743
-GRAPH_ENGINE_CSHARP_DOCKER_TESTS=1 npm test -w @graph-engineering/engine -- tests/context-csharp.test.ts
+GRAPH_ENGINE_CSHARP_DOCKER_TESTS=1 npm test -w @agile-graph/engine -- tests/context-csharp.test.ts
 docker build --pull=false --network=none -f packages/engine/tests/fixtures/csharp-runtime/Dockerfile -t graph-csharp-native-test:local .
 docker run --rm --network=none --read-only --tmpfs /tmp:rw,exec,nosuid,size=768m --memory=1536m --cpus=2 --pids-limit=128 --cap-drop=ALL --security-opt=no-new-privileges graph-csharp-native-test:local
 ```

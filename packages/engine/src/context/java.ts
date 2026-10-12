@@ -14,7 +14,7 @@ import path from "node:path";
 import { execFile, spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
-import type { GraphEdge } from "@graph-engineering/contracts";
+import type { GraphEdge } from "@agile-graph/contracts";
 import { command } from "../util.js";
 import { hash, type ParsedFile } from "./parser.js";
 import type { SemanticResult } from "./semantic.js";

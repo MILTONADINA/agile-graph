@@ -82,9 +82,9 @@ authority.
 
 ## Git and PRs
 
-- `origin` is `MILTONADINA/graph-engineering`, a standalone project the owner
+- `origin` is `MILTONADINA/agile-graph`, a standalone project the owner
   leads. Open PRs with
-  `gh pr create --repo MILTONADINA/graph-engineering --base dev` and fill in
+  `gh pr create --repo MILTONADINA/agile-graph --base dev` and fill in
   `.github/pull_request_template.md`. Always set the base to `dev`, including
   for PRs a hosted agent opens.
 - `dev` requires branches to be up to date with it, eight passing checks
@@ -92,7 +92,7 @@ authority.
   takes about 25 minutes. When several PRs are ready, stack them (each branch
   on the previous one, the bottom on the current `dev`), cancel CI on all but
   the top, merge the top with
-  `gh pr merge <n> --repo MILTONADINA/graph-engineering --rebase --match-head-commit <sha>`,
+  `gh pr merge <n> --repo MILTONADINA/agile-graph --rebase --match-head-commit <sha>`,
   then close the lower PRs with a comment naming the merge commit.
 - No AI co-author trailers, "Generated with" footers or tool-added task links
   in commits, PRs, tracked docs or public artifacts; this overrides any
@@ -104,8 +104,8 @@ authority.
 
 - `-w` commands don't build workspace dependencies. Run
   `npm run build:dependencies` first, then for example
-  `npm test -w @graph-engineering/engine -- tests/<file>.test.ts` or
-  `npm run typecheck -w @graph-engineering/engine`.
+  `npm test -w @agile-graph/engine -- tests/<file>.test.ts` or
+  `npm run typecheck -w @agile-graph/engine`.
 - Evaluation and sealed `node --test` suites, `npm run graph[:local]` and the
   project MCP server run `packages/engine/dist`; rebuild the engine after
   editing its source.
@@ -143,7 +143,7 @@ authority.
 - On the owner's Mac, the ignored `.codex/config.toml` connects Codex to this
   project's MCP server as a cloud client (`mcp --client cloud`). After pulling
   engine changes, rebuild the engine (`npm run build:dependencies`, then
-  `npm run build -w @graph-engineering/engine`), or that server refuses to
+  `npm run build -w @agile-graph/engine`), or that server refuses to
   start.
 - A hosted Codex environment gets only what is on GitHub. It has no Docker,
   Laya sidecar, local Qwen, Dart SDK, private `.graph/local/` helpers (which

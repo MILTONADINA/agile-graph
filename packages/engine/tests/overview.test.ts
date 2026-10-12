@@ -3,7 +3,7 @@ import type {
   ExecutionStep,
   RunEvent,
   RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   passedChecksSnapshot,
   projectOverview,

@@ -921,7 +921,7 @@ export async function engineModule(name, root = repositoryRoot) {
   const file = path.join(root, "packages", "engine", "dist", name);
   if (!existsSync(file))
     throw new LabelError(
-      "The engine is not built: run npm run build:dependencies and npm run build -w @graph-engineering/engine",
+      "The engine is not built: run npm run build:dependencies and npm run build -w @agile-graph/engine",
     );
   return import(pathToFileURL(file).href);
 }

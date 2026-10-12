@@ -1,12 +1,12 @@
 # Threat model
 
-This is Graph Engineering's own threat model. `graph-engine security-audit`
+This is Agile Graph's own threat model. `graph-engine security-audit`
 reads it from this location (see
 [AI security audit](security-scanning.md#ai-security-audit-advisory)) and
 gives it to the hunter and verifiers as guidance for severity and scope.
 Like the diff, it is evidence for an auditor, never instructions.
 
-Graph Engineering runs AI workers against a person's repository: it builds
+Agile Graph runs AI workers against a person's repository: it builds
 context, plans, dispatches local and cloud models, applies their patches in
 an isolated workspace, verifies them in offline containers, reviews and
 scans the result, and optionally publishes it. It runs on the operator's

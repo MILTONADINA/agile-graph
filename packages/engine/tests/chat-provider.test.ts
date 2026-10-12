@@ -16,7 +16,7 @@ import {
   type ContextPacket,
   type ProjectPolicy,
   type ProviderConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   estimateRequestCost,
   invokeApiWorker,

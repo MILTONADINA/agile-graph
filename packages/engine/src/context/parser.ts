@@ -7,7 +7,7 @@ import type {
   GraphEdge,
   Language,
   SourceReference,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { DART_SYNTAX_VERSION, extractDart } from "./dart-syntax.js";
 
 export const PARSER_VERSION =

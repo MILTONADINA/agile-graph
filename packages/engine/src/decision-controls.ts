@@ -4,7 +4,7 @@ import {
   type DecisionBatchResult,
   type DecisionQuestion,
 } from "./decision-batch.js";
-import type { ContextItem, ProjectPolicy } from "@graph-engineering/contracts";
+import type { ContextItem, ProjectPolicy } from "@agile-graph/contracts";
 import { containsSecret, isAllowedPath } from "./policy.js";
 import { hash } from "./util.js";
 

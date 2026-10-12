@@ -65,7 +65,7 @@ describe("engine dist freshness", () => {
     expect(distFreshnessAction(freshness, false)).toBe("warn");
     expect(distFreshnessMessage(freshness)).toContain(STALE_DIST_MESSAGE);
     expect(STALE_DIST_MESSAGE).toBe(
-      "engine dist is stale; run npm run build -w @graph-engineering/engine",
+      "engine dist is stale; run npm run build -w @agile-graph/engine",
     );
   });
 

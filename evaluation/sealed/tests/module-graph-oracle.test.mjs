@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ArtifactStore } from "../artifacts.mjs";
 import { SealedPublicPacketBridge } from "../public-packet.mjs";
 import { canonicalJson, hashJson } from "../schema.mjs";

@@ -188,5 +188,5 @@ cannot become held-out tasks merely by receiving new IDs.
 
 ```sh
 node --test evaluation/sealed/tests/*.test.mjs
-npm test -w @graph-engineering/engine -- --run tests/full-cohort-evaluation.test.ts
+npm test -w @agile-graph/engine -- --run tests/full-cohort-evaluation.test.ts
 ```

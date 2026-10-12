@@ -3,10 +3,7 @@ import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import os from "node:os";
 import path from "node:path";
-import {
-  DEFAULT_POLICY,
-  type ProjectPolicy,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ProjectPolicy } from "@agile-graph/contracts";
 import { verifyInContainer } from "../src/execution/docker.js";
 import * as util from "../src/util.js";
 

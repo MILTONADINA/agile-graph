@@ -3,10 +3,7 @@ import { access, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import {
-  DEFAULT_POLICY,
-  type ProjectConfig,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ProjectConfig } from "@agile-graph/contracts";
 import {
   configureProvider,
   initializeProject,

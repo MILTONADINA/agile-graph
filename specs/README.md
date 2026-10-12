@@ -1,6 +1,6 @@
 # Feature specs
 
-Every feature of Graph Engineering is written here before and while it is
+Every feature of Agile Graph is written here before and while it is
 built, one Markdown file per feature at `specs/<area>/<id>.md`. A spec says
 what the feature must do (acceptance criteria), how that is proven (a link
 from each criterion to the tests that check it), how it stays secure, and

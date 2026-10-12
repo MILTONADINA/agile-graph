@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunStatus } from "@graph-engineering/contracts";
+import type { RunStatus } from "@agile-graph/contracts";
 import { interruptedRunExitCode, runExitCode } from "../src/run-exit-code.js";
 
 describe("run exit codes", () => {

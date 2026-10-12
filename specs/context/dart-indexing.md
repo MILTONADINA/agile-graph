@@ -45,11 +45,11 @@ Dart and Flutter repositories need bounded, source-backed context: declarations 
 
 ## Evidence
 
-[PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119) merged
+[PR #119](https://github.com/MILTONADINA/agile-graph/pull/119) merged
 into fork `dev` at `09427fe33a273f8426580b806eafdb5717e702a7` on
 2026-09-30 at 21:33:03 UTC. Exact checked head
 `84dcbbe162e4cf90883a5095c2ac912fce74ffd4` passed all nine required jobs in
-[CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+[CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
 attempt 1. Linux x64 job `110097698965` passed the native direct/imported
 binding/provenance, empty-AOT-environment and real bounded-timeout cases.
 Independent scoped agent and main-session review found no blockers; no

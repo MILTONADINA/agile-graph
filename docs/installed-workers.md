@@ -1,12 +1,12 @@
 # Installed workers
 
-Installed clients return structured patch proposals. Graph Engineering applies approved replacements in an isolated run workspace and runs verification in Docker. A client receives a filtered context packet through standard input or JSON-RPC, and runs from a newly created empty temporary directory. It never receives the run workspace path. Temporary transport files are removed after completion or cancellation.
+Installed clients return structured patch proposals. Agile Graph applies approved replacements in an isolated run workspace and runs verification in Docker. A client receives a filtered context packet through standard input or JSON-RPC, and runs from a newly created empty temporary directory. It never receives the run workspace path. Temporary transport files are removed after completion or cancellation.
 
 `discoverInstalledWorkers()` reports installed versions, availability, authentication, execution mode, and limitations. It runs version/help probes and generates temporary protocol schemas; it never logs in, installs a client, or requests model inference. Availability does not mean authentication or live inference was tested.
 
 ## Which AI can do what
 
-Graph Engineering uses an AI in six roles: a **worker** implements plan
+Agile Graph uses an AI in six roles: a **worker** implements plan
 steps, the **tester** writes acceptance tests before them, the **reviewer**
 gates the finished change ([code review](code-review.md)), the **planner**
 breaks an objective into steps ([decomposition](decomposition.md)), the
@@ -47,7 +47,7 @@ Limits that apply across the table:
 
 ## Reviewed executable identity (opt-in)
 
-Released in [PR #122](https://github.com/MILTONADINA/graph-engineering/pull/122)
+Released in [PR #122](https://github.com/MILTONADINA/agile-graph/pull/122)
 at fork `dev` pin `40cfd318d5c79830ab02b3c84d260061f873b627`, after all nine
 required exact-head CI checks and scoped source review. The PR records the
 checked/merged tree and build identities. This is not live-client inference
@@ -214,19 +214,19 @@ repair its obsolete policy binding. The CLI/MCP interface remains tool-neutral:
 Claude Code orchestration requires no running Codex session or service.
 
 The narrow approval/repair/deadline release merged through
-[PR #118](https://github.com/MILTONADINA/graph-engineering/pull/118) at
+[PR #118](https://github.com/MILTONADINA/agile-graph/pull/118) at
 `d22d69ad0f08bbc95fa2209d42171234817f780d`. Its checked head
 `e25565b09aa974dd657f1b273a570a6cac903d10` passed all nine required jobs in
-[CI run 36759128007](https://github.com/MILTONADINA/graph-engineering/actions/runs/36759128007),
+[CI run 36759128007](https://github.com/MILTONADINA/agile-graph/actions/runs/36759128007),
 attempt 1, with scoped source/contract review and an identical-tree merge.
 It also had 42 distinct focused local cases and successful dependency/engine
 builds; no live installed-client inference is claimed. The separate generator
 feature extends the finite-deadline regression alongside API/local, unknown
 and template coverage. That extension merged through
-[PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119) at
+[PR #119](https://github.com/MILTONADINA/agile-graph/pull/119) at
 `09427fe33a273f8426580b806eafdb5717e702a7`, after checked head
 `84dcbbe162e4cf90883a5095c2ac912fce74ffd4` passed all nine required jobs in
-[CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+[CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
 attempt 1, and independent scoped agent/main-session review found no blockers.
 The checked and merged commits share tree
 `76d24aebb95eeb1d431fc23d0973220846d8b37b`; this adds no live-client evidence. See the
@@ -246,7 +246,7 @@ This adapter is a restricted-read worker, not a claim that the native runtime ex
 
 For compatible binaries, the adapter disables execution, hooks, apps, plugins, agents, browser/computer access, and configured MCP servers. It verifies effective feature flags and model/effort availability before starting an ephemeral thread. The turn uses `outputSchema`, no network access for sandboxed tools, and read access limited to scratch plus native platform defaults. Approval requests are declined. The client never invokes App Server filesystem, process, shell-command, or configuration-write APIs. Nonempty instruction sources, incompatible managed settings, relaxed sandbox responses, and unexpected tool activity fail the run.
 
-Native authentication remains with Codex; Graph Engineering does not copy or extract its stored credentials. Subscription access depends on the account and supported native integration. See [App Server protocol](https://learn.chatgpt.com/docs/app-server) and [configuration controls](https://learn.chatgpt.com/docs/config-file/config-reference).
+Native authentication remains with Codex; Agile Graph does not copy or extract its stored credentials. Subscription access depends on the account and supported native integration. See [App Server protocol](https://learn.chatgpt.com/docs/app-server) and [configuration controls](https://learn.chatgpt.com/docs/config-file/config-reference).
 
 ## Cursor and budgets
 

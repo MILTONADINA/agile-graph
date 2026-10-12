@@ -13,7 +13,7 @@ public and associated with your GitHub account, not anonymous.
 Automatic reports never include a manual note or raw error text.
 -->
 
-Graph Engineering feedback report
+Agile Graph feedback report
 
 - Engine version:
 - Command:

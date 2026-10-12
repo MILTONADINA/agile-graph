@@ -10,7 +10,7 @@ Once a person accepts a run's result, other tools (a CI system, a release proces
 
 ## Acceptance criteria
 
-- AC1: For an accepted run, the engine builds an in-toto Statement v1 (`_type` `https://in-toto.io/Statement/v1`, `predicateType` `https://github.com/MILTONADINA/graph-engineering/provenance/run/v1`) whose subject is the result commit (`gitCommit`) and each changed file's sha256, and whose predicate holds the plan SHA-256, policy hash, decision mode, the approval used, the workers (provider ID, kind, model, pinned executable sha256), the gates with their snapshot hashes and timestamps; a strict schema refuses any other field.
+- AC1: For an accepted run, the engine builds an in-toto Statement v1 (`_type` `https://in-toto.io/Statement/v1`, `predicateType` `https://github.com/MILTONADINA/agile-graph/provenance/run/v1`) whose subject is the result commit (`gitCommit`) and each changed file's sha256, and whose predicate holds the plan SHA-256, policy hash, decision mode, the approval used, the workers (provider ID, kind, model, pinned executable sha256), the gates with their snapshot hashes and timestamps; a strict schema refuses any other field.
   - Test: packages/engine/tests/run-provenance.test.ts :: emits a schema-valid in-toto Statement v1 for an accepted run
 - AC2: The statement contains no prompt (objective or acceptance criteria), acceptance note, review summary, check output, secret, executable or model path, workspace path, pull request URL, endpoint, key variable name or user identity.
   - Test: packages/engine/tests/run-provenance.test.ts :: leaves prompts, notes, check output, secrets, paths and user identity out of the statement

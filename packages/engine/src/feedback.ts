@@ -5,7 +5,7 @@ import envPaths from "env-paths";
 import { containsSecret } from "./policy.js";
 
 /** Fixed public destination for automatic and separately reviewed reports. */
-export const FEEDBACK_REPOSITORY = "MILTONADINA/graph-engineering";
+export const FEEDBACK_REPOSITORY = "MILTONADINA/agile-graph";
 
 /**
  * The only error descriptions a report may carry. A report names one of

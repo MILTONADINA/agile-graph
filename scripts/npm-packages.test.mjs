@@ -12,7 +12,7 @@ const repository = fileURLToPath(new URL("..", import.meta.url));
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");
 const manifest = async (directory) =>
   JSON.parse(await read(`${directory}/package.json`));
-const GITHUB = "git+https://github.com/MILTONADINA/graph-engineering.git";
+const GITHUB = "git+https://github.com/MILTONADINA/agile-graph.git";
 const OPTIONAL_PEERS = ["@cursor/sdk", "@huggingface/transformers"];
 
 function packed(workspace) {
@@ -55,7 +55,7 @@ test("both packages are public, MIT-licensed and point at this repository", asyn
   }
   assert.equal(contracts.version, engine.version);
   assert.equal(
-    engine.dependencies["@graph-engineering/contracts"],
+    engine.dependencies["@agile-graph/contracts"],
     contracts.version,
   );
   assert.equal((await manifest("packages/dashboard")).private, true);

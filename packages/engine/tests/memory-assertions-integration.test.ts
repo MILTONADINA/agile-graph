@@ -2,10 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  DEFAULT_POLICY,
-  type MemoryRecord,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type MemoryRecord } from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import Database from "better-sqlite3";
 import { parseReviewedAssertions } from "../src/context/memory-assertions.js";

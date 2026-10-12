@@ -1,6 +1,6 @@
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
-import type { ProjectConfig, RunRecord } from "@graph-engineering/contracts";
+import type { ProjectConfig, RunRecord } from "@agile-graph/contracts";
 import {
   assertPublication,
   isAllowedPath,

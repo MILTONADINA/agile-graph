@@ -6,7 +6,7 @@ import {
   sameGeneratorRegistration,
   type GeneratorRegistration,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 
 const image = `sha256:${"a".repeat(64)}`;
 const registration = (): GeneratorRegistration => ({

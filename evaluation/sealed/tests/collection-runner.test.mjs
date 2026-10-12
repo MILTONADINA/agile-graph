@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { tsImport } from "tsx/esm/api";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ArtifactStore } from "../artifacts.mjs";
 import { runOneShotLocalRepositoryV2Cohort } from "../collection-runner.mjs";
 import { runOneShotLocalRepositoryV2Attempt } from "../local-repository-attempt.mjs";

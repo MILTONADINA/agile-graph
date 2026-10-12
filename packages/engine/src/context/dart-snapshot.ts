@@ -7,7 +7,7 @@ import type {
   CodeSymbol,
   GraphEdge,
   SourceReference,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { hash, parserVersionFor, type ParsedFile } from "./parser.js";
 
 export const DART_LIMITS = {

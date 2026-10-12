@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes @graph-engineering/contracts and @graph-engineering/engine to npm
+# Publishes @agile-graph/contracts and @agile-graph/engine to npm
 # when the owner pushes a version tag. npm trusted publishing (OpenID Connect)
 # authenticates the job, so no npm token is stored, and npm records
 # provenance for each package. Required reviewers on the npm environment gate

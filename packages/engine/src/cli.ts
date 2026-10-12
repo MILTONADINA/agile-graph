@@ -23,7 +23,7 @@ import {
   type ProviderConfig,
   type ProjectPolicy,
   type RunStatus,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { GraphEngine } from "./service.js";
 import { interruptedRunExitCode, runExitCode } from "./run-exit-code.js";
 import { repositoryProfile } from "./scale.js";
@@ -1347,7 +1347,7 @@ cli
       const steps = options.steps
         ? ((await readJson(
             path.resolve(options.steps),
-          )) as import("@graph-engineering/contracts").ExecutionStep[])
+          )) as import("@agile-graph/contracts").ExecutionStep[])
         : undefined;
       const common = {
         providerId: options.provider,
@@ -1422,7 +1422,7 @@ cli
 // shared run-wide budget allows.
 function warnAboutPlan(
   engine: GraphEngine,
-  plan: import("@graph-engineering/contracts").ExecutionPlan,
+  plan: import("@agile-graph/contracts").ExecutionPlan,
 ) {
   for (const warning of engine.planWarnings(plan)) console.error(warning);
   return plan;
@@ -1432,7 +1432,7 @@ function warnAboutPlan(
 // generates, as an objective does for a worker step. A projection of the
 // plan alone, with the content hash an approval binds; plan-status reports
 // the stored approval.
-function shownPlan(plan: import("@graph-engineering/contracts").ExecutionPlan) {
+function shownPlan(plan: import("@agile-graph/contracts").ExecutionPlan) {
   return {
     planId: plan.id,
     planSha256: planSha256(plan),

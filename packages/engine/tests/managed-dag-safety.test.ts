@@ -17,7 +17,7 @@ import type {
   ExecutionStep,
   GeneratorRegistration,
   ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import type { GeneratorResult } from "../src/execution/generator.js";
 import {

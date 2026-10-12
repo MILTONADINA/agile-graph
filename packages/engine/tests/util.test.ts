@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { command, lineCount, subprocessEnvironment } from "../src/util.js";
 import { decisionProviders } from "../src/decisions.js";
 import { invokeApiWorker } from "../src/workers/api.js";

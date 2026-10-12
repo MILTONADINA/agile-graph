@@ -7,7 +7,7 @@ import type {
   ProjectPolicy,
   RunEvent,
   RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { managedGit } from "./execution/git.js";
 import { runEvidence } from "./overview.js";
 import { planSha256 } from "./store.js";
@@ -26,7 +26,7 @@ import { hash, subprocessEnvironment, writeJson } from "./util.js";
  */
 export const IN_TOTO_STATEMENT_TYPE = "https://in-toto.io/Statement/v1";
 export const RUN_PROVENANCE_PREDICATE_TYPE =
-  "https://github.com/MILTONADINA/graph-engineering/provenance/run/v1";
+  "https://github.com/MILTONADINA/agile-graph/provenance/run/v1";
 
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const gitObject = z.string().regex(/^[a-f0-9]{40}([a-f0-9]{24})?$/);

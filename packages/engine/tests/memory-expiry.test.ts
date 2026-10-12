@@ -8,7 +8,7 @@ import {
   DEFAULT_POLICY,
   type MemoryAssertion,
   type MemoryRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 import {
   memoryExpired,

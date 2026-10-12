@@ -49,20 +49,15 @@ describe("engine package layout", () => {
 
   it("treats an installed engine as no checkout and keeps every file it serves inside the package", async () => {
     const root = await layout({
-      ".": { name: "graph-engineering-workspace" },
-      "node_modules/@graph-engineering/engine": {
-        name: "@graph-engineering/engine",
+      ".": { name: "agile-graph-workspace" },
+      "node_modules/@agile-graph/engine": {
+        name: "@agile-graph/engine",
       },
-      "node_modules/@graph-engineering/dashboard": {
-        name: "@graph-engineering/dashboard",
+      "node_modules/@agile-graph/dashboard": {
+        name: "@agile-graph/dashboard",
       },
     });
-    const installed = path.join(
-      root,
-      "node_modules",
-      "@graph-engineering",
-      "engine",
-    );
+    const installed = path.join(root, "node_modules", "@agile-graph", "engine");
     expect(sourceCheckoutRoot(installed)).toBeNull();
     expect(dashboardRoot(installed)).toBe(path.join(installed, "dashboard"));
     expect(scannerBuildContext(installed)).toBe(
@@ -73,15 +68,15 @@ describe("engine package layout", () => {
   it("accepts a checkout only when its root package is this repository's", async () => {
     const other = await layout({
       ".": { name: "someone-elses-monorepo" },
-      "packages/engine": { name: "@graph-engineering/engine" },
+      "packages/engine": { name: "@agile-graph/engine" },
     });
     const vendored = path.join(other, "packages", "engine");
     expect(sourceCheckoutRoot(vendored)).toBeNull();
     expect(dashboardRoot(vendored)).toBe(path.join(vendored, "dashboard"));
 
     const checkout = await layout({
-      ".": { name: "graph-engineering-workspace" },
-      "packages/engine": { name: "@graph-engineering/engine" },
+      ".": { name: "agile-graph-workspace" },
+      "packages/engine": { name: "@agile-graph/engine" },
     });
     const engine = path.join(checkout, "packages", "engine");
     expect(sourceCheckoutRoot(engine)).toBe(checkout);

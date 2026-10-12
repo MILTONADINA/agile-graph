@@ -91,7 +91,7 @@ test("protection setup dry-run prints both branch-specific profiles", () => {
   );
   assert.equal(result.status, 0, result.stderr);
   const printed = JSON.parse(result.stdout);
-  assert.equal(printed.repository, "MILTONADINA/graph-engineering");
+  assert.equal(printed.repository, "MILTONADINA/agile-graph");
   assert.deepEqual(printed.protections.main, protectionFor("main"));
   assert.deepEqual(printed.protections.dev, protectionFor("dev"));
 });

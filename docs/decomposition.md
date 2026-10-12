@@ -1,7 +1,7 @@
 # Proposed decomposition
 
 A professional team agrees on the breakdown of a large piece of work before
-building it. Graph Engineering can ask a planner model to propose that
+building it. Agile Graph can ask a planner model to propose that
 breakdown, and a person approves it before anything runs.
 
 ```sh

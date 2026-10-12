@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type {
-  ExecutionPlan,
-  ProviderConfig,
-} from "@graph-engineering/contracts";
+import type { ExecutionPlan, ProviderConfig } from "@agile-graph/contracts";
 import { modelRoles } from "../src/service.js";
 
 describe("model role locality", () => {

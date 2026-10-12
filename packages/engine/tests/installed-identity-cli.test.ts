@@ -13,10 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type {
-  ExecutionPlan,
-  ProviderConfig,
-} from "@graph-engineering/contracts";
+import type { ExecutionPlan, ProviderConfig } from "@agile-graph/contracts";
 import {
   configureProvider,
   initializeProject,

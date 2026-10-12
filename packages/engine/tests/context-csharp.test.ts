@@ -15,7 +15,7 @@ import {
 } from "../src/context/csharp.js";
 import { checked, command } from "../src/util.js";
 import { ContextEngine } from "../src/context/index.js";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 
 const PROJECT =
   '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>disable</ImplicitUsings></PropertyGroup></Project>';

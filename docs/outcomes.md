@@ -1,7 +1,7 @@
 # Run outcomes and human acceptance
 
 A team learns by looking back at what it decided and how that turned out.
-Graph Engineering records how every managed run ended, links it to the
+Agile Graph records how every managed run ended, links it to the
 decisions and memories that shaped it, and keeps a person's acceptance of
 the result as a separate, recorded decision.
 

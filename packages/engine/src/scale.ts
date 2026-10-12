@@ -1,4 +1,4 @@
-import type { ProjectPolicy } from "@graph-engineering/contracts";
+import type { ProjectPolicy } from "@agile-graph/contracts";
 import { command } from "./util.js";
 import { inWorkingSet } from "./policy.js";
 import { excludedFromIndex, INDEX_FILE_LIMIT } from "./context/index.js";

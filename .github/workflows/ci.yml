@@ -77,7 +77,7 @@ jobs:
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           docker pull node:24-alpine
-          npm test -w @graph-engineering/engine -- --run tests/execution.test.ts tests/generator.test.ts
+          npm test -w @agile-graph/engine -- --run tests/execution.test.ts tests/generator.test.ts
         env:
           GRAPH_ENGINE_DOCKER_TESTS: "1"
       - name: Evaluation fixture self-checks
@@ -106,7 +106,7 @@ jobs:
         run: |
           docker pull golang@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804
           npm run verify:image
-          npm test -w @graph-engineering/engine -- --run tests/context-go.test.ts
+          npm test -w @agile-graph/engine -- --run tests/context-go.test.ts
           docker build --pull=false --network=none -f packages/engine/tests/fixtures/go-runtime/Dockerfile -t graph-go-native-test:local .
           docker run --rm --network=none --read-only --tmpfs /tmp:rw,exec,nosuid,size=768m --memory=1536m --cpus=2 --pids-limit=128 --cap-drop=ALL --security-opt=no-new-privileges graph-go-native-test:local
         env:
@@ -121,7 +121,7 @@ jobs:
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           docker pull mcr.microsoft.com/dotnet/sdk@sha256:78235e09001f52b6592c458ac010775ebac6725422e80cd0c1650590f67b2743
-          npm test -w @graph-engineering/engine -- --run tests/context-csharp.test.ts
+          npm test -w @agile-graph/engine -- --run tests/context-csharp.test.ts
           docker build --pull=false --network=none -f packages/engine/tests/fixtures/csharp-runtime/Dockerfile -t graph-csharp-native-test:local .
           docker run --rm --network=none --read-only --tmpfs /tmp:rw,exec,nosuid,size=768m --memory=1536m --cpus=2 --pids-limit=128 --cap-drop=ALL --security-opt=no-new-privileges graph-csharp-native-test:local
         env:
@@ -139,14 +139,14 @@ jobs:
           docker pull dart@sha256:4027705fb598ee07b016e17a06786e56c399f95308a54f7171fcc60871eb1738
           docker buildx build --platform=linux/amd64 --load --pull=false --network=none -f packages/engine/tests/fixtures/dart-runtime/Dockerfile -t graph-dart-analyzer:local packages/engine/tests/fixtures/dart-runtime
           docker image inspect graph-dart-analyzer:local --format 'Dart image={{.Id}} os={{.Os}} arch={{.Architecture}} env={{json .Config.Env}} entrypoint={{json .Config.Entrypoint}} labels={{json .Config.Labels}}'
-          npm test -w @graph-engineering/engine -- --run tests/context-dart-runtime.test.ts
+          npm test -w @agile-graph/engine -- --run tests/context-dart-runtime.test.ts
         env:
           GRAPH_ENGINE_DART_DOCKER_TESTS: "1"
       - name: Platform dashboard browser integration
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           npx playwright install --with-deps chromium
-          npm run test:e2e:fixture -w @graph-engineering/dashboard
+          npm run test:e2e:fixture -w @agile-graph/dashboard
 
   sidecar:
     runs-on: ubuntu-24.04
@@ -174,7 +174,7 @@ jobs:
       - name: Real scanners find, suppress and fingerprint findings
         run: |
           npm run build:dependencies
-          npm test -w @graph-engineering/engine -- tests/security-catalog.test.ts tests/security-live.test.ts
+          npm test -w @agile-graph/engine -- tests/security-catalog.test.ts tests/security-live.test.ts
         env:
           GRAPH_ENGINE_SECURITY_IMAGE: "1"
           GRAPH_ENGINE_LIVE_SCAN_TESTS: "1"
@@ -276,7 +276,7 @@ jobs:
             node --test --test-concurrency=1 evaluation/sealed/tests/module-graph-oracle.test.mjs
       - name: Offline bounded repository black-box oracle
         run: |
-          npm run build -w @graph-engineering/engine
+          npm run build -w @agile-graph/engine
           docker pull node:24-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
           docker build --pull=false --network=none \
             -f evaluation/sealed/worker-runtime/Dockerfile \

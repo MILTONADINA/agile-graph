@@ -2,7 +2,7 @@ import type {
   ProjectConfig,
   ProviderConfig,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 
 export interface AccountingGroup {
   totals: Usage;

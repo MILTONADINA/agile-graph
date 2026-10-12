@@ -1,7 +1,4 @@
-import type {
-  ExecutionPlan,
-  ExecutionStep,
-} from "@graph-engineering/contracts";
+import type { ExecutionPlan, ExecutionStep } from "@agile-graph/contracts";
 
 /** The step ID a configured tester's step always uses. */
 export const TESTER_STEP_ID = "tester";

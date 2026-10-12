@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { tsImport } from "tsx/esm/api";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ArtifactStore } from "../artifacts.mjs";
 import {
   repositoryV2ScopeBytes,

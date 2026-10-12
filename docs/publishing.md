@@ -1,13 +1,13 @@
 # Publishing to npm
 
-Graph Engineering ships as two public npm packages:
+Agile Graph ships as two public npm packages:
 
-| Package                        | What it is                                                  |
-| ------------------------------ | ----------------------------------------------------------- |
-| `@graph-engineering/contracts` | The shared project, context, execution and decision schemas |
-| `@graph-engineering/engine`    | The `graph-engine` command, its MCP server and dashboard    |
+| Package                  | What it is                                                  |
+| ------------------------ | ----------------------------------------------------------- |
+| `@agile-graph/contracts` | The shared project, context, execution and decision schemas |
+| `@agile-graph/engine`    | The `graph-engine` command, its MCP server and dashboard    |
 
-The dashboard is built into the engine package; `@graph-engineering/dashboard`
+The dashboard is built into the engine package; `@agile-graph/dashboard`
 stays private. Both packages carry the repository's MIT license, and the
 engine also carries the [`NOTICE`](../NOTICE) for its vendored files.
 
@@ -39,8 +39,8 @@ workflow needs npm 11.5.1 or later, which it installs.
 ## One-time setup
 
 1. **Create the npm organization.** Sign in to npmjs.com and create the free
-   organization `graph-engineering`, which owns the `@graph-engineering`
-   scope. Enable two-factor authentication on your npm account.
+   organization `agile-graph`, which owns the `@agile-graph` scope. Enable
+   two-factor authentication on your npm account.
 2. **Protect the release environment.** In the GitHub repository, open
    Settings → Environments → `npm` and add yourself as a required reviewer,
    so every publish waits for your approval.
@@ -71,7 +71,7 @@ workflow needs npm 11.5.1 or later, which it installs.
 
 1. On a feature branch, set the same new version in
    `packages/contracts/package.json` and `packages/engine/package.json`, and
-   the engine's dependency on `@graph-engineering/contracts` to that exact
+   the engine's dependency on `@agile-graph/contracts` to that exact
    version. Run `npm install --package-lock-only` and commit the lockfile.
 2. Merge the PR into `dev` through the usual checks.
 3. Tag the merged commit and push the tag:

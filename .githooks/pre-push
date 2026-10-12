@@ -4,14 +4,14 @@ push_remote=$(git config --get graph.pushRemote || true)
 if [ -n "$push_remote" ]; then
   allowed_url=$(git remote get-url --push "$push_remote") || exit 1
   if [ "$2" != "$allowed_url" ]; then
-    echo "Graph Engineering: pushes are restricted to $push_remote ($allowed_url). Upstream synchronization is deferred." >&2
+    echo "Agile Graph: pushes are restricted to $push_remote ($allowed_url)." >&2
     exit 1
   fi
 fi
 while read -r local_ref local_oid remote_ref remote_oid; do
   case "$remote_ref" in
     refs/heads/main|refs/heads/master|refs/heads/dev)
-      echo 'Graph Engineering: direct pushes to main/master/dev are prohibited. Use a feature branch and a PR to dev.' >&2
+      echo 'Agile Graph: direct pushes to main/master/dev are prohibited. Use a feature branch and a PR to dev.' >&2
       exit 1
       ;;
   esac

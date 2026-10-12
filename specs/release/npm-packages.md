@@ -6,8 +6,8 @@
 
 ## Problem
 
-People should be able to install Graph Engineering with
-`npm install --global @graph-engineering/engine` and use it on their own
+People should be able to install Agile Graph with
+`npm install --global @agile-graph/engine` and use it on their own
 machine, without cloning the repository. What they install must contain only
 the built engine and the files it needs at run time, carry the project's
 license, and never reach outside its own package for code or files to load
@@ -16,7 +16,7 @@ it.
 
 ## Acceptance criteria
 
-- AC1: `@graph-engineering/contracts` and `@graph-engineering/engine` are
+- AC1: `@agile-graph/contracts` and `@agile-graph/engine` are
   public, MIT-licensed, require Node.js 24 to 26, name this repository (with
   the exact URL npm trusted publishing checks) and share one version, with the
   engine depending on exactly that contracts version. The dashboard and the

@@ -64,8 +64,8 @@ export function App() {
             <br />A private connection.
           </h1>
           <p>
-            Open the dashboard URL printed by your Graph Engineering terminal.
-            That link connects this browser to your local engine.
+            Open the dashboard URL printed by your Agile Graph terminal. That
+            link connects this browser to your local engine.
           </p>
           <div className="note">
             Your access token stays in this browser session.

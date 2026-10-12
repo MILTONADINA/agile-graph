@@ -13,7 +13,7 @@ import { z } from "zod";
 import {
   assertProjectConfig,
   type ProjectConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { ContextEngine } from "./context/index.js";
 import { ContextDatabase, CONTEXT_SCHEMA_VERSION } from "./context/database.js";
 import { fingerprintFile } from "./context/maintenance.js";

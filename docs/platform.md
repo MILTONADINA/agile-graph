@@ -1,4 +1,4 @@
-# Graph Engineering platform
+# Agile Graph platform
 
 The platform extends the existing template registry with a local context engine and managed engineering runs. The CLI, MCP server, and browser dashboard use the same project configuration and project-scoped local stores. Context and operational history have separate SQLite databases. The template systems keep their separate metadata contracts.
 
@@ -105,7 +105,7 @@ npm run graph -- -C /path/to/project run PLAN_ID
 
 `provider-add` stores a worker's whole configuration, replacing any worker with the same ID, and permits a local worker. A cloud or installed worker needs `--enable`; to permit a worker that is already configured, run `provider-enable <id>`, which adds it to `policy.providers` and leaves its endpoint, key variable, prices, efforts and limits unchanged. The program's own options, such as `-C <project>`, go before the command; `-C` defaults to the current directory, and a command run where there is no `.graph/project.json` says to run `graph-engine init` there or pass `-C <project root>`. Under a numeric `policy.maxCostUsd` (the checked-in project uses 0), planning refuses a worker without recorded prices, including a local one, so the example records a local worker's prices as zero with `--input-cost 0 --output-cost 0`; `provider-add`, `provider-enable`, `reviewer`, `auditor` and `tester` warn about a worker the cap would refuse for that reason. An installed agent (codex, claude or cursor) reports no cost the engine can enforce, so a numeric cap refuses it whatever prices are recorded; the same warnings say so and point to an openai, anthropic, chat or local worker. Pull or build each check's image before a run (`docker pull node:24-alpine` for the example): `run` and `resume` refuse, before any worker is paid, while an image a plan's checks use is not on this machine, naming it (a cloud-backed MCP client's `run_start` is told only that an image is missing), and the plan stays usable once it is. Register checks with `check-add` before planning: a plan keeps the verification commands configured when it was created, so `plan` (and `plan_create` and the dashboard) warns about a plan with none, and `run` refuses it and, once checks exist, says to create a new plan.
 
-The local endpoint must support OpenAI-compatible chat completions and structured JSON responses. Graph Engineering does not install or assume a particular generative model. Cloud API providers use `openai`, `anthropic` or `chat`; configure their model, supported efforts, and credential environment variable explicitly. Installed-agent capability restrictions are described in `installed-workers.md`.
+The local endpoint must support OpenAI-compatible chat completions and structured JSON responses. Agile Graph does not install or assume a particular generative model. Cloud API providers use `openai`, `anthropic` or `chat`; configure their model, supported efforts, and credential environment variable explicitly. Installed-agent capability restrictions are described in `installed-workers.md`.
 
 `chat` is any hosted OpenAI-compatible chat-completions service, such as a hosted Qwen, a model gateway or a vLLM server. It calls `POST {endpoint}/chat/completions` with a strict `json_schema` response format and sends the key from its variable as a bearer token. It has no default address or key variable, so both are required, and its endpoint must be HTTPS on a host listed in `policy.allowedHosts`, with no loopback exception: a model server on this machine is a `local` worker instead. Local-server options such as `--local-thinking` do not apply to it. A `chat` worker is a cloud consumer exactly like `openai`: it receives only exportable context, it is refused secrets and by an offline policy, it counts as non-local in a cloud-backed client's one-side plan check, and a numeric `policy.maxCostUsd` needs its prices recorded.
 
@@ -113,7 +113,7 @@ The local endpoint must support OpenAI-compatible chat completions and structure
 npm run graph -- -C /path/to/project provider-add hosted chat YOUR_HOSTED_MODEL --endpoint https://models.example/v1 --api-key-env HOSTED_MODEL_KEY --input-cost REVIEWED_PRICE --output-cost REVIEWED_PRICE
 ```
 
-`--api-key-env` and `--key-env` are the same option. The engine defines the provider kinds once, in `@graph-engineering/contracts`: `LOCAL_KINDS` (`local`), `API_KINDS` (`openai`, `anthropic`, `chat`) and `INSTALLED_KINDS` (`codex`, `claude`, `cursor`), with `isInstalledKind`, `isApiKind` and `isCloudKind` (every kind but `local`).
+`--api-key-env` and `--key-env` are the same option. The engine defines the provider kinds once, in `@agile-graph/contracts`: `LOCAL_KINDS` (`local`), `API_KINDS` (`openai`, `anthropic`, `chat`) and `INSTALLED_KINDS` (`codex`, `claude`, `cursor`), with `isInstalledKind`, `isApiKind` and `isCloudKind` (every kind but `local`).
 
 To enable cloud API workers, review `.graph/project.json`: its checked-in inference/network mode is already `allowlisted`, but only local `qwen`/`laya` providers are permitted and no outbound hosts are listed. Add explicitly reviewed cloud provider IDs and exact HTTPS hosts, and review the selected exportable file patterns before use. Do not use wildcard network hosts. A strict cost budget requires known pricing and a compatible API worker; missing telemetry is unknown, not zero.
 
@@ -157,7 +157,7 @@ Managed Git operations suppress repository hooks, executable filters, filesystem
 
 ```sh
 npm run check
-GRAPH_ENGINE_DOCKER_TESTS=1 npm test -w @graph-engineering/engine
+GRAPH_ENGINE_DOCKER_TESTS=1 npm test -w @agile-graph/engine
 ```
 
 The launch target matrix is macOS ARM64, Linux x64/ARM64 on glibc, and Windows x64. CI checks native dependencies and all language parsers on those runners. The optional embedding integration test uses real weights, downloading them only when its explicitly configured cache is missing; default tests remain offline. A passing synthetic/mock test is not evidence that every provider, device, or production workload has been validated.

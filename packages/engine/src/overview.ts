@@ -1,8 +1,4 @@
-import type {
-  RunEvent,
-  RunOutcome,
-  RunRecord,
-} from "@graph-engineering/contracts";
+import type { RunEvent, RunOutcome, RunRecord } from "@agile-graph/contracts";
 
 /** Who acts next on a run, as an agile board groups work. */
 export type OverviewColumn = "needs-you" | "in-progress" | "done";

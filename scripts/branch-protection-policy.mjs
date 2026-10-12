@@ -1,4 +1,4 @@
-export const repository = "MILTONADINA/graph-engineering";
+export const repository = "MILTONADINA/agile-graph";
 
 const platformChecks = [
   "platform (ubuntu-24.04)",

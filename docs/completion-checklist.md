@@ -11,7 +11,7 @@ calibration evidence.
 
 Work is stacked in focused commits on feature branches. No direct pushes to
 `main` and no AI co-author trailers. The owner authorized review and merge of
-the implementation into `MILTONADINA/graph-engineering:dev`.
+the implementation into `MILTONADINA/agile-graph:dev`.
 
 ## Active follow-on: default-enabled automatic feedback
 
@@ -63,9 +63,9 @@ and [deadline spec](../specs/quality/verification-deadlines.md).
 - [x] Deliver actual reviewed merged pin and CI/build identities.
 
 Both settings released through
-[PR #125](https://github.com/MILTONADINA/graph-engineering/pull/125) at
+[PR #125](https://github.com/MILTONADINA/agile-graph/pull/125) at
 `5b88af9787f9da00e312268847aee27053be8555` after all nine required jobs passed
-in [CI run 36911129917](https://github.com/MILTONADINA/graph-engineering/actions/runs/36911129917),
+in [CI run 36911129917](https://github.com/MILTONADINA/agile-graph/actions/runs/36911129917),
 attempt 1. Checked head and merged commit share the same tree. The handover
 and PR record exact CI/build identities. Lower PR #124 is closed as included;
 consumer activation remains separate from this GE release.
@@ -84,9 +84,9 @@ and [selection spec](../specs/quality/verification-selection.md).
 - [x] Required exact-head CI and reviewed merge into fork `dev`.
 - [x] Exact merged pin and CI/build evidence delivered for consumer adoption.
 
-[PR #123](https://github.com/MILTONADINA/graph-engineering/pull/123) merged at
+[PR #123](https://github.com/MILTONADINA/agile-graph/pull/123) merged at
 `104accacf0c4389699bfab3f32140095e13654fa` after all nine required checks in
-[CI run 36820953784](https://github.com/MILTONADINA/graph-engineering/actions/runs/36820953784),
+[CI run 36820953784](https://github.com/MILTONADINA/agile-graph/actions/runs/36820953784),
 attempt 1. Its checked and merged commits have identical trees. The handover
 and PR Verification record hold exact source/build/job identities. Consumer
 activation remains separate; no live-inference or promotion claim is made.
@@ -106,26 +106,26 @@ and [identity spec](../specs/providers/installed-worker-identity.md).
 - [x] Required exact-head CI and reviewed PR merge into fork `dev`.
 - [x] Exact merged pin and CI/build evidence delivered for consumer adoption.
 
-[PR #122](https://github.com/MILTONADINA/graph-engineering/pull/122) merged at
+[PR #122](https://github.com/MILTONADINA/agile-graph/pull/122) merged at
 `40cfd318d5c79830ab02b3c84d260061f873b627` after all nine required checks in
-[CI run 36816489588](https://github.com/MILTONADINA/graph-engineering/actions/runs/36816489588),
+[CI run 36816489588](https://github.com/MILTONADINA/agile-graph/actions/runs/36816489588),
 attempt 1. Checked head and merge share the same Git tree; the handover and
 PR record the full identities. No live-inference or independent promotion
 claim is made. Per-plan selection has its separate completed release above.
 
 ## Current release checkpoint — 2026-09-30
 
-[PR #118](https://github.com/MILTONADINA/graph-engineering/pull/118) merged
+[PR #118](https://github.com/MILTONADINA/agile-graph/pull/118) merged
 into fork `dev` at `d22d69ad0f08bbc95fa2209d42171234817f780d` on
 2026-09-30 at 18:57:27 UTC. This is the reviewed approval-release pin; it
 separates the approval gate, scoped implementation repairs and opt-in
 installed-worker deadlines from the separately delivered Dart/generator stack.
 The exact checked head `e25565b09aa974dd657f1b273a570a6cac903d10` and
 merged commit share Git tree `cd9a497d0370642f7b5f92063bdd0317441f9bd2`.
-[CI run 36759128007](https://github.com/MILTONADINA/graph-engineering/actions/runs/36759128007),
+[CI run 36759128007](https://github.com/MILTONADINA/agile-graph/actions/runs/36759128007),
 attempt 1, passed all nine required checks on that head; independent scoped
 source and contract review found no blockers. The separate automatic post-merge
-[run 36762274094](https://github.com/MILTONADINA/graph-engineering/actions/runs/36762274094),
+[run 36762274094](https://github.com/MILTONADINA/agile-graph/actions/runs/36762274094),
 attempt 1 on `d22d69a`, ended cancelled: eight jobs passed and Linux x64 was
 cancelled during `npm run check`. No test failure or cancellation cause was
 recorded; this session neither cancelled nor reran it. The checked-head run
@@ -157,13 +157,13 @@ root was corrected to absolute before rerunning only the 12 affected failures;
 no runtime patch was needed. Those local checks preceded the completed narrow
 CI/review/merge and remain distinct from live provider evidence.
 
-[PR #119](https://github.com/MILTONADINA/graph-engineering/pull/119) merged
+[PR #119](https://github.com/MILTONADINA/agile-graph/pull/119) merged
 the Dart/model-role/generator/analyzer stack into fork `dev` on 2026-09-30 at
 21:33:03 UTC, at runtime-release pin
 `09427fe33a273f8426580b806eafdb5717e702a7`. Exact checked head
 `84dcbbe162e4cf90883a5095c2ac912fce74ffd4` and the merged commit share tree
 `76d24aebb95eeb1d431fc23d0973220846d8b37b`.
-[CI run 36777117238](https://github.com/MILTONADINA/graph-engineering/actions/runs/36777117238),
+[CI run 36777117238](https://github.com/MILTONADINA/agile-graph/actions/runs/36777117238),
 attempt 1, passed all nine required jobs, including native Dart and generator
 integrations in Linux x64 job `110097698965`. Independent scoped agent
 review and main-session review found no blockers; no external human approval
@@ -173,14 +173,14 @@ over 121 engine files. The [handover](claude-code-handover.md#dart-and-generator
 records all job identities. Documentation-only follow-ups do not change this
 runtime-release pin; `d22d69a…` remains the independent approval-only option.
 
-The subsequent automatic push [run 36783841908](https://github.com/MILTONADINA/graph-engineering/actions/runs/36783841908)
+The subsequent automatic push [run 36783841908](https://github.com/MILTONADINA/agile-graph/actions/runs/36783841908)
 on documentation commit `d21761e` failed the Windows missing-image MCP privacy
 fixture with a generic SIGTERM; eight jobs passed. The terminated child is
 not identified by that log. A test-only portability correction replaces its
 Unix `PATH` shim with an exact image-inspection command double, retaining the
 real privacy-handling code, all response assertions and production timeouts.
 The local case and scoped review passed, and Windows
-[preflight 36799636801](https://github.com/MILTONADINA/graph-engineering/actions/runs/36799636801)
+[preflight 36799636801](https://github.com/MILTONADINA/agile-graph/actions/runs/36799636801)
 ran the exact case successfully on `171630f`, job `110170850178` (one passed,
 not all skipped). See the [handover follow-up](claude-code-handover.md#post-release-windows-fixture-follow-up).
 Consult the PR on `fix/mcp-image-preflight-fixture` for the final required-check
@@ -190,7 +190,7 @@ Runtime identity and the independent approval/repair pin remain unchanged.
 ### Feature validation history (historical)
 
 The first PR #119 exact-head run
-[36768502119](https://github.com/MILTONADINA/graph-engineering/actions/runs/36768502119),
+[36768502119](https://github.com/MILTONADINA/agile-graph/actions/runs/36768502119),
 attempt 1 at `04f49778d76b354f5d24a46c61649154f878625c`, ended with eight
 jobs passing and Linux x64 job `110068618463` failing in Dart bindings. The
 native exact empty-AOT-environment and real bounded-timeout cases passed;
@@ -208,11 +208,11 @@ remain distinct from the native CI results above. Scoped runtime-port review
 found no blockers; the dropped generator approval-display spec binding was
 restored. Synthetic-only diagnostics and a separate focused preflight were
 added at `455da45` on `fix/dart-binding-native-preflight-20260930`.
-[Focused run 36772700675](https://github.com/MILTONADINA/graph-engineering/actions/runs/36772700675)
+[Focused run 36772700675](https://github.com/MILTONADINA/agile-graph/actions/runs/36772700675)
 failed during initialization with `Dart analyzer memory monitor failed`.
 Second test-only diagnostic head `59cc6c7` passed its one selected native
 binding case in
-[run 36773291042](https://github.com/MILTONADINA/graph-engineering/actions/runs/36773291042),
+[run 36773291042](https://github.com/MILTONADINA/agile-graph/actions/runs/36773291042),
 without a runtime change; that intermittent pass does not establish a fix.
 
 The first correction changed the internal Docker stats command allowance
@@ -228,7 +228,7 @@ historical source manifest
 over 121 files.
 
 Native preflight at `209d5426ad9e39338f6feb2fb266385c790aa9b5` in
-[run 36774307816](https://github.com/MILTONADINA/graph-engineering/actions/runs/36774307816)
+[run 36774307816](https://github.com/MILTONADINA/agile-graph/actions/runs/36774307816)
 passed initialization but failed readiness after a missing-container sample
 and then successful Docker output `0B / 0B`; neither sample timed out. The
 startup correction recognizes only that anchored empty-stats sentinel as
@@ -242,7 +242,7 @@ historical source manifest
 over 121 files.
 
 Diagnostic head `b877322c7c7081ddf17197ff53ddb1f1039b2106` in
-[run 36775946203](https://github.com/MILTONADINA/graph-engineering/actions/runs/36775946203)
+[run 36775946203](https://github.com/MILTONADINA/agile-graph/actions/runs/36775946203)
 completed definition responses and confirmed LSP termination, but the owned
 container's already-in-progress removal caused cleanup failure. Pushed fix
 `d7612cd08b5eeabd6a6d7cd374c3924a464c1ce4` handles only the same-name response
@@ -254,7 +254,7 @@ from the earlier three timing and eight startup cases. Current engine build,
 lint, format and scoped source/test review passed with manifest
 `cb2878c24080100d101056e23b1db9f404d6b00ac37b99c8ede37bb67ea4e07b`
 over 121 files. No assertion was relaxed. Corrected-head native preflight
-[36776596177](https://github.com/MILTONADINA/graph-engineering/actions/runs/36776596177)
+[36776596177](https://github.com/MILTONADINA/agile-graph/actions/runs/36776596177)
 passed on exact `d7612cd08b5eeabd6a6d7cd374c3924a464c1ce4`; job
 `110095953506` verified the direct/imported binding case. That focused result
 preceded, and did not replace, the completed final-head CI and review above.
@@ -272,15 +272,15 @@ or policy/budget changes are part of these documentation updates.
 
 ## Historical fork state — 2026-09-24 UTC
 
-Foundation [PR #3](https://github.com/MILTONADINA/graph-engineering/pull/3)
-and platform [PR #2](https://github.com/MILTONADINA/graph-engineering/pull/2)
+Foundation [PR #3](https://github.com/MILTONADINA/agile-graph/pull/3)
+and platform [PR #2](https://github.com/MILTONADINA/agile-graph/pull/2)
 were rebase-merged into the owner's fork `dev` at `bcbd691`. All nine required
 checks passed on the PR tip and again in
-[the post-merge run](https://github.com/MILTONADINA/graph-engineering/actions/runs/35978069125).
-[PR #4](https://github.com/MILTONADINA/graph-engineering/pull/4) then added
+[the post-merge run](https://github.com/MILTONADINA/agile-graph/actions/runs/35978069125).
+[PR #4](https://github.com/MILTONADINA/agile-graph/pull/4) then added
 the opt-in local worker signature emitter and was rebase-merged at `0649e95`;
 its nine required PR checks and
-[post-merge `dev` run](https://github.com/MILTONADINA/graph-engineering/actions/runs/35983667667)
+[post-merge `dev` run](https://github.com/MILTONADINA/agile-graph/actions/runs/35983667667)
 also passed. The Vite/React catalog work described below is a separate feature
 branch, not part of that merged `dev` commit.
 The fork `main` still requires seven checks and one independent approval;
@@ -290,36 +290,36 @@ force-push/deletion protection. No commit was pushed to `main`. The
 subsequent owner-reported acceptance of the UTF-8 real-task run is recorded
 below.
 
-Subsequent fork-only PRs [#4](https://github.com/MILTONADINA/graph-engineering/pull/4),
-[#5](https://github.com/MILTONADINA/graph-engineering/pull/5) and
-[#6](https://github.com/MILTONADINA/graph-engineering/pull/6) were also
+Subsequent fork-only PRs [#4](https://github.com/MILTONADINA/agile-graph/pull/4),
+[#5](https://github.com/MILTONADINA/agile-graph/pull/5) and
+[#6](https://github.com/MILTONADINA/agile-graph/pull/6) were also
 rebase-merged into `dev`, through `3b433cb`. Their exact-tip required checks
 passed. They add local signed worker-delivery receipts, an audited Vite/React
 scaffold and API client, and optional worker-key fingerprint registry checks.
 Neither `main` nor the parent repository was updated.
 
-[PR #7](https://github.com/MILTONADINA/graph-engineering/pull/7),
-[#8](https://github.com/MILTONADINA/graph-engineering/pull/8), and
-[#9](https://github.com/MILTONADINA/graph-engineering/pull/9) merged next,
+[PR #7](https://github.com/MILTONADINA/agile-graph/pull/7),
+[#8](https://github.com/MILTONADINA/agile-graph/pull/8), and
+[#9](https://github.com/MILTONADINA/agile-graph/pull/9) merged next,
 bringing fork `dev` to `9611ec5`. They added optional oracle-key registry
 comparison, Cursor private-context exclusions, and fail-closed Codex proposal
-event handling. Later [PR #10](https://github.com/MILTONADINA/graph-engineering/pull/10),
-[#14](https://github.com/MILTONADINA/graph-engineering/pull/14),
-[#12](https://github.com/MILTONADINA/graph-engineering/pull/12), and
-[#11](https://github.com/MILTONADINA/graph-engineering/pull/11) were
+event handling. Later [PR #10](https://github.com/MILTONADINA/agile-graph/pull/10),
+[#14](https://github.com/MILTONADINA/agile-graph/pull/14),
+[#12](https://github.com/MILTONADINA/agile-graph/pull/12), and
+[#11](https://github.com/MILTONADINA/agile-graph/pull/11) were
 rebase-merged in that order on 2026-09-24, bringing fork `dev` to `3bee02f`.
 Their nine required checks passed on each PR head before merge. These changes
 added analysis-only promotion projections, bounded Docker availability retries,
 signed promotion-approval inspection without grants, and optional source-key
 registry comparison. The
-[post-merge `dev` run](https://github.com/MILTONADINA/graph-engineering/actions/runs/36025914101)
+[post-merge `dev` run](https://github.com/MILTONADINA/agile-graph/actions/runs/36025914101)
 for `3bee02f` also passed all nine required checks.
 
-[PR #13](https://github.com/MILTONADINA/graph-engineering/pull/13) then merged
+[PR #13](https://github.com/MILTONADINA/agile-graph/pull/13) then merged
 the remaining reviewed implementation/documentation stack into the fork's
 `dev`. The final `dev` head for this phase was
 `cf4245848cab24181b104d5cc3eb36f19a32a9f7`; its
-[post-merge CI run](https://github.com/MILTONADINA/graph-engineering/actions/runs/36030395799)
+[post-merge CI run](https://github.com/MILTONADINA/agile-graph/actions/runs/36030395799)
 passed all nine required jobs. This supersedes the earlier references to
 Vite/React and review/merge as pending implementation.
 

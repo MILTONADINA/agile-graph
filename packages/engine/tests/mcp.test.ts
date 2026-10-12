@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { ExecutionPlan, RunRecord } from "@graph-engineering/contracts";
+import type { ExecutionPlan, RunRecord } from "@agile-graph/contracts";
 import { GraphEngine } from "../src/service.js";
 import { initializeProject, projectDataDir } from "../src/project.js";
 import { createMcpServer } from "../src/mcp.js";
@@ -395,7 +395,7 @@ it("cloud graph traversal cannot expose resolved private targets or bridge throu
         expect(result.isError).not.toBe(true);
         const { edges } = JSON.parse(
           (result.content as { type: string; text: string }[])[0]!.text,
-        ) as { edges: import("@graph-engineering/contracts").GraphEdge[] };
+        ) as { edges: import("@agile-graph/contracts").GraphEdge[] };
         expect(
           edges.some(
             (edge) =>
@@ -441,7 +441,7 @@ it("cloud graph traversal cannot expose resolved private targets or bridge throu
             const packet = JSON.parse(
               (contextResult.content as { type: string; text: string }[])[0]!
                 .text,
-            ) as import("@graph-engineering/contracts").ContextPacket;
+            ) as import("@agile-graph/contracts").ContextPacket;
             expect(packet.items).toEqual([]);
             expect(packet.estimatedTokens).toBe(estimateTokens(query) + 64);
           }

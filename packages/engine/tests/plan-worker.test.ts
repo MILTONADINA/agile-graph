@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  DEFAULT_POLICY,
-  type ContextPacket,
-} from "@graph-engineering/contracts";
+import { DEFAULT_POLICY, type ContextPacket } from "@agile-graph/contracts";
 import {
   invokePlanWorker,
   PLANNER_INSTRUCTIONS,

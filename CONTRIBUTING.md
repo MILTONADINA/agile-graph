@@ -2,7 +2,7 @@
 
 `dev` is the integration branch. Work on focused feature branches and open pull requests against `dev`; never push directly to `main`, `master`, or `dev`.
 
-The project lives at `MILTONADINA/graph-engineering` (the `origin` remote) and
+The project lives at `MILTONADINA/agile-graph` (the `origin` remote) and
 is led by its owner. Push feature branches to `origin` and merge reviewed,
 green PRs into `dev`. Under the owner's current authorization, the working
 agent may author-review the actual diff and exact-tip CI, then merge those PRs

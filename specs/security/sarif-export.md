@@ -6,9 +6,9 @@
 
 ## Problem
 
-Security findings are only available in Graph Engineering's own JSON. Code hosts, editors and other
+Security findings are only available in Agile Graph's own JSON. Code hosts, editors and other
 review tools read SARIF 2.1.0, the standard static-analysis format. Teams using any AI client or CI
-system should be able to load Graph Engineering's findings without a custom converter.
+system should be able to load Agile Graph's findings without a custom converter.
 
 ## Acceptance criteria
 

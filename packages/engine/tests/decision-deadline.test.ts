@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  assertProjectPolicy,
-  DEFAULT_POLICY,
-} from "@graph-engineering/contracts";
+import { assertProjectPolicy, DEFAULT_POLICY } from "@agile-graph/contracts";
 import {
   decideBatch,
   type DecisionBatchOptions,

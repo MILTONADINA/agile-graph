@@ -9,11 +9,11 @@ import type {
   ProviderConfig,
   RunEvent,
   RunRecord,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   MAX_VERIFICATION_SELECTION,
   VERIFICATION_CHECK_ID_PATTERN,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import type { GraphEngine } from "./service.js";
 import { dockerAvailable } from "./execution/docker.js";
 import { MAX_PLAN_OBJECTIVE } from "./planning.js";
@@ -414,7 +414,7 @@ export function createServer(
     app.get("/", { config: { [PUBLIC_ASSET]: true } }, async () => ({
       message: checkout
         ? "Build the dashboard with npm run build, then restart the server."
-        : "This installation has no dashboard files; reinstall @graph-engineering/engine.",
+        : "This installation has no dashboard files; reinstall @agile-graph/engine.",
     }));
   return { app, token };
 }

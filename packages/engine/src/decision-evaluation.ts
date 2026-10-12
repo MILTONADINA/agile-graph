@@ -1,4 +1,4 @@
-import type { DecisionRecord } from "@graph-engineering/contracts";
+import type { DecisionRecord } from "@agile-graph/contracts";
 import { z } from "zod";
 import {
   evaluationDatasetSchema,

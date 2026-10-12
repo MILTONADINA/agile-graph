@@ -12,7 +12,7 @@ import {
   type ProjectConfig,
   type ProjectPolicy,
   type ProviderConfig,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { id, readJson, writeJson } from "./util.js";
 
 export const PROJECT_FILE = ".graph/project.json";
@@ -26,7 +26,7 @@ export async function loadProject(root: string): Promise<ProjectConfig> {
     // Keeps the ENOENT code: initializeProject creates the file on it.
     throw Object.assign(
       new Error(
-        `No Graph Engineering project at ${root}: run graph-engine init there, or pass -C <project root> before the command`,
+        `No Agile Graph project at ${root}: run graph-engine init there, or pass -C <project root> before the command`,
         { cause: error },
       ),
       { code: "ENOENT" },

@@ -1,4 +1,4 @@
-# @graph-engineering/engine
+# @agile-graph/engine
 
 An AI agile team for your repository. You are the product owner: you write
 feature specs with acceptance criteria, approve plans and accept results. AI
@@ -14,7 +14,7 @@ worktree, limited to the files it declares.
 ## Install
 
 ```sh
-npm install --global @graph-engineering/engine
+npm install --global @agile-graph/engine
 graph-engine --version
 ```
 
@@ -38,7 +38,7 @@ results with `graph-engine accept`. `graph-engine --help` lists every command.
 
 To give an AI client such as Claude Code, Codex or Cursor the project's
 context, run `graph-engine -C /path/to/your/project mcp` as its MCP server.
-See [connecting an AI client](https://github.com/MILTONADINA/graph-engineering/blob/dev/docs/mcp-clients.md).
+See [connecting an AI client](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/mcp-clients.md).
 
 ## Optional integrations
 
@@ -56,7 +56,7 @@ The security gate runs its scanners in a local Docker image. Build it once
 from the Dockerfile this package ships:
 
 ```sh
-docker build -t graph-security:local "$(npm root --global)/@graph-engineering/engine/scanner"
+docker build -t graph-security:local "$(npm root --global)/@agile-graph/engine/scanner"
 ```
 
 ## Data and privacy
@@ -75,10 +75,10 @@ off with `graph-engine feedback-config off` or `GRAPH_ENGINE_NO_FEEDBACK=1`.
 
 ## Documentation
 
-The [repository](https://github.com/MILTONADINA/graph-engineering) has the
-[platform guide](https://github.com/MILTONADINA/graph-engineering/blob/dev/docs/platform.md),
-[working as an AI agile team](https://github.com/MILTONADINA/graph-engineering/blob/dev/docs/agile-team.md)
-and the [documentation index](https://github.com/MILTONADINA/graph-engineering/blob/dev/docs/README.md).
+The [repository](https://github.com/MILTONADINA/agile-graph) has the
+[platform guide](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/platform.md),
+[working as an AI agile team](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/agile-team.md)
+and the [documentation index](https://github.com/MILTONADINA/agile-graph/blob/dev/docs/README.md).
 
 ## License
 

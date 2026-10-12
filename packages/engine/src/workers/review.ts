@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { isApiKind } from "@graph-engineering/contracts";
+import { isApiKind } from "@agile-graph/contracts";
 import type {
   ProjectPolicy,
   ProviderConfig,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import { assertProvider, containsSecret } from "../policy.js";
 import {
   callStructuredProvider,

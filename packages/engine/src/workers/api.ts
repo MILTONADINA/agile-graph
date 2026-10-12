@@ -9,7 +9,7 @@ import type {
   ProjectPolicy,
   ProviderConfig,
   Usage,
-} from "@graph-engineering/contracts";
+} from "@agile-graph/contracts";
 import {
   assertChatEndpoint,
   assertEndpoint,

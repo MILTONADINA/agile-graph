@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ExecutionPlan, RunRecord } from "@graph-engineering/contracts";
+import type { ExecutionPlan, RunRecord } from "@agile-graph/contracts";
 import { GraphEngine } from "../src/service.js";
 import { initializeProject, projectDataDir } from "../src/project.js";
 

@@ -14,7 +14,7 @@ import {
   validateGoOutput,
 } from "../src/context/go.js";
 import { checked, command } from "../src/util.js";
-import { DEFAULT_POLICY } from "@graph-engineering/contracts";
+import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import { ContextEngine } from "../src/context/index.js";
 
 const runtime = await goRuntime();
