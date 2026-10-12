@@ -972,7 +972,36 @@ export function readTurnBudget(
   );
 }
 // Limits JSON Schema cannot relate: the read budget is part of maxTurns.
+/**
+ * Path globs compile to regular expressions that backtrack on a near match:
+ * on a 255-character path segment, four `*` wildcards in one segment took
+ * about 64 ms per path, five took seconds and six took minutes. A path
+ * segment may hold at most this many wildcards (a run of `*`, or an extglob
+ * group such as `+(...)`), and a glob at most GLOB_LENGTH_LIMIT characters.
+ */
+export const GLOB_SEGMENT_WILDCARD_LIMIT = 3;
+export const GLOB_LENGTH_LIMIT = 512;
+/** Why a glob is too costly to match, or undefined when it is fine. */
+export function globComplexityError(pattern: string): string | undefined {
+  if (pattern.length > GLOB_LENGTH_LIMIT)
+    return `glob ${JSON.stringify(pattern.slice(0, 40))}... is longer than ${GLOB_LENGTH_LIMIT} characters`;
+  for (const segment of pattern.replace(/^!/, "").split("/")) {
+    if (segment === "**") continue;
+    const wildcards = (segment.match(/\*+|[?+@!]\(/g) ?? []).length;
+    if (wildcards > GLOB_SEGMENT_WILDCARD_LIMIT)
+      return `glob ${JSON.stringify(pattern)} has ${wildcards} wildcards in one path segment; at most ${GLOB_SEGMENT_WILDCARD_LIMIT} are allowed, since more can take minutes to match`;
+  }
+  return undefined;
+}
 function policyLimitError(policy: ProjectPolicy): string | undefined {
+  for (const pattern of [
+    ...policy.exportPaths,
+    ...policy.excludedPaths,
+    ...(policy.workingSet ?? []),
+  ]) {
+    const error = globComplexityError(pattern);
+    if (error) return error;
+  }
   return policy.maxReadTurns !== undefined &&
     policy.maxReadTurns > policy.maxTurns
     ? `maxReadTurns (${policy.maxReadTurns}) must be at most maxTurns (${policy.maxTurns}): the read budget comes out of maxTurns`
@@ -1136,7 +1165,11 @@ export function assertProjectConfig(
     throw new Error(
       `Invalid project configuration: ${ajv.errorsText(validateProject.errors)}`,
     );
-  const limits = policyLimitError((value as unknown as ProjectConfig).policy);
+  const limits =
+    policyLimitError((value as unknown as ProjectConfig).policy) ??
+    ((value as unknown as ProjectConfig).tester?.writes ?? [])
+      .map(globComplexityError)
+      .find(Boolean);
   if (limits) throw new Error(`Invalid project configuration: ${limits}`);
   const ids = (
     (value as unknown as ProjectConfig).security?.liveTargets ?? []
