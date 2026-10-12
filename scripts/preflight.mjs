@@ -11,21 +11,25 @@ const CONTRACTS = "packages/contracts/";
 const DASHBOARD = "packages/dashboard/";
 
 /**
- * The steps to run for a set of changed repository paths, in order. Each
- * step is { name, command, args, cwd? }; cwd is relative to the repository.
+ * The steps to run for the repository paths a change added or modified
+ * (`changed`) and deleted (`deleted`), in order. A deleted path chooses
+ * steps (a deleted source still needs the typecheck that finds imports of
+ * it) but is never passed to a tool. Each step is { name, command, args,
+ * cwd? }; cwd is relative to the repository.
  */
-export function planPreflight(changed) {
+export function planPreflight(changed, deleted = []) {
   const files = [...new Set(changed)].filter(Boolean).sort();
+  const touched = [...new Set([...files, ...deleted])].filter(Boolean);
   const steps = [
     { name: "format", command: "npm", args: ["run", "format:check"] },
   ];
   const lintable = files.filter((file) => /\.(c|m)?[jt]sx?$/.test(file));
-  if (files.includes("eslint.config.mjs"))
+  if (touched.includes("eslint.config.mjs"))
     steps.push({ name: "lint", command: "npm", args: ["run", "lint"] });
   else if (lintable.length)
     steps.push({ name: "lint", command: "npx", args: ["eslint", ...lintable] });
-  const typed = files.some(
-    (file) => /\.tsx?$/.test(file) || file.startsWith("tsconfig"),
+  const typed = touched.some(
+    (file) => /\.tsx?$/.test(file) || /(^|\/)tsconfig[^/]*\.json$/.test(file),
   );
   if (typed)
     steps.push({
@@ -43,7 +47,7 @@ export function planPreflight(changed) {
       args: ["vitest", "related", "--run", ...engine],
       cwd: ENGINE,
     });
-  if (files.some((file) => file.startsWith(DASHBOARD)))
+  if (touched.some((file) => file.startsWith(DASHBOARD)))
     steps.push({
       name: "dashboard tests",
       command: "npm",
@@ -52,7 +56,7 @@ export function planPreflight(changed) {
   const scriptTests = [
     ...new Set(
       files
-        .filter((file) => /^(scripts|evaluation)\/[^/]+\.mjs$/.test(file))
+        .filter((file) => /^(scripts|evaluation)\/.+\.mjs$/.test(file))
         .map((file) =>
           file.endsWith(".test.mjs")
             ? file
@@ -67,7 +71,7 @@ export function planPreflight(changed) {
       args: ["--test", ...scriptTests],
     });
   if (
-    files.some(
+    touched.some(
       (file) =>
         file.startsWith("specs/") ||
         (file.startsWith(ENGINE) && file.includes("/tests/")),
@@ -120,22 +124,25 @@ function git(args) {
 /** Files changed since the merge base with `base`, committed or not. */
 export function changedFiles(base = "origin/main") {
   const mergeBase = git(["merge-base", "HEAD", base])[0];
-  return [
-    ...git(["diff", "--name-only", "--diff-filter=ACMR", mergeBase]),
-    ...git(["ls-files", "--others", "--exclude-standard"]),
-  ];
+  return {
+    changed: [
+      ...git(["diff", "--name-only", "--diff-filter=ACMR", mergeBase]),
+      ...git(["ls-files", "--others", "--exclude-standard"]),
+    ],
+    deleted: git(["diff", "--name-only", "--diff-filter=D", mergeBase]),
+  };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   root = git(["rev-parse", "--show-toplevel"])[0];
   const base = process.argv[2] ?? "origin/main";
-  const changed = changedFiles(base);
-  if (!changed.length) {
+  const { changed, deleted } = changedFiles(base);
+  if (!changed.length && !deleted.length) {
     console.log(`Preflight: nothing changed since ${base}.`);
     process.exit(0);
   }
   const started = Date.now();
-  for (const step of planPreflight(changed)) {
+  for (const step of planPreflight(changed, deleted)) {
     const begun = Date.now();
     process.stdout.write(`Preflight: ${step.name}...\n`);
     const result = spawnSync(step.command, step.args, {
@@ -150,7 +157,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     }
     console.log(`Preflight: ${step.name} passed in ${seconds}s.`);
   }
-  for (const note of preflightNotes(changed)) console.log(`Preflight: ${note}`);
+  for (const note of preflightNotes([...changed, ...deleted]))
+    console.log(`Preflight: ${note}`);
   console.log(
     `Preflight passed in ${((Date.now() - started) / 1000).toFixed(0)}s. CI still runs everything.`,
   );

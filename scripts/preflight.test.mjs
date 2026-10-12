@@ -66,3 +66,31 @@ test("a contracts change says the related engine tests do not cover it", () => {
   assert.equal(preflightNotes(["packages/contracts/src/index.ts"]).length, 1);
   assert.equal(preflightNotes(["packages/engine/src/cli.ts"]).length, 0);
 });
+
+test("a deleted source file still runs the typecheck, and is never passed to a tool", () => {
+  const steps = planPreflight([], ["packages/engine/src/old.ts"]);
+  assert.deepEqual(names(steps), ["format", "typecheck"]);
+  const both = planPreflight(
+    ["packages/engine/src/new.ts"],
+    ["packages/engine/src/old.ts"],
+  );
+  assert.ok(!JSON.stringify(both).includes("old.ts"));
+});
+
+test("a changed test in a nested script directory runs", () => {
+  const steps = planPreflight([
+    "evaluation/guest-runtime/cloud-graph.test.mjs",
+  ]);
+  assert.deepEqual(steps.find((step) => step.name === "script tests").args, [
+    "--test",
+    "evaluation/guest-runtime/cloud-graph.test.mjs",
+  ]);
+});
+
+test("a package's TypeScript configuration runs the typecheck", () => {
+  assert.ok(
+    names(planPreflight(["packages/engine/tsconfig.json"])).includes(
+      "typecheck",
+    ),
+  );
+});
