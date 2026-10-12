@@ -31,6 +31,7 @@ import {
   type WorkerResult,
 } from "./api.js";
 import { installedWorkerTimeoutMs } from "./deadline.js";
+import { ENGINE_VERSION } from "../package-layout.js";
 import {
   assertInstalledIdentity,
   installedProviderProfileSha256,
@@ -840,7 +841,7 @@ async function invokeCodexWorker(
       selection.executable,
     ));
     await rpc.request("initialize", {
-      clientInfo: { name: "graph_engineering", version: "0.1.0" },
+      clientInfo: { name: "graph_engineering", version: ENGINE_VERSION },
       capabilities: { experimentalApi: true },
     });
     rpc.initialized();

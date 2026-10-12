@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 import { checked } from "../src/util.js";
+import { ENGINE_VERSION } from "../src/package-layout.js";
 
 const CLI = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 const directories: string[] = [];
@@ -686,7 +687,7 @@ describe("command line", () => {
     for (const argv of commands) {
       const added = await graph("check-add", "fixture:local", ...argv);
       expect(added.code).toBe(0);
-      expect(added.stdout).not.toContain("0.1.0");
+      expect(added.stdout).not.toContain(ENGINE_VERSION);
     }
     // A leading -- only separates the command from check-add's own options.
     await graph("check-add", "fixture:local", "--", "pytest", "-x");
@@ -700,7 +701,7 @@ describe("command line", () => {
       })),
     );
     // The program's own options still work before the command.
-    expect((await graph("--version")).stdout.trim()).toBe("0.1.0");
+    expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
   it("registers only safe pinned generators, preserves argv, and revokes old revisions", async () => {
