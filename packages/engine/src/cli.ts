@@ -102,6 +102,7 @@ import {
   scannerBuildHint,
 } from "./security/scan.js";
 import { ENGINE_VERSION } from "./package-layout.js";
+import { runRetro, summarizeRetro } from "./retro.js";
 import {
   LIVE_BASELINE_FILE,
   liveBaselineFrom,
@@ -1728,6 +1729,22 @@ cli
         ? summarizeOutcomes(outcomes, engine.store.decisions())
         : outcomes;
     }),
+  );
+cli
+  .command("retro")
+  .description(
+    "Look back at delivery: per run and in total, minutes in worker, verification, review and security phases, time stopped and waiting, retries that repeated the previous attempt's failure or left the snapshot unchanged, the first-pass verification rate, and stop reasons as kinds. Read-only local analysis: counts, minutes, kinds and run IDs only; no MCP tool returns it",
+  )
+  .option("--since <date>", "Only runs created on or after this ISO 8601 date")
+  .action((options) =>
+    withEngine(async (engine) =>
+      summarizeRetro(
+        engine.store
+          .runs()
+          .map((run) => runRetro(run, engine.store.events(run.id))),
+        { since: options.since },
+      ),
+    ),
   );
 cli
   .command("insights-context")
