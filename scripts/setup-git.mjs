@@ -21,5 +21,5 @@ execFileSync("git", ["config", "push.default", "current"], {
   stdio: "inherit",
 });
 console.log(
-  "Installed the main/master/dev push guard. Feature PRs target dev.",
+  "Installed the main/master/dev push guard. Feature PRs target main.",
 );
