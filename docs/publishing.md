@@ -79,9 +79,11 @@ workflow needs npm 11.5.1 or later, which it installs.
 ## Releasing a new version
 
 1. On a feature branch, set the same new version in
-   `packages/contracts/package.json` and `packages/engine/package.json`, and
-   the engine's dependency on `@agile-graph/contracts` to that exact
-   version. Run `npm install --package-lock-only` and commit the lockfile.
+   `packages/contracts/package.json`, `packages/engine/package.json` and
+   `packages/dashboard/package.json`, and the engine's and dashboard's
+   dependency on `@agile-graph/contracts` to that exact version. Otherwise npm
+   resolves the old contracts version from the registry instead of the
+   workspace. Run `npm install --package-lock-only` and commit the lockfile.
 2. Merge the PR into `main` through the usual checks.
 3. Tag the merged commit and push the tag:
 

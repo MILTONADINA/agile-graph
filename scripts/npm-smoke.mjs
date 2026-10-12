@@ -136,8 +136,12 @@ try {
     })}\n`,
   );
   mcp.stop();
-  if (!JSON.parse(mcp.line).result?.serverInfo)
-    throw new Error(`MCP initialize failed: ${mcp.line}`);
+  const serverInfo = JSON.parse(mcp.line).result?.serverInfo;
+  if (!serverInfo) throw new Error(`MCP initialize failed: ${mcp.line}`);
+  if (serverInfo.version !== version)
+    throw new Error(
+      `MCP server reported version ${serverInfo.version}, expected ${version}`,
+    );
 
   const server = await started(["-C", project, "serve"]);
   try {

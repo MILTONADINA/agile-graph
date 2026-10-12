@@ -1,6 +1,6 @@
 {
   "name": "@agile-graph/dashboard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "test:e2e:fixture": "node scripts/browser-fixture.mjs"
   },
   "dependencies": {
-    "@agile-graph/contracts": "0.1.0",
+    "@agile-graph/contracts": "0.1.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

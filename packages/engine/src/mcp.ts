@@ -21,6 +21,7 @@ import {
   containsSecret,
   isAllowedPath,
 } from "./policy.js";
+import { ENGINE_VERSION } from "./package-layout.js";
 import { MAX_PLAN_OBJECTIVE } from "./planning.js";
 import {
   MCP_OPTIONAL_TOOLS,
@@ -228,7 +229,7 @@ export function createMcpServer(
   options: McpServerOptions,
 ) {
   const server = new McpServer(
-    { name: "graph-engineering", version: "0.1.0" },
+    { name: "graph-engineering", version: ENGINE_VERSION },
     {
       instructions:
         options.client === "cloud"
