@@ -386,4 +386,20 @@ describe("delivery retro", () => {
     ]);
     expect(retro.minutes).toMatchObject({ review: 3, waiting: 1 });
   });
+
+  it("counts lessons proposed after a repeated failure and lessons shown to a worker", () => {
+    const retro = runRetro(record("failed"), [
+      event(0, "lesson.applied", { memoryId: "m1", attempt: 1 }),
+      event(1, "lesson.proposed", { memoryId: "m2", signature: "abc" }),
+      event(2, "run.stopped", {
+        error: "Required checks failed the same way on three attempts in a row",
+      }),
+    ]);
+    expect(retro).toMatchObject({ lessonsProposed: 1, lessonsApplied: 1 });
+    expect(summarizeRetro([retro, retro])).toMatchObject({
+      lessonsProposed: 2,
+      lessonsApplied: 2,
+      stopKinds: { "repeated-failure": 2 },
+    });
+  });
 });

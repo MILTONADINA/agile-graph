@@ -977,6 +977,15 @@ export class RunStore {
       .all(...(runId ? [this.projectId, runId] : [this.projectId]))
       .map((row) => JSON.parse((row as { json: string }).json) as RunOutcome);
   }
+  /** Every run's events of one type, oldest first. */
+  eventsOfType(type: string): RunEvent[] {
+    return this.db
+      .prepare(
+        "SELECT json FROM run_events WHERE project_id=? AND json_extract(json, '$.type')=? ORDER BY seq",
+      )
+      .all(this.projectId, type)
+      .map((r) => JSON.parse((r as { json: string }).json));
+  }
   events(runId: string): RunEvent[] {
     return this.db
       .prepare(

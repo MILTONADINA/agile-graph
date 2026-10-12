@@ -205,6 +205,7 @@ import {
   resolveVerificationSelection,
 } from "./verification-selection.js";
 import { classifyError } from "./feedback.js";
+import { memoryExpired } from "./context/memory-assertions.js";
 import { failureSignature } from "./retro.js";
 import { parseSpec, planFromSpec, SPECS_DIR } from "./specs.js";
 import {
@@ -3830,6 +3831,80 @@ export class GraphEngine {
           return undefined;
         }
       };
+      // A run stopped by a repeated failure proposes a private lesson; a
+      // person accepts it once the countermeasure is known. The signature
+      // stays in the event, so later runs can find the lesson.
+      const proposeLesson = async (
+        stepId: string,
+        objective: string,
+        signature: string,
+        cause: string,
+        guidance?: string,
+      ) => {
+        try {
+          const memory = await this.context.createMemory({
+            kind: "observation",
+            text: [
+              `Lesson: the required checks failed the same way ${cause} in run ${run.id}, working on: ${objective}.`,
+              `Failing checks: ${failedCheckLines.join("; ")}.`,
+              guidance ? `The reviewer's view: ${guidance}` : "",
+              "Accept this lesson once the countermeasure is known; later runs that meet this failure are shown it.",
+            ]
+              .filter(Boolean)
+              .join(" "),
+          });
+          this.store.event(
+            run.id,
+            "lesson.proposed",
+            { memoryId: memory.id, signature },
+            stepId,
+          );
+        } catch (error) {
+          this.store.event(
+            run.id,
+            "lesson.capture_failed",
+            { error: errorMessage(error) },
+            stepId,
+          );
+        }
+      };
+      // The accepted, unexpired lesson for a failure signature, following
+      // supersessions to the memory now in force; newest lesson first.
+      const lessonFor = async (signature: string) => {
+        const proposed = this.store
+          .eventsOfType("lesson.proposed")
+          .filter((event) => event.data.signature === signature)
+          .reverse();
+        if (!proposed.length) return undefined;
+        const memories = await this.context.listMemories();
+        const now = Date.now();
+        for (const event of proposed) {
+          let memory = memories.find(
+            (record) => record.id === event.data.memoryId,
+          );
+          for (
+            let hops = 0;
+            memory?.status === "superseded" && hops < 16;
+            hops++
+          ) {
+            const previous = memory.id;
+            memory = memories.find((record) => record.supersedes === previous);
+          }
+          if (
+            !memory ||
+            memory.status !== "accepted" ||
+            memoryExpired(memory, now)
+          )
+            continue;
+          const review = await this.context.memoryExportReview(memory.id);
+          return {
+            memoryId: memory.id,
+            text: memory.text,
+            exportAuthorized: review.exportAuthorized,
+          };
+        }
+        return undefined;
+      };
       const verify = async (stepId: string) => {
         if (signal.aborted) throw new Error("Run cancelled");
         await this.assertCurrentPlanVerification(run.plan);
@@ -4460,6 +4535,17 @@ export class GraphEngine {
                 unchanged: false,
               })
             : "";
+        // The accepted lesson for the last failure, if the team has one;
+        // a repair can meet a known failure before its first attempt.
+        let lesson: Awaited<ReturnType<typeof lessonFor>> =
+          seeded && checkFailure ? await lessonFor(checkFailure) : undefined;
+        if (lesson && (provider.kind === "local" || lesson.exportAuthorized))
+          this.store.event(
+            run.id,
+            "lesson.applied",
+            { memoryId: lesson.memoryId, attempt: firstAttempt - 1 },
+            step.id,
+          );
         // The reviewer's decision on the last repeated failure, if any.
         let repeatGuidance:
           Awaited<ReturnType<typeof decideRepeat>> | undefined;
@@ -4595,6 +4681,11 @@ export class GraphEngine {
             const workerFeedback = [
               // Fixed sentences only, so every worker may receive it.
               retryNotice,
+              // A lesson reaches a cloud worker only once its exact text is
+              // authorized for export, like mandatory memory.
+              lesson &&
+                (provider.kind === "local" || lesson.exportAuthorized) &&
+                `A lesson the team accepted for this failure: ${lesson.text}`,
               repeatGuidance &&
                 `The reviewer's decision after the repeated failure: ${
                   repeatGuidance.decision === "narrow_scope"
@@ -4884,17 +4975,43 @@ export class GraphEngine {
                 { attempt, signature: checkFailure, repeats, unchanged },
                 step.id,
               );
-            if (repeats >= 2)
+            if (repeats >= 2) {
+              await proposeLesson(
+                step.id,
+                step.objective,
+                checkFailure,
+                "on three attempts in a row",
+              );
               throw new Error(
                 "Required checks failed the same way on three attempts in a row; the run stopped instead of retrying the same approach. Read the failure, then change the plan or the code before resuming",
               );
+            }
             repeatGuidance =
               repeated && repeats === 1
                 ? await decideRepeat(step.id, step.objective, attempt)
                 : undefined;
-            if (repeatGuidance?.decision === "blocked")
+            if (repeatGuidance?.decision === "blocked") {
+              await proposeLesson(
+                step.id,
+                step.objective,
+                checkFailure,
+                "on two attempts in a row and the reviewer judged the run blocked",
+                repeatGuidance.guidance,
+              );
               throw new Error(
                 "Required checks failed the same way on two attempts in a row, and the reviewer judged the run blocked; a person should decide how to proceed",
+              );
+            }
+            lesson = await lessonFor(checkFailure);
+            if (
+              lesson &&
+              (provider.kind === "local" || lesson.exportAuthorized)
+            )
+              this.store.event(
+                run.id,
+                "lesson.applied",
+                { memoryId: lesson.memoryId, attempt },
+                step.id,
               );
             retryNotice = retryNoticeFor({
               attempt,
@@ -4906,6 +5023,7 @@ export class GraphEngine {
             repeats = 0;
             retryNotice = "";
             repeatGuidance = undefined;
+            lesson = undefined;
           }
           previousFailure = checkFailure;
           previousCheckedHash = checkedHash;
