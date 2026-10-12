@@ -58,6 +58,9 @@ export interface RetroSummary {
 
 const PHASES = {
   "worker.dispatched": ["worker", "worker.completed"],
+  // A multi-step plan's steps: open until the step's worker completes or,
+  // for a generator step, until the step is applied.
+  "dag.step.started": ["worker", "dag.step.completed"],
   "verification.started": ["verification", "verification.completed"],
   "review.started": ["review", "review.completed"],
   "security.scan_started": ["security", "security.scan_completed"],
@@ -88,6 +91,7 @@ function unionMinutes(spans: readonly Span[]): number {
 interface CheckResult {
   checkId?: unknown;
   argv?: unknown;
+  image?: unknown;
   code?: unknown;
 }
 
@@ -100,9 +104,10 @@ function failureSignature(checks: unknown): string | null {
   const failed = (checks as CheckResult[])
     .filter((check) => check.code !== 0)
     .map((check) => [
+      // An unnamed check is its command in its image.
       typeof check.checkId === "string"
         ? check.checkId
-        : JSON.stringify(check.argv ?? null),
+        : JSON.stringify([check.argv ?? null, check.image ?? null]),
       check.code,
     ])
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
@@ -180,6 +185,12 @@ export function runRetro(
         stopKinds.push(classifyError(event.data.error));
     }
     if (event.type === "attempt.started") attempts++;
+    // A multi-step plan's first worker attempts start as steps.
+    if (
+      event.type === "dag.step.started" &&
+      typeof event.data.providerId === "string"
+    )
+      attempts++;
     if (event.type === "verification.started") {
       verifications++;
       // Reaching a first verification counts even if it never finishes.
@@ -233,14 +244,36 @@ export function runRetro(
   };
 }
 
+const ISO =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+/** The instant an ISO 8601 date or date-time names; undefined for any other
+ * text or an impossible calendar date such as 2026-02-30. */
+function isoInstant(text: string): number | undefined {
+  const match = ISO.exec(text);
+  if (!match) return undefined;
+  const [, year, month, day, hour = "0", minute = "0", second = "0"] = match;
+  const calendar = new Date(Date.UTC(+year!, +month! - 1, +day!));
+  if (
+    calendar.getUTCFullYear() !== +year! ||
+    calendar.getUTCMonth() !== +month! - 1 ||
+    calendar.getUTCDate() !== +day! ||
+    +hour > 23 ||
+    +minute > 59 ||
+    +second > 59
+  )
+    return undefined;
+  const instant = Date.parse(text);
+  return Number.isNaN(instant) ? undefined : instant;
+}
+
 /** Runs created on or after `since` (every run without it). */
 export function runsCreatedSince<Run extends { createdAt: string }>(
   runs: readonly Run[],
   since?: string,
 ): Run[] {
   if (since === undefined) return [...runs];
-  const from = Date.parse(since);
-  if (Number.isNaN(from))
+  const from = isoInstant(since);
+  if (from === undefined)
     throw new Error("--since must be an ISO 8601 date or time");
   return runs.filter((run) => Date.parse(run.createdAt) >= from);
 }
