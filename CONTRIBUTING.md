@@ -43,6 +43,10 @@ Before a code pull request, inspect the relevant source and prove a changed
 failure path with focused checks before running `npm run check` or other broad
 subsystem checks when warranted. A docs-only change needs proportionate
 formatting and link checks, not a repeat of an unchanged green engine suite.
+`npm run preflight` runs the cheap CI steps a change can fail, chosen from the
+files it changed (the format check, lint, typecheck, the related engine and
+script tests, and `spec-check` when specs or tests changed), so a rejection
+costs minutes locally instead of a CI cycle. CI still runs everything.
 The PR describes the final behavior, migration effects, and verification
 actually performed. The working agent reviews the diff and exact-tip CI
 results before integration into `main`; the owner may review as well.

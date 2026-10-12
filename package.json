@@ -14,6 +14,7 @@
     "typecheck": "npm run build:dependencies && npm run typecheck --workspaces --if-present",
     "test": "npm run build:dependencies && npm run test --workspaces --if-present",
     "check": "npm run typecheck && npm run test && npm run build",
+    "preflight": "node scripts/preflight.mjs",
     "graph": "node packages/engine/dist/cli.js",
     "graph:local": "node scripts/local-engine.mjs",
     "laya:serve": "node scripts/local-engine.mjs --serve-laya",
