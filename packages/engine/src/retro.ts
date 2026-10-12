@@ -93,13 +93,49 @@ interface CheckResult {
   argv?: unknown;
   image?: unknown;
   code?: unknown;
+  stdout?: unknown;
+  stderr?: unknown;
 }
 
 /**
- * A verification's failure signature: its failing checks and their exit
- * codes, hashed. Output is never part of it. Null when every check passed.
+ * The part of a check's output that says how it failed: its last 40
+ * non-empty lines, without colour codes, durations, timestamps, temporary
+ * paths or long hexadecimal IDs, which differ between identical failures.
  */
-function failureSignature(checks: unknown): string | null {
+export function outputTail(stdout: unknown, stderr: unknown): string {
+  // Lines are cut before any pattern runs, so no pattern ever sees more
+  // than 40 lines of 500 characters, whatever the check printed.
+  return [stdout, stderr]
+    .map((text) => (typeof text === "string" ? text : ""))
+    .join("\n")
+    .split("\n")
+    .map((line) => line.replace(/\u001b\[[0-9;]*m/g, "").trim())
+    .filter(Boolean)
+    .slice(-40)
+    .map((line) =>
+      line
+        .slice(0, 500)
+        .replace(
+          /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?/g,
+          "<time>",
+        )
+        .replace(/\b\d+(\.\d+)?\s?(ms|s|sec|seconds|m|min)\b/g, "<duration>")
+        .replace(
+          /(\/private)?\/(tmp|var\/folders)\/[^\s'"`]+|[A-Za-z]:\\[^\s'"`]*\\Temp\\[^\s'"`]+/g,
+          "<tmp>",
+        )
+        .replace(/\b[0-9a-f]{12,}\b/gi, "<hex>"),
+    )
+    .join("\n");
+}
+
+/**
+ * A verification's failure signature: each failing check, its exit code and
+ * its output tail (see outputTail), hashed and truncated so the output can
+ * never be read back from it. Most test runners exit 1 for any failure, so
+ * the tail is what tells two failures apart. Null when every check passed.
+ */
+export function failureSignature(checks: unknown): string | null {
   if (!Array.isArray(checks)) return null;
   const failed = (checks as CheckResult[])
     .filter((check) => check.code !== 0)
@@ -109,6 +145,7 @@ function failureSignature(checks: unknown): string | null {
         ? check.checkId
         : JSON.stringify([check.argv ?? null, check.image ?? null]),
       check.code,
+      outputTail(check.stdout, check.stderr),
     ])
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   if (!failed.length) return null;
