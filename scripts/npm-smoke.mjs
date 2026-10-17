@@ -2,6 +2,8 @@
 // Installs the packed contracts and engine tarballs into an empty project, as
 // a user would from npm, then runs the installed CLI: --version, --help, init
 // and a lexical index of a throwaway repository, an MCP initialize handshake,
+// the README's cloud MCP path (init --cloud-mcp, context_get) and its refusal
+// on an offline project,
 // and the dashboard that serve hosts. Optional peer dependencies are not
 // installed, so this also shows the engine starts without them.
 //
@@ -81,6 +83,56 @@ function started(args, input) {
   });
 }
 
+/** Runs the MCP server over stdio, as a client would, and returns the
+ *  result of one tools/call. */
+function callTool(root, args, name, toolArguments) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cli, ["-C", root, ...args], { cwd: root, env });
+    let output = "";
+    let errors = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`mcp ${name} timed out: ${errors}`));
+    }, 60_000);
+    const send = (message) =>
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+      for (const line of output.split("\n")) {
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (message.id === 1 && !message.error && !output.includes('"id":2')) {
+          send({ method: "notifications/initialized" });
+          send({
+            id: 2,
+            method: "tools/call",
+            params: { name, arguments: toolArguments },
+          });
+        } else if (message.id === 2) {
+          clearTimeout(timer);
+          child.kill();
+          resolve(message.result ?? { isError: true, error: message.error });
+        }
+      }
+    });
+    child.stderr.on("data", (chunk) => (errors += chunk));
+    child.on("error", reject);
+    send({
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "graph-npm-smoke", version: "1" },
+      },
+    });
+  });
+}
+
 let cli;
 try {
   await mkdir(home, { recursive: true });
@@ -143,7 +195,37 @@ try {
       `MCP server reported version ${serverInfo.version}, expected ${version}`,
     );
 
-  const server = await started(["-C", project, "serve"]);
+  // The README's cloud path: plain init is offline and refuses cloud
+  // clients with a message naming the fix; init --cloud-mcp --export works.
+  const question = { query: "add function" };
+  const refused = await callTool(project, ["mcp"], "context_get", question);
+  const refusal = JSON.stringify(refused);
+  if (!refused.isError || !refusal.includes("--cloud-mcp"))
+    throw new Error(`offline cloud context_get was not refused: ${refusal}`);
+
+  const cloudProject = path.join(work, "cloud-project");
+  await mkdir(path.join(cloudProject, "src"), { recursive: true });
+  await writeFile(
+    path.join(cloudProject, "src", "add.js"),
+    "export function add(a, b) {\n  return a + b;\n}\n",
+  );
+  run("git", ["init", "--quiet"], cloudProject);
+  run(
+    cli,
+    ["-C", cloudProject, "init", "--cloud-mcp", "--export", "src/**"],
+    app,
+  );
+  run(cli, ["-C", cloudProject, "index", "--lexical"], app);
+  const context = await callTool(
+    cloudProject,
+    ["mcp"],
+    "context_get",
+    question,
+  );
+  if (context.isError || !JSON.stringify(context).includes("src/add.js"))
+    throw new Error(`cloud context_get failed: ${JSON.stringify(context)}`);
+
+  const server = await started(["-C", project, "serve", "--port", "0"]);
   try {
     const address = server.line.split("/#")[0];
     const page = await fetch(`${address}/`).then((response) => response.text());
