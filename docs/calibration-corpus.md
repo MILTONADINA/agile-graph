@@ -10,7 +10,7 @@ Task category, complexity, and risk are explicitly proposed classifications.
 | ------------------------------------ | ------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `zero-api-budget`                    | Configuration validation / localized        | `6d7d67d`       | Existing guarded replay; independent labels and paired measurements missing                                                                                                                        |
 | `unmetered-decision-budget`          | Spend control / localized                   | `545e230`       | Isolated candidate verifier; measured worker outcomes still missing                                                                                                                                |
-| `cloud-graph-export`                 | Privacy boundary / multi-file               | `fd7081d`       | [Isolated known-history replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-10-11.json); no paired model calls                                                                      |
+| `cloud-graph-export`                 | Privacy boundary / multi-file               | `fd7081d`       | [Isolated known-history replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-10-17.json); no paired model calls                                                                      |
 | `retry-state-visibility`             | State consistency / localized               | `5703aba`       | [Pinned historical replay](../evaluation/retry-visibility-runtime/fixture-validation.json) plus opt-in arbitrary-source diagnostic; candidate-directed RPC is not independent algorithm provenance |
 | `verifier-infrastructure-stop`       | Failure classification / system integration | `06e1689`       | [Isolated service/virtual-setup replay](../evaluation/infrastructure-runtime/fixture-validation.json); no held-out runs                                                                            |
 | `linux-private-verification-mount`   | Container permissions / system integration  | `fc56768`       | Isolated candidate verifier plus native Linux private-mount permission proof                                                                                                                       |
@@ -23,8 +23,9 @@ and the [2026-09-23 replay](../evaluation/isolated-cloud-graph-fixture-validatio
 remain unchanged and pin the root dependency locks used for those runs. The
 2026-09-25 replay repeats both historical arms against the host lock after the
 ESLint dev dependencies were added, and the 2026-10-11 replay repeats them again
-after the app generator workspace was removed; each is still a zero-model-call
-fixture check, not a new measured worker result.
+after the app generator workspace was removed, and the 2026-10-17 replay once
+more after `@modelcontextprotocol/sdk` moved to 1.31.0; each is still a
+zero-model-call fixture check, not a new measured worker result.
 
 On 2026-10-11 the app generator, the template kit and the reference app were
 removed from the repository, and with them the replays of the three tasks whose
