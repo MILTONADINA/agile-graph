@@ -14,8 +14,9 @@ Fixes ship as a new patch release of the latest minor. To get a fix, upgrade.
 
 ## Supported Node.js versions
 
-The `engines` field of each package sets the supported Node.js range:
-`>=24 <27`. Other Node.js versions get no support.
+The supported Node.js range is `>=24 <27`, which the published packages
+(`@agile-graph/engine` and `@agile-graph/contracts`) declare in their `engines`
+field. Other Node.js versions get no support.
 
 ## Report a vulnerability
 
@@ -58,8 +59,10 @@ Out of scope:
 
 ## Releases and provenance
 
-Releases are published to npm from CI, not from a developer machine. Each
-published package carries npm provenance, which links it to the commit and
+Releases are published to npm from CI. Version 0.1.0 of the engine and
+contracts packages was the first publish, made from a developer machine: it has
+registry signatures but no provenance attestation. Later releases published
+from CI carry npm provenance, which links the package to the commit and
 workflow that built it. See [publishing](docs/publishing.md).
 
 To verify the packages you installed, run this in your project:
@@ -68,5 +71,5 @@ To verify the packages you installed, run this in your project:
 npm audit signatures
 ```
 
-It checks the registry signatures and the provenance attestations of your
-installed packages.
+It checks the registry signatures of your installed packages, and the
+provenance attestations of those that have one.
