@@ -547,11 +547,17 @@ export async function similarFilesNote(
         Number(path.posix.dirname(b) === wanted.dir) -
           Number(path.posix.dirname(a) === wanted.dir) || a.localeCompare(b),
     );
-  // Only files that exist on disk as regular files (not deleted, not links).
+  // Only files the worker could read: through safePath (no symlinked file or
+  // parent directory, and for a cloud worker an exportable name on disk), and
+  // regular files that exist.
   const similar: string[] = [];
   for (const file of candidates) {
     if (similar.length === SIMILAR_FILE_LIMIT) break;
-    const info = await lstat(path.join(workspace, file)).catch(() => null);
+    const absolute = await safePath(workspace, file, policy, {
+      forExport: exportOnly,
+    }).catch(() => null);
+    if (!absolute) continue;
+    const info = await lstat(absolute).catch(() => null);
     if (info?.isFile()) similar.push(file);
   }
   return similar.length
