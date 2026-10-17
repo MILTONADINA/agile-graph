@@ -24,6 +24,9 @@ verification and security scans, not for indexing or retrieval.
 ## Start
 
 ```sh
+# Cloud AI client (Claude Code, Codex, Cursor):
+graph-engine -C /path/to/your/project init --cloud-mcp --export 'src/**'
+# Local model only:
 graph-engine -C /path/to/your/project init
 graph-engine -C /path/to/your/project index --lexical
 graph-engine -C /path/to/your/project serve
