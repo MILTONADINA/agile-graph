@@ -14,7 +14,7 @@ Fixes ship as a new patch release of the latest minor. To get a fix, upgrade.
 
 ## Supported Node.js versions
 
-The supported Node.js range is `^22.14.0 || >=24 <27` (Node.js 22.14 or later on
+The supported Node.js range is `^22.18.0 || >=24 <27` (Node.js 22.18 or later on
 22, or 24 to 26), which the published packages
 (`@agile-graph/engine` and `@agile-graph/contracts`) declare in their `engines`
 field. Other Node.js versions get no support.
