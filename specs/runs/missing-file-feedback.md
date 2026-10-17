@@ -20,8 +20,9 @@ spend turns adjusting text for a file that is not there.
 
 - AC2: When a worker's patch edits a path that does not exist, the system shall also list up to 3 existing files with the same base name (any extension) or the same file name in another directory, or say that none exists.
   - Test: packages/engine/tests/execution.test.ts :: tells the worker a patched file does not exist instead of blaming its before text
-- AC3: If a file with a similar name is excluded by policy, outside exportPaths for a cloud worker or named like a credential, then the system shall not list it in the feedback.
+- AC3: If a file with a similar name is excluded by policy, outside exportPaths for a cloud worker, named like a credential, or not an existing regular file, then the system shall not list it in the feedback.
   - Test: packages/engine/tests/execution.test.ts :: suggests only readable files when a patched file does not exist
+  - Test: packages/engine/tests/execution.test.ts :: suggests only exportable, non-credential files to a cloud worker
 
 ## Security considerations
 
