@@ -1502,6 +1502,239 @@ describe("managed execution", () => {
         .some((event) => event.type === "step.reconciled"),
     ).toBe(true);
   });
+  it("reuses an unchanged failed snapshot on resume and gives the next worker its stored failure", async () => {
+    const { root } = await fixture();
+    let calls = 0;
+    let checks = 0;
+    const feedback: (string | undefined)[] = [];
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async (input) => {
+        feedback.push(input.feedback);
+        calls++;
+        if (calls === 2) throw new Error("Worker temporarily unavailable");
+        // The retained failure must be reused before this dispatch, not
+        // merely produce the same total after another verification.
+        expect(checks).toBe(calls === 1 ? 0 : 1);
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            requests: [],
+            changes: [
+              calls === 1
+                ? { path: "math.cjs", before: "a - b", after: "a * b" }
+                : { path: "math.cjs", before: "a * b", after: "a + b" },
+            ],
+          },
+          usage: {
+            inputTokens: 10,
+            outputTokens: 10,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: false,
+          },
+        };
+      },
+      verify: async (_workspace, commands, _policy, snapshotHash) => {
+        checks++;
+        return commands.map((check) => ({
+          ...check,
+          code: checks === 1 ? 1 : 0,
+          stdout: checks === 1 ? "addition expected 5, received 6" : "passed",
+          stderr: "",
+          snapshotHash,
+        }));
+      },
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["addition passes"],
+    });
+    const run = await engine.start(plan.id);
+    expect((await engine.wait(run.id)).status).toBe("failed");
+    expect(checks).toBe(1);
+    expect(calls).toBe(2);
+    const completed = engine.store
+      .events(run.id)
+      .find((event) => event.type === "verification.completed")!;
+    await engine.resume(run.id, true);
+    const resumed = await engine.wait(run.id);
+    expect(resumed.error).toBeUndefined();
+    expect(resumed.status).toBe("succeeded");
+    expect(calls).toBe(3);
+    expect(checks).toBe(2);
+    expect(feedback[2]).toContain("node --test math.test.cjs exited 1");
+    expect(feedback[2]).toContain("addition expected 5, received 6");
+    const reused = engine.store
+      .events(run.id)
+      .filter((event) => event.type === "verification.reused");
+    expect(reused).toHaveLength(1);
+    expect(reused[0]!.stepId).toBe(completed.stepId);
+    expect(reused[0]!.data).toEqual({
+      snapshotHash: completed.data.snapshotHash,
+    });
+  });
+  it("re-verifies a changed failed snapshot on resume", async () => {
+    const { root } = await fixture();
+    let calls = 0;
+    let checks = 0;
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async () => {
+        if (++calls === 2) throw new Error("Worker temporarily unavailable");
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            requests: [],
+            changes: [{ path: "math.cjs", before: "a - b", after: "a * b" }],
+          },
+          usage: {
+            inputTokens: 10,
+            outputTokens: 10,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: false,
+          },
+        };
+      },
+      verify: async (_workspace, commands, _policy, snapshotHash) => {
+        checks++;
+        return commands.map((check) => ({
+          ...check,
+          code: checks === 1 ? 1 : 0,
+          stdout: checks === 1 ? "addition expected 5, received 6" : "passed",
+          stderr: "",
+          snapshotHash,
+        }));
+      },
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["addition passes"],
+    });
+    const run = await engine.start(plan.id);
+    const failed = await engine.wait(run.id);
+    expect(failed.status).toBe("failed");
+    expect(checks).toBe(1);
+    await writeFile(
+      path.join(failed.workspace!, "math.cjs"),
+      "exports.add = (a, b) => a + b;\n",
+    );
+    await engine.resume(run.id, true);
+    const resumed = await engine.wait(run.id);
+    expect(resumed.error).toBeUndefined();
+    expect(resumed.status).toBe("succeeded");
+    expect(calls).toBe(2);
+    expect(checks).toBe(2);
+    expect(
+      engine.store
+        .events(run.id)
+        .filter((event) => event.type === "verification.reused"),
+    ).toHaveLength(0);
+  });
+  it.each([
+    "interrupted verification",
+    "passing checks",
+    "container infrastructure failure",
+    "verifier setup failure",
+    "incomplete checks",
+    "different check commands",
+  ])("re-verifies on resume after %s", async (condition) => {
+    const { root } = await fixture();
+    let calls = 0;
+    let checks = 0;
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async () => {
+        if (++calls > 1) throw new Error("Worker temporarily unavailable");
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            requests: [],
+            changes: [{ path: "math.cjs", before: "a - b", after: "a * b" }],
+          },
+          usage: {
+            inputTokens: 10,
+            outputTokens: 10,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: false,
+          },
+        };
+      },
+      verify: async (_workspace, commands, _policy, snapshotHash) => {
+        checks++;
+        return commands.map((check) => ({
+          ...check,
+          code: checks === 1 ? 1 : 0,
+          stdout: "addition check",
+          stderr: "",
+          snapshotHash,
+        }));
+      },
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["addition passes"],
+    });
+    const run = await engine.start(plan.id);
+    expect((await engine.wait(run.id)).status).toBe("failed");
+    const completed = engine.store
+      .events(run.id)
+      .find((event) => event.type === "verification.completed")!;
+    // Model the last persisted evidence at recovery. An older complete
+    // failure must not override a newer interrupted or ineligible check set.
+    engine.store.event(
+      run.id,
+      condition === "interrupted verification"
+        ? "verification.started"
+        : "verification.completed",
+      {
+        snapshotHash: completed.data.snapshotHash,
+        checks:
+          condition === "incomplete checks"
+            ? []
+            : plan.verification.map((check) => ({
+                ...check,
+                argv:
+                  condition === "different check commands"
+                    ? ["node", "--version"]
+                    : check.argv,
+                code:
+                  condition === "passing checks"
+                    ? 0
+                    : condition === "container infrastructure failure"
+                      ? 125
+                      : condition === "verifier setup failure"
+                        ? 78
+                        : 1,
+                stdout: "addition check",
+                stderr:
+                  condition === "verifier setup failure"
+                    ? "[graph-verifier:setup-failed] unavailable"
+                    : "",
+              })),
+      },
+      completed.stepId,
+    );
+    await engine.resume(run.id, true);
+    const resumed = await engine.wait(run.id);
+    expect(resumed.error).toBeUndefined();
+    expect(resumed.status).toBe("succeeded");
+    expect(calls).toBe(2);
+    expect(checks).toBe(2);
+    expect(
+      engine.store
+        .events(run.id)
+        .filter((event) => event.type === "verification.reused"),
+    ).toHaveLength(0);
+  });
   it("resumes a run after reconciliation deleted a file its worker wrote", async () => {
     // A new file the worker created, then a tracked file it edited.
     for (const deleted of ["notes.txt", "math.cjs"]) {
