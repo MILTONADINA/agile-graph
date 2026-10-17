@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ProjectConfig } from "@agile-graph/contracts";
@@ -216,6 +216,9 @@ describe("run outcomes", () => {
     });
     expect(result.status).toBe("failed");
     passing = true;
+    // A person changes the retained workspace while reconciling, so the
+    // resume checks the new snapshot instead of reusing the failure.
+    await appendFile(path.join(result.workspace!, "math.cjs"), "// fixed\n");
     await engine.resume(result.id, true);
     await engine.wait(result.id);
     const outcomes = engine.store.outcomes(result.id);
