@@ -177,6 +177,7 @@ import {
   UnexportablePatchError,
   unexportablePatchFeedback,
   unseenPatchLocation,
+  similarFilesNote,
 } from "./execution/requested-sources.js";
 import {
   checkedGit,
@@ -4340,7 +4341,15 @@ export class GraphEngine {
                     if (!returnedPatch) throw error;
                     returned(step.id, returnedPatch.reason);
                     patchFeedback = patchFeedbackFor(
-                      returnedPatch.feedback,
+                      returnedPatch.feedback +
+                        (returnedPatch.reason === "missing-file"
+                          ? await similarFilesNote(
+                              workspace,
+                              errorMessage(error),
+                              provider,
+                              this.config.policy,
+                            )
+                          : ""),
                       result.proposal,
                       provider,
                       this.config.policy,
@@ -4948,7 +4957,15 @@ export class GraphEngine {
               if (!returnedPatch) throw error;
               returned(step.id, returnedPatch.reason);
               patchFeedback = patchFeedbackFor(
-                returnedPatch.feedback,
+                returnedPatch.feedback +
+                  (returnedPatch.reason === "missing-file"
+                    ? await similarFilesNote(
+                        workspace,
+                        message,
+                        provider,
+                        this.config.policy,
+                      )
+                    : ""),
                 result.proposal,
                 provider,
                 this.config.policy,

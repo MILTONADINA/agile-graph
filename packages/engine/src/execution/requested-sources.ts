@@ -502,6 +502,57 @@ export function patchFeedbackFor(
   return "A proposed change did not apply to lines you were shown. Request the exact exportable lines you intend to edit, then propose again.";
 }
 
+const SIMILAR_FILE_LIMIT = 3;
+
+/**
+ * For a patch to a file that does not exist: up to three existing files with
+ * the same base name (any extension) or the same file name in another
+ * directory, chosen only from files the worker may read (Git's file list, no
+ * policy-excluded, protected or, for a cloud worker, unexportable or secret
+ * paths). Says so when there are none.
+ */
+export async function similarFilesNote(
+  workspace: string,
+  message: string,
+  provider: WorkerInput["provider"],
+  policy: WorkerInput["policy"],
+): Promise<string> {
+  const missing =
+    /^Patch target does not exist: (.+?)(?: The patch was rolled back.*)?$/s.exec(
+      message,
+    )?.[1];
+  if (!missing) return "";
+  let listed: string[];
+  try {
+    listed = await gitFiles(workspace);
+  } catch {
+    return "";
+  }
+  const exportOnly = provider.kind !== "local";
+  const wanted = path.posix.parse(missing);
+  const similar = listed
+    .filter((file) => {
+      if (file === missing) return false;
+      const parsed = path.posix.parse(file);
+      return parsed.name === wanted.name || parsed.base === wanted.base;
+    })
+    .filter(
+      (file) =>
+        !excludedFromIndex(file, policy) &&
+        isAllowedPath(file, policy, exportOnly) &&
+        !(exportOnly && containsSecret(file)),
+    )
+    .sort(
+      (a, b) =>
+        Number(path.posix.dirname(b) === wanted.dir) -
+          Number(path.posix.dirname(a) === wanted.dir) || a.localeCompare(b),
+    )
+    .slice(0, SIMILAR_FILE_LIMIT);
+  return similar.length
+    ? ` Existing files with a similar name: ${similar.join(", ")}.`
+    : " No existing file has a similar name.";
+}
+
 const LISTING_LIMIT = 200;
 // Above any retrieved or carried evidence score.
 const NEW_EVIDENCE_SCORE = 1_000;
