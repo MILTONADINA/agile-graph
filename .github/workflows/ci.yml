@@ -147,6 +147,20 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e:fixture -w @agile-graph/dashboard
+      # Node 22 compatibility run, last on purpose: every Node 24 step and the
+      # built dist/ are done, and node_modules from npm ci is reused. It pins
+      # the supported floor (engines >=22.12).
+      - name: Switch to Node 22.12 (compatibility run)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.12.0
+      - name: Contracts and engine tests on Node 22.12
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: |
+          node --version
+          npm test -w @agile-graph/contracts
+          npm test -w @agile-graph/engine
 
   sidecar:
     runs-on: ubuntu-24.04

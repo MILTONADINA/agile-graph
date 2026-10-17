@@ -17,7 +17,7 @@ it.
 ## Acceptance criteria
 
 - AC1: `@agile-graph/contracts` and `@agile-graph/engine` are
-  public, MIT-licensed, require Node.js 24 to 26, name this repository (with
+  public, MIT-licensed, require Node.js 22.12 to 26, name this repository (with
   the exact URL npm trusted publishing checks) and share one version, with the
   engine depending on exactly that contracts version. The dashboard and the
   workspace root stay private.

@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=24 <27"
+    "node": ">=22.12 <27"
   },
   "scripts": {
     "build": "npm run build -w @agile-graph/contracts && npm run build -w @agile-graph/engine && npm run build -w @agile-graph/dashboard",

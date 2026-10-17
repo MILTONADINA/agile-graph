@@ -18,7 +18,7 @@ npm install --global @agile-graph/engine
 graph-engine --version
 ```
 
-You need Node.js 24, 25 or 26 and Git. Docker is needed for managed
+You need Node.js 22.12 or later (22 to 26) and Git. Docker is needed for managed
 verification and security scans, not for indexing or retrieval.
 
 ## Start

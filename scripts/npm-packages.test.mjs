@@ -49,7 +49,7 @@ test("both packages are public, MIT-licensed and point at this repository", asyn
       url: GITHUB,
       directory,
     });
-    assert.deepEqual(value.engines, { node: ">=24 <27" });
+    assert.deepEqual(value.engines, { node: ">=22.12 <27" });
     assert.deepEqual(value.publishConfig, { access: "public" });
     assert.ok(value.description && value.files?.length);
   }

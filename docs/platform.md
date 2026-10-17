@@ -4,7 +4,7 @@ The platform extends the existing template registry with a local context engine 
 
 ## Start locally
 
-Use Node.js 24, Git, and npm. Managed builds and tests additionally need a running Docker-compatible engine. Normal indexing and context retrieval do not require containers or cloud credentials.
+Use Node.js 22.12 or later (CI develops on 24), Git, and npm. Managed builds and tests additionally need a running Docker-compatible engine. Normal indexing and context retrieval do not require containers or cloud credentials.
 
 ```sh
 npm ci
