@@ -151,7 +151,7 @@ authority.
 - A hosted Codex environment gets only what is on GitHub. It has no Docker,
   Laya sidecar, local Qwen, Dart SDK, private `.graph/local/` helpers (which
   include the Jev and Laya question tool) or owner keys. Its setup needs
-  Node `>=22.14 <27`, `npm ci` and `npm run build:dependencies`.
+  Node `^22.14.0 || >=24 <27`, `npm ci` and `npm run build:dependencies`.
 - The handover mentions tools that belong to Claude Code: the advisor,
   multi-agent audit workflows and cross-session messages. Codex has none of
   them. The audit loop stopped after round 10 under its stop rule; don't
