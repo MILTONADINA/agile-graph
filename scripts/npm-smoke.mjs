@@ -96,16 +96,21 @@ function callTool(root, args, name, toolArguments) {
     }, 60_000);
     const send = (message) =>
       child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
+    let called = false;
     child.stdout.on("data", (chunk) => {
       output += chunk;
-      for (const line of output.split("\n")) {
+      let end;
+      while ((end = output.indexOf("\n")) !== -1) {
+        const line = output.slice(0, end);
+        output = output.slice(end + 1);
         let message;
         try {
           message = JSON.parse(line);
         } catch {
           continue;
         }
-        if (message.id === 1 && !message.error && !output.includes('"id":2')) {
+        if (message.id === 1 && !called) {
+          called = true;
           send({ method: "notifications/initialized" });
           send({
             id: 2,
@@ -222,7 +227,16 @@ try {
     "context_get",
     question,
   );
-  if (context.isError || !JSON.stringify(context).includes("src/add.js"))
+  const packet = context.isError
+    ? undefined
+    : JSON.parse(context.content?.[0]?.text ?? "null");
+  if (
+    !packet?.items?.some(
+      (item) =>
+        item.source?.path === "src/add.js" &&
+        item.text?.includes("return a + b"),
+    )
+  )
     throw new Error(`cloud context_get failed: ${JSON.stringify(context)}`);
 
   const server = await started(["-C", project, "serve", "--port", "0"]);
