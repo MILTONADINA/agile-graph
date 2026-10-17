@@ -17,6 +17,9 @@ describe("policy glob complexity", () => {
     expect(globComplexityError("src/**/*.test.ts")).toBeUndefined();
     expect(globComplexityError("packages/*/src/*-*.*")).toBeUndefined();
     expect(globComplexityError("a".repeat(513))).toMatch(/longer than 512/);
+    expect(globComplexityError("+(a|aa)b")).toMatch(/repeating extglob/);
+    expect(globComplexityError("src/*(x|xx).ts")).toMatch(/repeating extglob/);
+    expect(globComplexityError("src/@(a|b).ts")).toBeUndefined();
   });
 
   it("refuses such a glob in exportPaths or excludedPaths when the policy loads, quickly", () => {
