@@ -5568,6 +5568,11 @@ function patchErrorFeedback(
   message: string,
   stepId: string,
 ): { feedback: string; reason: string } | undefined {
+  if (message.startsWith("Patch target does not exist"))
+    return {
+      feedback: `${message}. That file does not exist in the project. Create it (a change with before null) or fix the path.`,
+      reason: "missing-file",
+    };
   if (message.startsWith("Patch precondition failed"))
     return {
       feedback: `${message}. Include enough surrounding lines in before to match exactly once in the whole file.`,

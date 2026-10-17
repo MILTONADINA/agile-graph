@@ -218,11 +218,9 @@ export async function prepareProposal(
         );
       content = change.after;
     } else {
-      if (
-        content === undefined ||
-        !change.before ||
-        content.split(change.before).length !== 2
-      )
+      if (content === undefined)
+        throw new Error(`Patch target does not exist: ${change.path}`);
+      if (!change.before || content.split(change.before).length !== 2)
         throw new Error(
           `Patch precondition failed: ${change.path} must contain exactly one matching substring`,
         );

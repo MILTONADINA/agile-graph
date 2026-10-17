@@ -28,6 +28,7 @@ import {
   PROJECT_FILE,
 } from "../src/project.js";
 import { GraphEngine } from "../src/service.js";
+import { classifyError } from "../src/feedback.js";
 import { applyProposal } from "../src/execution/workspace.js";
 import { invokeApiWorker, StructuredOutputError } from "../src/workers/api.js";
 import { findingId } from "../src/workers/review.js";
@@ -416,6 +417,60 @@ describe("managed execution", () => {
     });
     expect(result.status).toBe("succeeded");
   });
+  it("tells the worker a patched file does not exist instead of blaming its before text", async () => {
+    const { root } = await fixture();
+    await writeFile(path.join(root, "math.ts"), "export const d = a - b;\n");
+    await checked("git", ["add", "math.ts"], { cwd: root });
+    await checked("git", ["commit", "-m", "test: math"], { cwd: root });
+    const feedback: (string | undefined)[] = [];
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async (input) => {
+        feedback.push(input.feedback);
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Edit",
+            requests: [],
+            changes: [
+              {
+                path: feedback.length === 1 ? "math.js" : "math.ts",
+                before: "a - b",
+                after: "a + b",
+              },
+            ],
+          },
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: false,
+          },
+        };
+      },
+      verify: async (_workspace, checks, _policy, snapshotHash) =>
+        checks.map((check) => ({
+          ...check,
+          code: 0,
+          stdout: "passed",
+          stderr: "",
+          snapshotHash,
+        })),
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Add in math.ts",
+      acceptance: ["d adds"],
+    });
+    const result = await engine.wait((await engine.start(plan.id)).id);
+    expect(feedback).toHaveLength(2);
+    expect(feedback[1]).toContain("Patch target does not exist: math.js");
+    expect(feedback[1]).toContain("Create it");
+    expect(feedback[1]).not.toContain("exactly one matching");
+    expect(classifyError(feedback[1]!)).toBe("missing-file");
+    expect(result.status).toBe("succeeded");
+  });
   it("returns an ambiguous patch to the worker instead of failing the run", async () => {
     const { root } = await fixture();
     await writeFile(
@@ -762,7 +817,7 @@ describe("managed execution", () => {
         },
         DEFAULT_POLICY,
       ),
-    ).rejects.toThrow("precondition");
+    ).rejects.toThrow("Patch target does not exist: missing.ts");
     expect(await readFile(path.join(root, "math.cjs"), "utf8")).toContain(
       "a - b",
     );
