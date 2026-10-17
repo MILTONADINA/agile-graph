@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type {
   ContextItem,
@@ -530,7 +530,7 @@ export async function similarFilesNote(
   }
   const exportOnly = provider.kind !== "local";
   const wanted = path.posix.parse(missing);
-  const similar = listed
+  const candidates = listed
     .filter((file) => {
       if (file === missing) return false;
       const parsed = path.posix.parse(file);
@@ -540,14 +540,20 @@ export async function similarFilesNote(
       (file) =>
         !excludedFromIndex(file, policy) &&
         isAllowedPath(file, policy, exportOnly) &&
-        !(exportOnly && containsSecret(file)),
+        !containsSecret(file),
     )
     .sort(
       (a, b) =>
         Number(path.posix.dirname(b) === wanted.dir) -
           Number(path.posix.dirname(a) === wanted.dir) || a.localeCompare(b),
-    )
-    .slice(0, SIMILAR_FILE_LIMIT);
+    );
+  // Only files that exist on disk as regular files (not deleted, not links).
+  const similar: string[] = [];
+  for (const file of candidates) {
+    if (similar.length === SIMILAR_FILE_LIMIT) break;
+    const info = await lstat(path.join(workspace, file)).catch(() => null);
+    if (info?.isFile()) similar.push(file);
+  }
   return similar.length
     ? ` Existing files with a similar name: ${similar.join(", ")}.`
     : " No existing file has a similar name.";

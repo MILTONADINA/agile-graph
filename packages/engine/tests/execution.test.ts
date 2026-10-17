@@ -29,6 +29,7 @@ import {
 } from "../src/project.js";
 import { GraphEngine } from "../src/service.js";
 import { classifyError } from "../src/feedback.js";
+import { similarFilesNote } from "../src/execution/requested-sources.js";
 import { applyProposal } from "../src/execution/workspace.js";
 import { invokeApiWorker, StructuredOutputError } from "../src/workers/api.js";
 import { findingId } from "../src/workers/review.js";
@@ -477,6 +478,7 @@ describe("managed execution", () => {
       files: Record<string, string>,
       policy: Record<string, unknown>,
       missing = "math.js",
+      deleted: string[] = [],
     ) => {
       const { root, config } = await fixture();
       config.policy = { ...config.policy, ...policy };
@@ -487,6 +489,7 @@ describe("managed execution", () => {
       }
       await checked("git", ["add", "."], { cwd: root });
       await checked("git", ["commit", "-m", "test: files"], { cwd: root });
+      for (const file of deleted) await rm(path.join(root, file));
       const feedback: (string | undefined)[] = [];
       const engine = await GraphEngine.open(root, {
         dockerAvailable: async () => true,
@@ -553,6 +556,16 @@ describe("managed execution", () => {
     );
     expect(excluded).toContain("src/math.ts");
     expect(excluded).not.toContain("secrets/math.ts");
+    // A credential-named directory, and a tracked file deleted from disk.
+    const tokenDir = "gh" + "p_" + "Q7mZ2xK9vB4nR8tW3yL6pD1sF5hJ0cGa";
+    const unreadable = await run(
+      { [`${tokenDir}/math.ts`]: "x\n", "gone/math.ts": "x\n" },
+      {},
+      "math.js",
+      ["gone/math.ts"],
+    );
+    expect(unreadable).not.toContain(tokenDir);
+    expect(unreadable).not.toContain("gone/math.ts");
     const none = await run(
       { "secrets/util.ts": "private\n" },
       { excludedPaths: ["secrets/**"] },
@@ -560,6 +573,29 @@ describe("managed execution", () => {
     );
     expect(none).toContain("No existing file has a similar name");
     expect(none).not.toContain("secrets");
+  });
+  it("suggests only exportable, non-credential files to a cloud worker", async () => {
+    const { root, config } = await fixture();
+    const tokenDir = "gh" + "p_" + "Q7mZ2xK9vB4nR8tW3yL6pD1sF5hJ0cGa";
+    for (const file of ["math.ts", "notes/math.md", `${tokenDir}/math.ts`]) {
+      await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+      await writeFile(path.join(root, file), "x\n");
+    }
+    await checked("git", ["add", "."], { cwd: root });
+    await checked("git", ["commit", "-m", "test: files"], { cwd: root });
+    const policy = {
+      ...config.policy,
+      exportPaths: ["math.cjs", "math.ts", `${tokenDir}/**`],
+    };
+    const note = await similarFilesNote(
+      root,
+      "Patch target does not exist: math.js",
+      { kind: "cloud" } as never,
+      policy,
+    );
+    expect(note).toContain("math.cjs, math.ts");
+    expect(note).not.toContain("notes/");
+    expect(note).not.toContain(tokenDir);
   });
   it("returns an ambiguous patch to the worker instead of failing the run", async () => {
     const { root } = await fixture();
