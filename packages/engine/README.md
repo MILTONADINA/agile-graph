@@ -83,6 +83,11 @@ The [repository](https://github.com/MILTONADINA/agile-graph) has the
 [working as an AI agile team](https://github.com/MILTONADINA/agile-graph/blob/main/docs/agile-team.md)
 and the [documentation index](https://github.com/MILTONADINA/agile-graph/blob/main/docs/README.md).
 
+## Security
+
+Report vulnerabilities privately. See the
+[security policy](https://github.com/MILTONADINA/agile-graph/blob/main/SECURITY.md).
+
 ## License
 
 MIT © 2026 Milton Adina. Third-party material and its licenses are listed in
