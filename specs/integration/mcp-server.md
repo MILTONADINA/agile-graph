@@ -64,6 +64,8 @@ Developers use AI clients such as Claude Code, Codex and Cursor, which should be
   - Test: packages/engine/tests/cli.test.ts :: sets up a project cloud MCP clients may use only when asked, with the export globs given
   - Test: packages/engine/tests/cli.test.ts :: refuses a repeated or doubly negated --export glob without writing a project
   - Test: packages/engine/tests/cli.test.ts :: keeps a plain init offline, so cloud MCP clients stay refused by default
+- AC14: When a cloud-backed client is refused because the project's policy keeps context offline, the refusal says how to fix it, naming `init --cloud-mcp --export '<glob>'` for a new project and `policy.inference`, `policy.network` and `policy.exportPaths` in `.graph/project.json` for an existing one, and names no local path.
+  - Test: packages/engine/tests/mcp.test.ts :: tells a cloud client how to export an offline project's context
 
 ## Security considerations
 

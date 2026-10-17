@@ -40,7 +40,9 @@ it("serves real indexed context through MCP and refuses cloud export for offline
         });
         if (kind === "cloud") {
           expect(result.isError).toBe(true);
-          expect(JSON.stringify(result)).toContain("Offline project");
+          expect(JSON.stringify(result)).toContain(
+            "Policy keeps this project's context offline",
+          );
         } else {
           expect(result.isError).not.toBe(true);
           expect(JSON.stringify(result)).toContain("math.ts");
@@ -51,6 +53,38 @@ it("serves real indexed context through MCP and refuses cloud export for offline
       }
     }
   } finally {
+    await engine.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectDataDir(config.projectId), {
+      recursive: true,
+      force: true,
+    });
+  }
+});
+
+it("tells a cloud client how to export an offline project's context", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "graph-mcp-hint-"));
+  const config = await initializeProject(root);
+  const engine = await GraphEngine.open(root);
+  const server = createMcpServer(engine, { client: "cloud" });
+  const client = new Client({ name: "integration-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    const result = await client.callTool({
+      name: "context_get",
+      arguments: { query: "add", budgetTokens: 2000 },
+    });
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result);
+    expect(text).toContain("--cloud-mcp");
+    expect(text).toContain("exportPaths");
+    expect(text).not.toContain(root);
+  } finally {
+    await client.close();
+    await server.close();
     await engine.close();
     await rm(root, { recursive: true, force: true });
     await rm(projectDataDir(config.projectId), {

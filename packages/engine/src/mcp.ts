@@ -290,7 +290,7 @@ export function createMcpServer(
         engine.config.policy.network === "deny")
     )
       throw new RefusalError(
-        "Offline project context cannot be exported to this cloud-backed client",
+        "Policy keeps this project's context offline, so it cannot be exported to a cloud-backed client. To fix a new project, run: graph-engine init --cloud-mcp --export '<glob>'. To fix an existing project, set policy.inference and policy.network to \"allowlisted\" and list policy.exportPaths in .graph/project.json.",
       );
   };
   // The plan or run a call concerned, kept only when it names one of this
