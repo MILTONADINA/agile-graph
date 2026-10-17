@@ -467,9 +467,99 @@ describe("managed execution", () => {
     expect(feedback).toHaveLength(2);
     expect(feedback[1]).toContain("Patch target does not exist: math.js");
     expect(feedback[1]).toContain("Create it");
+    expect(feedback[1]).toContain("similar name: math.cjs, math.ts");
     expect(feedback[1]).not.toContain("exactly one matching");
     expect(classifyError(feedback[1]!)).toBe("missing-file");
     expect(result.status).toBe("succeeded");
+  });
+  it("suggests only readable files when a patched file does not exist", async () => {
+    const run = async (
+      files: Record<string, string>,
+      policy: Record<string, unknown>,
+      missing = "math.js",
+    ) => {
+      const { root, config } = await fixture();
+      config.policy = { ...config.policy, ...policy };
+      await writeJson(path.join(root, PROJECT_FILE), config);
+      for (const [file, text] of Object.entries(files)) {
+        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+        await writeFile(path.join(root, file), text);
+      }
+      await checked("git", ["add", "."], { cwd: root });
+      await checked("git", ["commit", "-m", "test: files"], { cwd: root });
+      const feedback: (string | undefined)[] = [];
+      const engine = await GraphEngine.open(root, {
+        dockerAvailable: async () => true,
+        worker: async (input) => {
+          feedback.push(input.feedback);
+          return {
+            model: "fixture",
+            proposal: {
+              summary: "Edit",
+              requests: [],
+              changes: [
+                {
+                  path: feedback.length === 1 ? missing : "math.cjs",
+                  before: "a - b",
+                  after: "a + b",
+                },
+              ],
+            },
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              cachedTokens: 0,
+              costUsd: 0,
+              estimated: false,
+            },
+          };
+        },
+        verify: async (_workspace, checks, _policy, snapshotHash) =>
+          checks.map((check) => ({
+            ...check,
+            code: 0,
+            stdout: "passed",
+            stderr: "",
+            snapshotHash,
+          })),
+      });
+      engines.push(engine);
+      const plan = await engine.createPlan({
+        objective: "Add in math.cjs",
+        acceptance: ["adds"],
+      });
+      await engine.wait((await engine.start(plan.id)).id);
+      return feedback[1]!;
+    };
+    // At most three, the same name in other directories included; a file
+    // with another base name is never suggested.
+    const many = await run(
+      {
+        "math.ts": "x\n",
+        "lib/math.js": "x\n",
+        "src/math.js": "x\n",
+        "other.ts": "x\n",
+      },
+      {},
+    );
+    const listed = many.split("similar name: ")[1]!.replace(/\.$/, "");
+    expect(listed.split(", ")).toHaveLength(3);
+    expect(listed).toContain("math.cjs");
+    expect(listed).not.toContain("other.ts");
+    // A file policy excludes or a cloud worker may not receive is never named.
+    const excluded = await run(
+      { "secrets/math.ts": "private\n", "src/math.ts": "x\n" },
+      { excludedPaths: ["secrets/**"] },
+    );
+    expect(excluded).toContain("src/math.ts");
+    expect(excluded).not.toContain("secrets/math.ts");
+    const none = await run(
+      { "secrets/util.ts": "private\n" },
+      { excludedPaths: ["secrets/**"] },
+      "util.js",
+    );
+    expect(none).toContain("No existing file has a similar name");
+    expect(none).not.toContain("secrets");
   });
   it("returns an ambiguous patch to the worker instead of failing the run", async () => {
     const { root } = await fixture();
