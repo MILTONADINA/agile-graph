@@ -1631,7 +1631,7 @@ model. In particular:
    local `$0` external-API cost is not zero hardware cost. Never turn an
    analysis-only receipt into a runtime permission without the trust chain.
 
-For a fresh checkout, verify Node `^22.14.0 || >=24 <27` and the private-local prerequisites
+For a fresh checkout, verify Node `^22.18.0 || >=24 <27` and the private-local prerequisites
 in the [Mac runbook](mac-local-runbook.md). Install dependencies with `npm ci`
 only if absent or changed; build workspace dependencies before targeted engine
 tests. For an item-13 source change, first inspect the affected implementation,
