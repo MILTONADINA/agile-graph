@@ -4480,7 +4480,7 @@ export class GraphEngine {
       }
       for (const step of singleSteps) {
         verified = false;
-        // A resumed step whose retained patch failed its checks again.
+        // A resumed step whose retained patch has failed its checks.
         let resumedFailure = false;
         // An acknowledged recovery checks the retained patch first. It never
         // reapplies the original exact-substring patch to an already edited file.
@@ -4502,7 +4502,58 @@ export class GraphEngine {
             checkedHash !== undefined &&
             checkedHash ===
               (await workspaceFingerprint(workspace, this.config.policy));
-          if (!justChecked && (await verify(step.id))) {
+          // Only the last verification event can supply a complete failure:
+          // a later start without a completion must be checked again.
+          const lastVerification = priorEvents.findLast(
+            (event) =>
+              event.stepId === step.id &&
+              (event.type === "verification.started" ||
+                event.type === "verification.completed"),
+          );
+          const checks = lastVerification?.data.checks as
+            VerificationResult[] | undefined;
+          const reuseFailure =
+            !justChecked &&
+            lastVerification?.type === "verification.completed" &&
+            Array.isArray(checks) &&
+            checks.length === run.plan.verification.length &&
+            checks.every(
+              (check, index) =>
+                check &&
+                typeof check.code === "number" &&
+                typeof check.stdout === "string" &&
+                typeof check.stderr === "string" &&
+                Array.isArray(check.argv) &&
+                check.argv.length ===
+                  run.plan.verification[index]!.argv.length &&
+                check.argv.every(
+                  (arg, i) => arg === run.plan.verification[index]!.argv[i],
+                ) &&
+                check.code !== 125 &&
+                !(
+                  check.code === 78 &&
+                  check.stderr.startsWith("[graph-verifier:setup-failed]")
+                ),
+            ) &&
+            checks.some((check) => check.code !== 0) &&
+            lastVerification.data.snapshotHash ===
+              (await workspaceFingerprint(workspace, this.config.policy));
+          if (reuseFailure && checks && lastVerification) {
+            feedback = compactFailures(checks);
+            checkFailure = failureSignature(checks);
+            failedCheckLines = checks
+              .filter((check) => check.code !== 0)
+              .map((check) => `${check.argv.join(" ")} exited ${check.code}`);
+            checkedHash = lastVerification.data.snapshotHash as string;
+            verified = false;
+            this.store.event(
+              run.id,
+              "verification.reused",
+              { snapshotHash: checkedHash },
+              step.id,
+            );
+          }
+          if (!justChecked && !reuseFailure && (await verify(step.id))) {
             this.store.event(run.id, "step.reconciled", {}, step.id);
             continue;
           }

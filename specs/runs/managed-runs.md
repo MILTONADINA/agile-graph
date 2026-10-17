@@ -101,6 +101,9 @@ An operator wants a worker model to implement a planned change without touching 
   - Test: packages/engine/tests/api.test.ts :: applies the output reservation: a request that fits the window alone is refused once the output cap is reserved
   - Test: packages/engine/tests/review.test.ts :: refuses a change too large for the reviewer under the strict one-token-per-byte count with the output reserved, never truncating it
   - Test: packages/engine/tests/security-audit.test.ts :: refuses a change too large for the auditor under the strict one-token-per-byte count with the output reserved
+- AC26: When resuming a retained single-step patch, if the step's last verification event completed every planned check with matching commands, at least one check failed without an infrastructure failure, and its snapshot hash matches the current workspace, the engine shall reuse that failure as the next worker attempt's feedback and record `verification.reused` without running checks again; when the snapshot changed, verification was interrupted or the checks passed, the engine shall re-verify as before.
+  - Test: packages/engine/tests/execution.test.ts :: reuses an unchanged failed snapshot on resume and gives the next worker its stored failure
+  - Test: packages/engine/tests/execution.test.ts :: re-verifies a changed failed snapshot on resume
 
 ## Security considerations
 
