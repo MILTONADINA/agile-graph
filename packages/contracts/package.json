@@ -31,7 +31,7 @@
     "dist/**/*.d.ts"
   ],
   "engines": {
-    "node": ">=22.12 <27"
+    "node": ">=22.14 <27"
   },
   "publishConfig": {
     "access": "public"
