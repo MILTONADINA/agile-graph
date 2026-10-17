@@ -9,6 +9,7 @@ import {
   readFile,
   rm,
   stat,
+  symlink,
 } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -596,6 +597,28 @@ describe("managed execution", () => {
     expect(note).toContain("math.cjs, math.ts");
     expect(note).not.toContain("notes/");
     expect(note).not.toContain(tokenDir);
+  });
+  it("suggests no file reached through a symlinked parent directory", async () => {
+    const { root, config } = await fixture();
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src/math.ts"), "x\n");
+    await checked("git", ["add", "."], { cwd: root });
+    await checked("git", ["commit", "-m", "test: src"], { cwd: root });
+    // Git still tracks src/math.ts, but src/ now points outside the project.
+    const outside = await mkdtemp(path.join(os.tmpdir(), "similar-outside-"));
+    await writeFile(path.join(outside, "math.ts"), "outside\n");
+    await rm(path.join(root, "src"), { recursive: true });
+    await symlink(outside, path.join(root, "src"), "dir");
+    const policy = { ...config.policy, exportPaths: ["math.js", "src/**"] };
+    for (const kind of ["local", "cloud"]) {
+      const note = await similarFilesNote(
+        root,
+        "Patch target does not exist: math.js",
+        { kind } as never,
+        policy,
+      );
+      expect(note).not.toContain("src/math.ts");
+    }
   });
   it("returns an ambiguous patch to the worker instead of failing the run", async () => {
     const { root } = await fixture();
