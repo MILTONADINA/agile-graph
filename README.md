@@ -36,7 +36,7 @@ graph-engine -C /path/to/your/project index --lexical
 graph-engine -C /path/to/your/project serve
 ```
 
-You need Node.js 24, 25 or 26 and Git. Docker is needed for managed
+You need Node.js 22.12 or later (22 to 26) and Git. Docker is needed for managed
 verification and security scans, not for indexing or retrieval. `serve`
 prints a loopback URL for the dashboard. A new project uses local-only
 inference, no external network, no publication and shadow-mode decisions; no
