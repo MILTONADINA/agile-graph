@@ -75,7 +75,7 @@ export const ERROR_KINDS = [
   },
   {
     kind: "missing-file",
-    pattern: /ENOENT|no such file or directory/,
+    pattern: /ENOENT|no such file or directory|Patch target does not exist/,
     description: "A file the run needed was missing",
   },
   {

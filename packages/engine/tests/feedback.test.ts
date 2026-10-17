@@ -83,6 +83,12 @@ describe("feedback reports", () => {
     expect(classifyError(messages[3]!)).toBe("worker-no-progress");
   });
 
+  it("classifies a patch to a missing file as missing-file", () => {
+    expect(classifyError("Patch target does not exist: src/a.ts")).toBe(
+      "missing-file",
+    );
+  });
+
   it("refuses a note that looks like it holds a secret", () => {
     expect(() =>
       buildFeedbackReport({
