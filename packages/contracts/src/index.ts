@@ -985,6 +985,10 @@ export const GLOB_LENGTH_LIMIT = 512;
 export function globComplexityError(pattern: string): string | undefined {
   if (pattern.length > GLOB_LENGTH_LIMIT)
     return `glob ${JSON.stringify(pattern.slice(0, 40))}... is longer than ${GLOB_LENGTH_LIMIT} characters`;
+  // A repeating extglob such as `+(a|aa)` is an ambiguous repeated
+  // alternation, exponential on a near match whatever the count.
+  if (/[*+]\(/.test(pattern))
+    return `glob ${JSON.stringify(pattern)} uses a repeating extglob group (*(...) or +(...)), which can take minutes to match; list the alternatives as separate globs instead`;
   for (const segment of pattern.replace(/^!/, "").split("/")) {
     if (segment === "**") continue;
     const wildcards = (segment.match(/\*+|[?+@!]\(/g) ?? []).length;
