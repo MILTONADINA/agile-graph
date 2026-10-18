@@ -182,7 +182,7 @@ test("every registry base image is pinned by digest", async () => {
     const text = await readFile(path.join(root, file), "utf8");
     const stages = new Set();
     for (const line of text.split("\n")) {
-      const m = /^FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i.exec(line);
+      const m = /^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i.exec(line);
       if (!m) continue;
       const [, image, alias] = m;
       const local =
