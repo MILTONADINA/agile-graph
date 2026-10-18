@@ -5,6 +5,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   readlink,
   rm,
@@ -153,3 +154,45 @@ test(
     }
   },
 );
+
+test("every registry base image is pinned by digest", async () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const files = [];
+  for (const name of await readdir(path.join(root, "infra"))) {
+    if (name.endsWith(".Dockerfile")) files.push(path.join("infra", name));
+  }
+  const fixtures = path.join(root, "packages/engine/tests/fixtures");
+  for (const name of await readdir(fixtures)) {
+    const file = path.join(
+      "packages/engine/tests/fixtures",
+      name,
+      "Dockerfile",
+    );
+    if (
+      await readFile(path.join(root, file)).then(
+        () => true,
+        () => false,
+      )
+    ) {
+      files.push(file);
+    }
+  }
+  assert.ok(files.includes("infra/verification.Dockerfile"));
+  for (const file of files) {
+    const text = await readFile(path.join(root, file), "utf8");
+    const stages = new Set();
+    for (const line of text.split("\n")) {
+      const m = /^FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i.exec(line);
+      if (!m) continue;
+      const [, image, alias] = m;
+      const local =
+        image === "scratch" ||
+        image === "graph-engineering-verify:local" ||
+        stages.has(image);
+      if (alias) stages.add(alias);
+      if (!local) {
+        assert.match(image, /@sha256:[0-9a-f]{64}$/, `${file}: ${line}`);
+      }
+    }
+  }
+});

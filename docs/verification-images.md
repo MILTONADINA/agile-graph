@@ -245,6 +245,23 @@ Checks may not change the source they are given, so a check that needs
 This repository's own [verification image](../infra/verification.Dockerfile)
 follows the same idea.
 
+### Base image digest
+
+The repository's verification image pins `node:24-bookworm` by the digest of
+its multi-arch image index, so a rebuild cannot silently pick up a changed
+image. The tag stays for readability. To refresh it, resolve the new digest
+without pulling:
+
+```sh
+TK=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/node:pull" | jq -r .token)
+curl -sI -H "Authorization: Bearer $TK" \
+  -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
+  https://registry-1.docker.io/v2/library/node/manifests/24-bookworm | grep -i docker-content-digest
+```
+
+Cross-check with the same request to `https://mirror.gcr.io/v2/library/node/manifests/24-bookworm`
+(no token), then update line 1 of `infra/verification.Dockerfile`.
+
 ### Python
 
 ```dockerfile
