@@ -61,6 +61,14 @@ describe("Dart syntax indexing", () => {
     const { snapshot, symbols, edges } = await indexToyCounter();
     expect(snapshot.languages).toEqual(["dart", "text"]);
     expect(snapshot.coverage).toMatchObject({ parsed: 5, textOnly: 2 });
+    // A parser failure or syntax error leaves calls unlinked. It is always
+    // reported as a coverage error, so an empty link list never passes
+    // silently: only the null-aware file and the unavailable analyzer may be
+    // reported.
+    expect(snapshot.coverage.errors).toEqual([
+      "lib/src/labels.dart: syntax errors; graph may be incomplete",
+      "Pinned isolated Dart analyzer unavailable; Dart syntax evidence retained.",
+    ]);
     const label = (symbol: CodeSymbol) =>
       `${symbol.source.path} ${symbol.kind} ${symbol.name}`;
     const declarations = symbols.filter((symbol) => symbol.kind !== "file");
