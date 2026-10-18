@@ -73,8 +73,9 @@ test("the update bot runs weekly for npm and GitHub Actions", () => {
     assert.ok(block, `${eco} ecosystem is missing`);
     assert.match(block, /directory: "\/"/);
     assert.match(block, /interval: "weekly"/);
-    assert.match(block, /groups:/);
+    assert.match(block, /groups:\n\s+[\w-]+:\n\s+(update-types|patterns):/);
   }
-  assert.match(bot, /open-pull-requests-limit: 5/);
+  const npm = bot.split(/^ {2}- /m).find((b) => b.includes("ecosystem: npm\n"));
+  assert.match(npm, /^ {4}open-pull-requests-limit: 5$/m);
   assert.match(bot, /hash-pinned/);
 });
