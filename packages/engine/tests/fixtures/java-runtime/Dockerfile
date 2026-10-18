@@ -1,5 +1,7 @@
 # Preprovision both images explicitly. Build and generated execution need no network.
 FROM graph-engineering-verify:local
+# The base image ends as the non-root node user; build as root, then drop.
+USER root
 ENV GRAPH_ENGINE_REQUIRE_JAVA_RUNTIME=1
 COPY --from=eclipse-temurin@sha256:92a2a4d7a928d057e7bd999c418d66c26a34eb9a0442f3ab67721c3f88110b2d /opt/java/openjdk/ /opt/java/openjdk/
 WORKDIR /opt/graph-deps
