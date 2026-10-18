@@ -204,9 +204,12 @@ export async function verifyInContainer(
             // With all capabilities dropped, container root cannot traverse a
             // private (0700) bind mount owned by the Linux host user. Match the
             // owner instead of granting DAC_OVERRIDE or opening private files.
-            ...(process.getuid && process.getgid
-              ? ["--user", `${process.getuid()}:${process.getgid()}`]
-              : []),
+            // Hosts without getuid/getgid (Windows) get the image's fixed
+            // non-root `node` user, so the container never runs as root.
+            "--user",
+            process.getuid && process.getgid
+              ? `${process.getuid()}:${process.getgid()}`
+              : "1000:1000",
             "--mount",
             `type=bind,source=${view},target=/workspace`,
             "--workdir",
