@@ -173,7 +173,19 @@ test("every registry base image is pinned by digest", async () => {
       files.push(file);
     }
   }
+  for (const name of await readdir(path.join(root, "sidecars"))) {
+    const file = `sidecars/${name}/Dockerfile`;
+    if (
+      await readFile(path.join(root, file)).then(
+        () => true,
+        () => false,
+      )
+    ) {
+      files.push(file);
+    }
+  }
   assert.ok(files.includes("infra/verification.Dockerfile"));
+  assert.ok(files.includes("sidecars/laya/Dockerfile"));
   for (const file of files) {
     const text = await readFile(path.join(root, file), "utf8");
     const stages = new Set();
