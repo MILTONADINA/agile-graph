@@ -250,6 +250,30 @@ describe("built-in verification container deadlines", () => {
     await state.assertRemoved();
   });
 
+  it("runs a non-root host user whose primary group is 0", async () => {
+    const state = await fixture(async () => ({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    }));
+    const saved = { getuid: process.getuid, getgid: process.getgid };
+    process.getuid = () => 1000;
+    process.getgid = () => 0;
+    try {
+      await verifyInContainer(
+        state.root,
+        checks.slice(0, 1),
+        DEFAULT_POLICY,
+        "toy-snapshot",
+      );
+    } finally {
+      process.getuid = saved.getuid;
+      process.getgid = saved.getgid;
+    }
+    const run = state.commands.find((e) => e.argv[0] === "run");
+    expect(run?.argv).toContain("1000:0");
+  });
+
   it("passes literal null through the normal verifier to real command transport and waits for terminal success", async () => {
     const actualCommand = util.command;
     let runOptions: CommandOptions;
