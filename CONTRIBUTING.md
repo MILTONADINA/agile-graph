@@ -47,6 +47,8 @@ formatting and link checks, not a repeat of an unchanged green engine suite.
 files it changed (the format check, lint, typecheck, the related engine and
 script tests, and `spec-check` when specs or tests changed), so a rejection
 costs minutes locally instead of a CI cycle. CI still runs everything.
+A test that passes and fails on the same commit follows the
+[flaky-test policy](docs/flaky-tests.md).
 The PR describes the final behavior, migration effects, and verification
 actually performed. The working agent reviews the diff and exact-tip CI
 results before integration into `main`; the owner may review as well.

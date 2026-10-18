@@ -6,6 +6,8 @@
 
 - `serve --log-requests` writes one stderr line per request (method, route
   pattern, status, duration) and per 5xx error (redacted). Off by default.
+- A written flaky-test policy, `docs/flaky-tests.md`: rerun once, file an
+  issue, no blind timeout raises, quarantine rules and retro counting.
 
 ### Security
 
