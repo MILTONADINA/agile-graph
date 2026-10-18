@@ -40,6 +40,14 @@ A team lead wants to open one page and see what the graph is doing, what is done
 - AC11: Ctrl-C, SIGTERM or SIGHUP (sent when the terminal closes) stops `serve` by closing the dashboard server and then the engine, which cancels the runs the dashboard started as managed-runs AC19 describes: their checks and agents are stopped, their check containers removed and each run recorded as `cancelled`, or as `needs_reconciliation` when its publication had started or a multi-step run's retained state must be reconciled, before the process exits. A run event stream an API client holds open (`GET /api/runs/:id/events`) is sent the events recorded so far and ended when the server closes, so it cannot keep the server open and the engine from cancelling those runs. Further signals are ignored until that cleanup finishes, so a repeated Ctrl-C cannot end the process with those runs still executing.
   - Test: packages/engine/tests/cli.test.ts :: ends open event streams and keeps cancelling the runs the dashboard started when Ctrl-C is pressed again while serve stops, then exits
   - Test: packages/engine/tests/server.test.ts :: ends an open run event stream when the server closes, after sending the events recorded so far
+- AC12: Every dashboard server response, including HTML, JSON, refusals (401, 403, 404, 413, 415, 500, 503) and event streams, carries `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`, `style-src 'self'`, `img-src 'self' data:`, `connect-src 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`, no `unsafe-` source), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`.
+  - Test: packages/engine/tests/server-hardening.test.ts :: sends the security headers on HTML, JSON, refusals and event streams
+- AC13: The server answers 413 for a body over its size limit, 415 for a body that is not JSON, 400 for malformed or invalid input, and 500 with the generic message "Internal server error" (no stack, path or internal text) for an unexpected failure.
+  - Test: packages/engine/tests/server-hardening.test.ts :: answers 413 for an oversized body and 415 for a wrong content type
+  - Test: packages/engine/tests/server-hardening.test.ts :: keeps 400 for malformed input
+  - Test: packages/engine/tests/server-hardening.test.ts :: answers 500 with a generic message for an unexpected failure
+- AC14: An event stream is sent `Cache-Control: no-store` and `X-Accel-Buffering: no` and its headers are flushed at once; no more than 16 streams are open at a time, and a further request is refused with 503 and `Retry-After`; open streams end when the server closes.
+  - Test: packages/engine/tests/server-hardening.test.ts :: marks event streams uncacheable and unbuffered, caps them with 503, and ends them on shutdown
 
 ## Security considerations
 

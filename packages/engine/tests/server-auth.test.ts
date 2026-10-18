@@ -124,8 +124,8 @@ async function expectEveryApiRouteGuarded(app: FastifyInstance) {
           headers: anonymous,
         });
         // A leading "//" reaches @fastify/static, whose refusal the server's
-        // error handler reports as 400 Forbidden; it never serves API data.
-        if (response.statusCode === 400 && variant.startsWith("//")) {
+        // error handler reports as 403 Forbidden; it never serves API data.
+        if (response.statusCode === 403 && variant.startsWith("//")) {
           if (method !== "HEAD")
             expect(response.json(), `${method} ${variant}`).toEqual({
               error: "Forbidden",
