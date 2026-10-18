@@ -3,6 +3,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile,
@@ -178,7 +179,10 @@ describe("property: workspace patches", () => {
       path.join(root, "linkfile"),
     );
     await symlink("real", path.join(root, "inner"));
+    await writeFile(path.join(root, "ok.txt"), "fine");
     const random = mulberry32(SEED + 1);
+    const refusal =
+      /escapes workspace|outside allowed project scope|Symlink is outside/;
     const names = ["a.txt", "secret.txt", "new/deep/b.txt", "x"];
     const prefixes = [
       () => "../outside/",
@@ -189,6 +193,9 @@ describe("property: workspace patches", () => {
       () => "inner/",
       () => `/${outside.slice(1)}/`,
     ];
+    const tree = async () =>
+      (await readdir(path.dirname(root), { recursive: true })).sort();
+    const before = await tree();
     for (let index = 0; index < CASES; index++) {
       const name = names[int(random, names.length)]!;
       const target =
@@ -200,6 +207,7 @@ describe("property: workspace patches", () => {
         `case ${index}: target ${JSON.stringify(target)}`,
       );
       const creation = random() < 0.5;
+      // A valid change comes first: a refusal must leave it unwritten too.
       await expect(
         applyProposal(
           root,
@@ -207,6 +215,7 @@ describe("property: workspace patches", () => {
             summary: "escape",
             requests: [],
             changes: [
+              { path: "ok.txt", before: "fine", after: "changed" },
               creation
                 ? { path: target, before: null, after: "pwned" }
                 : { path: target, before: "keep", after: "pwned" },
@@ -215,21 +224,16 @@ describe("property: workspace patches", () => {
           DEFAULT_POLICY,
         ),
         context,
-      ).rejects.toThrow();
+      ).rejects.toThrow(refusal);
+      expect(await readFile(path.join(root, "ok.txt"), "utf8"), context).toBe(
+        "fine",
+      );
       expect(
         await readFile(path.join(outside, "secret.txt"), "utf8"),
         context,
       ).toBe("keep");
     }
-    // Nothing was created outside, nor through a link into the real directory.
-    const { readdir } = await import("node:fs/promises");
-    expect(
-      (await readdir(outside)).sort(),
-      "outside directory changed",
-    ).toEqual(["secret.txt"]);
-    expect(
-      await readdir(path.join(root, "real")),
-      "link target changed",
-    ).toEqual([]);
+    // The whole fixture tree, outside included, is unchanged.
+    expect(await tree(), "files were created or removed").toEqual(before);
   });
 });
