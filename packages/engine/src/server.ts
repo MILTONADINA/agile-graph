@@ -150,10 +150,16 @@ export function createServer(
     // Opt-in, one line each to stderr. Only the method, the route pattern
     // (never request.url, which holds the query string), the status and the
     // duration; an error line carries its name and redacted message.
-    const oneLine = (text: string) =>
-      redact(text)
+    const oneLine = (text: string, request: { url: string }) => {
+      // Also drop what this request itself carried, in case a fault echoes it.
+      const query = request.url.split("?").slice(1).join("?");
+      let scrubbed = text.split(token).join("[REDACTED]");
+      if (query) scrubbed = scrubbed.split(query).join("[query]");
+      return redact(scrubbed)
         .replace(/(?:[A-Za-z]:)?(?:[\\/][\w.@~-]+){2,}/g, "[path]")
-        .replace(/\s+/g, " ");
+        .replace(/\s+/g, " ")
+        .slice(0, 300);
+    };
     app.addHook("onResponse", async (request, reply) => {
       const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
       process.stderr.write(
@@ -162,9 +168,12 @@ export function createServer(
     });
     app.addHook("onError", async (request, _reply, error) => {
       if (clientErrorStatus(error) !== undefined) return;
+      // A fault can be thrown as any value, not only an Error.
+      const name = error instanceof Error ? error.name : "NonError";
+      const message = error instanceof Error ? error.message : String(error);
       const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
       process.stderr.write(
-        `ERROR ${request.method} ${route ?? "(unmatched)"} ${oneLine(error.name)}: ${oneLine(error.message)}\n`,
+        `ERROR ${request.method} ${route ?? "(unmatched)"} ${oneLine(name, request)}: ${oneLine(message, request)}\n`,
       );
     });
   }
