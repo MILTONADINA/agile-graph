@@ -385,9 +385,12 @@ print(rejected)
       const files = await parse({
         "main.py": "def target():\n    pass\ntarget()\n",
       });
-      // The interpreter is real. Only the first parent memory sample is injected;
-      // subsequent samples use real ps, independent of interpreter startup speed.
-      vi.spyOn(childProcess, "execFile").mockImplementationOnce(((
+      // The interpreter is real. Every parent memory sample is injected, so a
+      // loaded runner cannot fail the run through a real ps call (its 1 s
+      // timeout) or a pid that has already exited. The first sample is the
+      // case under test; when the run must succeed, later samples are healthy.
+      let calls = 0;
+      vi.spyOn(childProcess, "execFile").mockImplementation(((
         ...args: unknown[]
       ) => {
         const callback = args.at(-1) as (
@@ -395,18 +398,24 @@ print(rejected)
           stdout: string,
           stderr: string,
         ) => void;
+        const first = calls++ === 0;
         queueMicrotask(() =>
-          callback(
-            code === null ? null : Object.assign(new Error("sample"), { code }),
-            output,
-            "",
-          ),
+          first
+            ? callback(
+                code === null
+                  ? null
+                  : Object.assign(new Error("sample"), { code }),
+                output,
+                "",
+              )
+            : callback(null, "1024\n", ""),
         );
         return new EventEmitter();
       }) as unknown as typeof childProcess.execFile);
       const result = await resolvePythonBindings(files, "snapshot", {
         maxRssKiB: 255 * 1024,
       });
+      if (expected) expect(result.diagnostics).toEqual([]);
       expect(result.resolvedCalls).toBe(expected);
       if (!expected) expect(result.diagnostics.join(" ")).toContain("limit");
     },
