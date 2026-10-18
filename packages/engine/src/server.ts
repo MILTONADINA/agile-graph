@@ -18,6 +18,7 @@ import {
 import type { GraphEngine } from "./service.js";
 import { dockerAvailable } from "./execution/docker.js";
 import { MAX_PLAN_OBJECTIVE } from "./planning.js";
+import { redact } from "./policy.js";
 import { projectOverview } from "./overview.js";
 import { summarizeOutcomes } from "./insights.js";
 import { discoverInstalledWorkers } from "./workers/installed.js";
@@ -138,9 +139,35 @@ function looksLikeApi(url: string): boolean {
 export function createServer(
   engine: GraphEngine,
   token = randomBytes(32).toString("hex"),
-  options: { dashboardRoot?: string; maxEventStreams?: number } = {},
+  options: {
+    dashboardRoot?: string;
+    maxEventStreams?: number;
+    logRequests?: boolean;
+  } = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 1_000_000 });
+  if (options.logRequests) {
+    // Opt-in, one line each to stderr. Only the method, the route pattern
+    // (never request.url, which holds the query string), the status and the
+    // duration; an error line carries its name and redacted message.
+    const oneLine = (text: string) =>
+      redact(text)
+        .replace(/(?:[A-Za-z]:)?(?:[\\/][\w.@~-]+){2,}/g, "[path]")
+        .replace(/\s+/g, " ");
+    app.addHook("onResponse", async (request, reply) => {
+      const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
+      process.stderr.write(
+        `${request.method} ${route ?? "(unmatched)"} ${reply.statusCode} ${Math.round(reply.elapsedTime)}ms\n`,
+      );
+    });
+    app.addHook("onError", async (request, _reply, error) => {
+      if (clientErrorStatus(error) !== undefined) return;
+      const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
+      process.stderr.write(
+        `ERROR ${request.method} ${route ?? "(unmatched)"} ${oneLine(error.name)}: ${oneLine(error.message)}\n`,
+      );
+    });
+  }
   app.addHook("onRequest", async (request, reply) => {
     // First, so refusals and error responses carry the headers too.
     reply.headers(SECURITY_HEADERS);

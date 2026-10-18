@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- `serve --log-requests` writes one stderr line per request (method, route
+  pattern, status, duration) and per 5xx error (redacted). Off by default.
+
 ### Security
 
 - The verification image now pins its base image by digest

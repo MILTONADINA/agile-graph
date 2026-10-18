@@ -16,7 +16,7 @@ npm run graph -- -C /path/to/project context 'Where is authentication handled?'
 npm run graph -- -C /path/to/project serve
 ```
 
-Open the printed loopback URL. Its fragment contains a local access token, which the dashboard stores only in the browser session. The server rejects unauthenticated API requests, non-loopback hostnames, and cross-origin requests. It is not a remotely exposed team service.
+Open the printed loopback URL. Its fragment contains a local access token, which the dashboard stores only in the browser session. The server rejects unauthenticated API requests, non-loopback hostnames, and cross-origin requests. It is not a remotely exposed team service. The server logs nothing by default; `serve --log-requests` writes one line per request (method, route pattern, status, duration) and one per 5xx error (error name and redacted message) to stderr, never the query string, headers, body or token.
 
 `.graph/project.json` is shared project configuration. Private data lives in the platform-specific user data directory under `graph-engineering/projects/<projectId>`; `GRAPH_ENGINE_DATA_DIR` can choose another root. Project IDs are stable across the partners' clones, while worktree and dirty-content identities keep source snapshots distinct.
 

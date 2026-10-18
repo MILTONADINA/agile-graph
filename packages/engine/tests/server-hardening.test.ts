@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -204,5 +204,71 @@ describe("dashboard server hardening", () => {
     );
     await app.close();
     expect(await ended).toEqual(["ended", "ended"]);
+  });
+
+  describe("request log", () => {
+    const engine = {
+      context: {
+        listMemories: () => {
+          throw new TypeError(
+            "boom at /Users/someone/private/file.ts password=hunter2hunter2hunter2",
+          );
+        },
+      },
+    } as unknown as GraphEngine;
+    const capture = () => {
+      const lines: string[] = [];
+      vi.spyOn(process.stderr, "write").mockImplementation(((
+        chunk: string | Uint8Array,
+      ) => {
+        lines.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+      return lines;
+    };
+    afterEach(() => vi.restoreAllMocks());
+
+    it("writes nothing by default", async () => {
+      const lines = capture();
+      const { app } = createServer(engine, TOKEN);
+      await app.inject({ url: "/api/health?token=secret", headers: auth });
+      await app.inject({ url: "/api/memories", headers: auth });
+      await app.close();
+      expect(lines).toEqual([]);
+    });
+
+    it("logs the route pattern, status and duration, not the query", async () => {
+      const lines = capture();
+      const { app } = createServer(engine, TOKEN, { logRequests: true });
+      await app.inject({
+        url: "/api/health?token=secret",
+        headers: { ...auth, cookie: "sid=cookie-value" },
+      });
+      await app.inject({ url: "/nope/x?token=secret" });
+      await app.close();
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toMatch(/^GET \/api\/health 200 \d+ms\n$/);
+      expect(lines[1]).toMatch(/^GET \(unmatched\) 40\d \d+ms\n$/);
+      const all = lines.join("");
+      for (const leak of ["secret", TOKEN, "cookie-value", "?"])
+        expect(all).not.toContain(leak);
+    });
+
+    it("logs a 5xx error with a redacted message", async () => {
+      const lines = capture();
+      const { app } = createServer(engine, TOKEN, { logRequests: true });
+      const response = await app.inject({
+        url: "/api/memories?token=secret",
+        headers: auth,
+      });
+      await app.close();
+      expect(response.statusCode).toBe(500);
+      const all = lines.join("");
+      expect(lines.filter((l) => l.startsWith("ERROR "))).toHaveLength(1);
+      expect(all).toContain("ERROR GET /api/memories TypeError: boom at");
+      expect(all).toMatch(/GET \/api\/memories 500 \d+ms/);
+      for (const leak of ["hunter2", "/Users/someone", "secret"])
+        expect(all).not.toContain(leak);
+    });
   });
 });
