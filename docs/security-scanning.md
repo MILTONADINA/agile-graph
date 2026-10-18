@@ -488,8 +488,35 @@ The platform job on Linux x64 runs `npm audit --omit=dev --audit-level=high`
 after `npm ci`, so a high or critical advisory in a production dependency fails
 CI. Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm
 (minor and patch updates grouped into one; majors open separately) and GitHub
-Actions (grouped). An npm update changes the hash-pinned `package-lock.json`,
-so a maintainer must update the pin before it can merge.
+Actions (grouped). An npm update changes the third-party resolutions of the
+hash-pinned `package-lock.json`, so its CI fails until the pin is renewed;
+an update pull request cannot merge as Dependabot opened it.
+
+To accept an npm update the owner has chosen:
+
+1. Apply it on a branch of its own (`npm install <package>@<version>` or the
+   lockfile change from Dependabot's pull request), then run `npm ci`,
+   `npm run build:dependencies` and the full test suites. Read the
+   dependency's release notes for a major version.
+2. Re-run the zero-model-call cloud-graph replay against the new lock into a
+   new dated receipt, as described in
+   [the calibration corpus](calibration-corpus.md). It needs the locally built
+   guest image and makes no model calls:
+
+   ```sh
+   docker build -f evaluation/guest-runtime/Dockerfile \
+     -t graph-evaluation-guest:local evaluation/guest-runtime
+   node evaluation/isolated-candidate.mjs \
+     --expected-sha256 REVIEWED_MANIFEST_SHA256 \
+     --task cloud-graph-export --validate-history \
+     --output evaluation/isolated-cloud-graph-fixture-validation-YYYY-MM-DD.json
+   ```
+
+3. Point `evaluation/historical-receipt-pins.test.mjs` at the new receipt and
+   add a sentence for it in `docs/calibration-corpus.md`. Never edit or delete
+   an older receipt: each pins the lock it was recorded with.
+4. Open the change as one pull request that names the Dependabot pull request
+   it replaces, and close that one once it merges.
 
 ## What needs someone else
 
