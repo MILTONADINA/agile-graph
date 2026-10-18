@@ -100,40 +100,64 @@ describe("property: policy globs", () => {
       const positive = pattern.replace(/^!/, "");
       if (positive.startsWith("!")) continue;
       // Compile once; time only the match, best of three against scheduling noise.
-      const matches = globAllowlist([positive]);
-      const reference = picomatch(positive.normalize("NFC"), {
-        dot: true,
-        nonegate: true,
-      });
-      for (const candidate of paths) {
-        let best = Infinity;
-        let result = false;
-        for (let run = 0; run < 3; run++) {
-          const start = performance.now();
-          result = matches(candidate);
-          best = Math.min(best, performance.now() - start);
+      const body = positive.normalize("NFC");
+      // The same glob as an inclusion and as an exclusion under `**`, since
+      // exclusions compile with their own options (nocase, and basename for a
+      // slash-free pattern).
+      const modes = [
+        {
+          label: "inclusion",
+          matches: globAllowlist([positive]),
+          expected: picomatch(body, { dot: true, nonegate: true }),
+        },
+        {
+          label: "exclusion",
+          matches: globAllowlist(["**", `!${positive}`]),
+          expected: (
+            (excluded) => (candidate: string) =>
+              !excluded(candidate)
+          )(
+            picomatch(body, {
+              dot: true,
+              nonegate: true,
+              nocase: true,
+              basename: !body.includes("/"),
+            }),
+          ),
+        },
+      ];
+      for (const { label, matches, expected } of modes)
+        for (const candidate of paths) {
+          let best = Infinity;
+          let result = false;
+          for (let run = 0; run < 3; run++) {
+            const start = performance.now();
+            result = matches(candidate);
+            best = Math.min(best, performance.now() - start);
+          }
+          expect(
+            best,
+            fail(
+              SEED,
+              `${label} ${JSON.stringify(pattern)} took ${best.toFixed(1)} ms on ${JSON.stringify(candidate)}`,
+            ),
+          ).toBeLessThan(TIME_BOUND_MS);
+          // The allowlist agrees with picomatch under the production options.
+          expect(
+            result,
+            fail(
+              SEED,
+              `${label} ${JSON.stringify(pattern)} on ${JSON.stringify(candidate)}`,
+            ),
+          ).toBe(expected(candidate));
         }
-        expect(
-          best,
-          fail(
-            SEED,
-            `glob ${JSON.stringify(pattern)} took ${best.toFixed(1)} ms on ${JSON.stringify(candidate)}`,
-          ),
-        ).toBeLessThan(TIME_BOUND_MS);
-        // The allowlist agrees with picomatch (no exclusions, so nothing narrows it).
-        expect(
-          result,
-          fail(
-            SEED,
-            `glob ${JSON.stringify(pattern)} on ${JSON.stringify(candidate)}`,
-          ),
-        ).toBe(reference(candidate));
-      }
     }
     // Positive controls: matching really happens, so a dead matcher fails here.
     expect(globAllowlist(["**"])(longPath(random))).toBe(true);
     expect(globAllowlist(["a*"])("a".repeat(255))).toBe(true);
     expect(globAllowlist(["a*"])("b".repeat(255))).toBe(false);
+    expect(globAllowlist(["**", "!a*"])(`dir/${"A".repeat(250)}`)).toBe(false);
+    expect(globAllowlist(["**", "!a*"])(`dir/${"b".repeat(250)}`)).toBe(true);
     // The generator must exercise both outcomes, or the property is empty.
     expect(accepted).toBeGreaterThan(CASES / 10);
     expect(refused).toBeGreaterThan(CASES / 10);
