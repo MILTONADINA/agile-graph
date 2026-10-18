@@ -52,8 +52,9 @@ malformed question was refused, then corrected; Jev was not called.
   - Test: packages/engine/tests/verification-deadline.test.ts :: binds adding changing and removing the verification deadline through the existing policy hash
   - Test: packages/engine/tests/managed-verification-deadline.test.ts :: changing the verification deadline to %s requires a fresh plan and separate approval
   - Test: packages/engine/tests/managed-verification-deadline.test.ts :: refuses a retained run resume after its approved verification deadline changes
-- AC6: Verification containers run as a non-root user on every platform: `--user uid:gid` of the host user where `process.getuid` and `process.getgid` exist, otherwise the fixed `1000:1000` (the image's `node` user), and `infra/verification.Dockerfile` ends with `USER node`. The workspace is a bind mount, so it stays writable by the matching host user.
+- AC6: Verification containers run as a non-root user on every platform: `--user uid:gid` of the host user where `process.getuid` and `process.getgid` exist, otherwise the fixed `1000:1000` (the image's `node` user); a root host user is refused, and `infra/verification.Dockerfile` ends with `USER node`. The workspace is a bind mount, so it stays writable by the matching host user.
   - Test: packages/engine/tests/verification-container-deadline.test.ts :: runs the container as a non-root user when $label
+  - Test: packages/engine/tests/verification-container-deadline.test.ts :: refuses to run a verification container as root when the host user is root
 
 ## Security considerations
 

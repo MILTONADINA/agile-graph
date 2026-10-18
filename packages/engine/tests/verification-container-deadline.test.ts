@@ -224,6 +224,30 @@ describe("built-in verification container deadlines", () => {
     await state.assertRemoved();
   });
 
+  it("refuses to run a verification container as root when the host user is root", async () => {
+    const state = await fixture(async () => ({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    }));
+    const saved = process.getuid;
+    process.getuid = () => 0;
+    try {
+      await expect(
+        verifyInContainer(
+          state.root,
+          checks.slice(0, 1),
+          DEFAULT_POLICY,
+          "toy-snapshot",
+        ),
+      ).rejects.toThrow(/must not run as root/);
+    } finally {
+      process.getuid = saved;
+    }
+    expect(state.commands.filter((e) => e.argv[0] === "run")).toHaveLength(0);
+    await state.assertRemoved();
+  });
+
   it("passes literal null through the normal verifier to real command transport and waits for terminal success", async () => {
     const actualCommand = util.command;
     let runOptions: CommandOptions;
