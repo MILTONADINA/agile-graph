@@ -79,7 +79,7 @@ function verificationUser(): string {
   if (!process.getuid || !process.getgid) return "1000:1000";
   const uid = process.getuid();
   const gid = process.getgid();
-  if (uid === 0 || gid === 0)
+  if (uid === 0)
     throw new Error(
       "Verification containers must not run as root: run the engine as a non-root user.",
     );
