@@ -13,7 +13,11 @@ afterEach(async () => {
 });
 
 async function listen(
-  options: { dashboardRoot?: string; maxEventStreams?: number } = {},
+  options: {
+    dashboardRoot?: string;
+    maxEventStreams?: number;
+    logRequests?: boolean;
+  } = {},
 ) {
   const engine = {
     store: { run: () => ({}), events: () => [] },
@@ -214,6 +218,14 @@ describe("dashboard server hardening", () => {
             `boom at /Users/someone/private/file.ts password=hunter2hunter2hunter2 ${TOKEN} q=reflected-query&token=secret`,
           );
         },
+        listSnapshots: () => {
+          throw Object.assign(
+            new Error(
+              "ENOENT: no such file or directory, open '/home/Jane Doe/private/project.json'",
+            ),
+            { code: "ENOENT" },
+          );
+        },
       },
     } as unknown as GraphEngine;
     const capture = () => {
@@ -244,7 +256,7 @@ describe("dashboard server hardening", () => {
         url: "/api/health?token=secret",
         headers: { ...auth, cookie: "sid=cookie-value" },
       });
-      await app.inject({ url: "/nope/x?token=secret" });
+      await app.inject({ url: "/api/nope?token=secret", headers: auth });
       await app.close();
       expect(lines).toHaveLength(2);
       expect(lines[0]).toMatch(/^GET \/api\/health 200 \d+ms\n$/);
@@ -275,6 +287,37 @@ describe("dashboard server hardening", () => {
         "reflected-query",
       ])
         expect(all).not.toContain(leak);
+    });
+
+    it("redacts a quoted path that contains spaces", async () => {
+      const lines = capture();
+      const { app } = createServer(engine, TOKEN, { logRequests: true });
+      const response = await app.inject({
+        url: "/api/snapshots",
+        headers: auth,
+      });
+      await app.close();
+      expect(response.statusCode).toBe(500);
+      const all = lines.join("");
+      expect(all).toContain("ERROR GET /api/snapshots Error: ENOENT");
+      for (const leak of ["Jane", "Doe", "private", "project.json"])
+        expect(all).not.toContain(leak);
+    });
+
+    it("logs an event stream when it closes", async () => {
+      const lines = capture();
+      const { address } = await listen({ logRequests: true });
+      const stream = await fetch(`${address}/api/runs/r1/events?token=secret`, {
+        headers: auth,
+      });
+      expect(stream.status).toBe(200);
+      await stream.body!.cancel();
+      await vi.waitFor(() =>
+        expect(lines.join("")).toMatch(
+          /GET \/api\/runs\/:id\/events 200 \d+ms\n/,
+        ),
+      );
+      expect(lines.join("")).not.toContain("secret");
     });
   });
 });
