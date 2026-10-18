@@ -159,15 +159,11 @@ test("every registry base image is pinned by digest", async () => {
   const root = path.resolve(import.meta.dirname, "..");
   const files = [];
   for (const name of await readdir(path.join(root, "infra"))) {
-    if (name.endsWith(".Dockerfile")) files.push(path.join("infra", name));
+    if (name.endsWith(".Dockerfile")) files.push(`infra/${name}`);
   }
   const fixtures = path.join(root, "packages/engine/tests/fixtures");
   for (const name of await readdir(fixtures)) {
-    const file = path.join(
-      "packages/engine/tests/fixtures",
-      name,
-      "Dockerfile",
-    );
+    const file = `packages/engine/tests/fixtures/${name}/Dockerfile`;
     if (
       await readFile(path.join(root, file)).then(
         () => true,
@@ -181,7 +177,7 @@ test("every registry base image is pinned by digest", async () => {
   for (const file of files) {
     const text = await readFile(path.join(root, file), "utf8");
     const stages = new Set();
-    for (const line of text.split("\n")) {
+    for (const line of text.split(/\r?\n/)) {
       const m = /^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/i.exec(line);
       if (!m) continue;
       const [, image, alias] = m;
