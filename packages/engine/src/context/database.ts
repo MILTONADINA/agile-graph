@@ -72,6 +72,31 @@ export class ContextDatabase {
             }
             return { dryRun, removed, protected: snapshots.filter(row => protectedIds.has(row.id)).map(row => row.id) };
           }).immediate();
+          else if (operation === 'reclaim') {
+            // Outside any transaction. VACUUM needs exclusive access, so a short
+            // busy timeout and a bounded, jittered retry; never throws on BUSY.
+            try {
+              db.pragma('busy_timeout = 250');
+              value = { reclaimed: false, reason: 'not attempted' };
+              for (let attempt = 0; attempt < 4; attempt++) {
+                try {
+                  const [checkpoint] = db.pragma('wal_checkpoint(TRUNCATE)');
+                  if (checkpoint && checkpoint.busy) throw Object.assign(new Error('checkpoint blocked by another connection'), { code: 'SQLITE_BUSY' });
+                  db.exec('VACUUM');
+                  // VACUUM itself writes through the WAL; truncate it again.
+                  const [after] = db.pragma('wal_checkpoint(TRUNCATE)');
+                  if (after && after.busy) throw Object.assign(new Error('checkpoint after vacuum blocked by another connection'), { code: 'SQLITE_BUSY' });
+                  value = { reclaimed: true, reason: null };
+                  break;
+                } catch (error) {
+                  const busy = error.code === 'SQLITE_BUSY' || error.code === 'SQLITE_LOCKED' || /SQLITE_(BUSY|LOCKED)/.test(error.code || '');
+                  value = { reclaimed: false, reason: busy ? 'database is in use by another process (' + error.message + ')' : 'vacuum failed: ' + error.message };
+                  if (!busy) break;
+                  if (attempt < 3) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, (delay => Math.floor(delay / 2 + Math.random() * (delay / 2)))(Math.min(50 * 2 ** attempt, 500)));
+                }
+              }
+            } finally { db.pragma('busy_timeout = 5000'); }
+          }
           else if (operation === 'batch') value = db.transaction(() => {
             for (const required of requiredSnapshots || []) if (!db.prepare('SELECT 1 FROM snapshots WHERE id=?').get(required)) throw new Error('Memory snapshot evidence was pruned before it could be pinned');
             return statements.map(s => {
@@ -173,6 +198,9 @@ export class ContextDatabase {
     protectedSnapshotIds: string[];
   }): Promise<{ dryRun: boolean; removed: string[]; protected: string[] }> {
     return this.request("prune", options);
+  }
+  reclaim(): Promise<{ reclaimed: boolean; reason: string | null }> {
+    return this.request("reclaim");
   }
   async close(): Promise<void> {
     if (this.closed) return;

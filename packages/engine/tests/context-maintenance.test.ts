@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
@@ -414,6 +421,115 @@ describe("storage and maintenance safety", () => {
     await expect(
       engine.searchSymbols("main", snapshots[2]!.id),
     ).rejects.toThrow("unavailable");
+  });
+  describe("prune disk reclamation", () => {
+    async function bulky() {
+      const ctx = await fixture();
+      for (let index = 1; index <= 4; index++) {
+        const body = Array.from(
+          { length: 400 },
+          (_, line) =>
+            `export function f${index}_${line}() { return ${index * line}; }`,
+        ).join("\n");
+        await writeFile(join(ctx.root, "src/main.ts"), body);
+        await ctx.engine.index({ semantic: false });
+      }
+      return ctx;
+    }
+    const dbBytes = async (dataDir: string) =>
+      (await stat(join(dataDir, "context.sqlite"))).size +
+      (await stat(join(dataDir, "context.sqlite-wal")).then(
+        (info) => info.size,
+        () => 0,
+      ));
+    it("shrinks the database after an applied prune and reports reclaimedBytes", async () => {
+      const { engine, dataDir } = await bulky();
+      const before = await dbBytes(dataDir);
+      const result = await engine.pruneSnapshots({
+        keepLatest: 1,
+        dryRun: false,
+      });
+      expect(result.removed.length).toBeGreaterThan(0);
+      const after = await dbBytes(dataDir);
+      expect(after).toBeLessThan(before);
+      expect(result.vacuum).toMatchObject({
+        attempted: true,
+        reclaimed: true,
+        reason: null,
+        bytesBefore: before,
+        bytesAfter: after,
+        reclaimedBytes: before - after,
+      });
+    });
+    it("still shrinks when the WAL was already checkpointed before the prune", async () => {
+      const { engine, dataDir } = await bulky();
+      const other = new Database(join(dataDir, "context.sqlite"));
+      other.pragma("wal_checkpoint(TRUNCATE)");
+      other.close();
+      const before = await dbBytes(dataDir);
+      const result = await engine.pruneSnapshots({
+        keepLatest: 1,
+        dryRun: false,
+      });
+      expect(result.removed.length).toBeGreaterThan(0);
+      expect(await dbBytes(dataDir)).toBeLessThan(before);
+      expect(result.vacuum?.reclaimed).toBe(true);
+    });
+    it("never vacuums on a dry run", async () => {
+      const { engine, dataDir } = await bulky();
+      const before = await dbBytes(dataDir);
+      const spy = vi.spyOn((engine as any).db, "reclaim");
+      const result = await engine.pruneSnapshots({ keepLatest: 1 });
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.vacuum).toBeUndefined();
+      expect(await dbBytes(dataDir)).toBe(before);
+    });
+    it("skips the vacuum with vacuum: false", async () => {
+      const { engine } = await bulky();
+      const spy = vi.spyOn((engine as any).db, "reclaim");
+      const result = await engine.pruneSnapshots({
+        keepLatest: 1,
+        dryRun: false,
+        vacuum: false,
+      });
+      expect(result.removed.length).toBeGreaterThan(0);
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.vacuum).toMatchObject({
+        attempted: false,
+        reclaimed: false,
+        reclaimedBytes: 0,
+      });
+    });
+    it("reports not reclaimed, without failing the prune, when another connection holds the write lock", async () => {
+      const { engine, dataDir } = await bulky();
+      const database = (engine as any).db,
+        prune = database.prune.bind(database);
+      let blocker: InstanceType<typeof Database> | undefined;
+      vi.spyOn(database, "prune").mockImplementationOnce(async (options) => {
+        const result = await prune(options);
+        blocker = new Database(join(dataDir, "context.sqlite"));
+        blocker.exec("BEGIN IMMEDIATE");
+        return result;
+      });
+      try {
+        const result = await engine.pruneSnapshots({
+          keepLatest: 1,
+          dryRun: false,
+        });
+        expect(result.removed.length).toBeGreaterThan(0);
+        expect(result.vacuum).toMatchObject({
+          attempted: true,
+          reclaimed: false,
+          reclaimedBytes: 0,
+        });
+        expect(result.vacuum?.reason).toMatch(/in use|blocked|locked|busy/i);
+        expect(await engine.listSnapshots()).toHaveLength(
+          4 - result.removed.length,
+        );
+      } finally {
+        blocker?.close();
+      }
+    });
   });
   it("backs up live WAL data and restores only verified same-project copies to new directories", async () => {
     const { engine, root, directory } = await fixture();

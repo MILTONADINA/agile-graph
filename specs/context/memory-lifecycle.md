@@ -30,6 +30,13 @@ A team wants durable project knowledge (requirements, constraints, observations)
 - AC7: Snapshot retention preserves the source evidence of every memory, and a memory write whose evidence is pruned concurrently is refused.
   - Test: packages/engine/tests/context-maintenance.test.ts :: previews retention and preserves current, external pins, and all memory provenance
   - Test: packages/engine/tests/context-maintenance.test.ts :: rejects memory writes whose evidence is concurrently pruned before pinning
+- AC7a: When `snapshots-prune --apply` removes at least one snapshot, the system shall checkpoint the WAL and run `VACUUM` outside the delete transaction and report `vacuum.bytesBefore`, `bytesAfter` and `reclaimedBytes` for `context.sqlite` plus its `-wal`.
+  - Test: packages/engine/tests/context-maintenance.test.ts :: shrinks the database after an applied prune and reports reclaimedBytes
+- AC7b: While `--no-vacuum` is given, or on a dry run, the system shall not vacuum.
+  - Test: packages/engine/tests/context-maintenance.test.ts :: skips the vacuum with vacuum: false
+  - Test: packages/engine/tests/context-maintenance.test.ts :: never vacuums on a dry run
+- AC7c: If another connection holds the database so that the vacuum cannot run, then the system shall complete the prune, report `vacuum.reclaimed: false` with a reason, and not fail.
+  - Test: packages/engine/tests/context-maintenance.test.ts :: reports not reclaimed, without failing the prune, when another connection holds the write lock
 - AC8: A person can reject a proposal with a reason; a rejected memory is kept on record, never retrieved, and can never be accepted.
   - Test: packages/engine/tests/hygiene.test.ts :: declines a proposal with a reason, and it can never be accepted
 
