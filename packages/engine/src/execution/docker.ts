@@ -72,14 +72,6 @@ export interface AddedFile {
   path: string;
   content: string;
 }
-/**
- * Runs registered checks in the offline sandbox, each on its own temporary
- * view: a fresh copy of the workspace's allowed files. `options.added` writes new files into
- * that view only (the security audit's reproducer), so the workspace itself
- * is never written; an added path that already exists is refused.
- * `options.replaced` overwrites files the view already has, in the view
- * only; a replaced path the view lacks is refused.
- */
 // Hosts without getuid/getgid (Windows) get the image's fixed non-root `node`
 // user. A root host would map to root in the container (and a private view
 // owned by root is unreadable to any other user), so it is refused.
@@ -94,6 +86,14 @@ function verificationUser(): string {
   return `${uid}:${gid}`;
 }
 
+/**
+ * Runs registered checks in the offline sandbox, each on its own temporary
+ * view: a fresh copy of the workspace's allowed files. `options.added` writes new files into
+ * that view only (the security audit's reproducer), so the workspace itself
+ * is never written; an added path that already exists is refused.
+ * `options.replaced` overwrites files the view already has, in the view
+ * only; a replaced path the view lacks is refused.
+ */
 export async function verifyInContainer(
   workspace: string,
   checks: ProjectConfig["verification"],
