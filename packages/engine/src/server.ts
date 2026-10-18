@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
+import type { OutgoingHttpHeaders } from "node:http";
 import { z } from "zod";
 import type {
   ExecutionPlan,
@@ -64,6 +65,54 @@ function dashboardEvent(event: RunEvent): RunEvent {
     : event;
 }
 
+// The built dashboard is a module script and a stylesheet served from this
+// origin and fetches only this origin's API, so nothing needs to be wider.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+].join("; ");
+const SECURITY_HEADERS = {
+  "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Cache-Control": "no-store",
+} as const;
+// Most event streams one dashboard server holds open at once.
+export const MAX_EVENT_STREAMS = 16;
+const EVENT_STREAM_RETRY_SECONDS = 5;
+
+// A client error is a failed validation, a protocol error Fastify itself
+// classified (413, 415, ...) or a deliberate engine refusal (a plain Error or
+// one of the engine's own error classes). Programming faults (TypeError,
+// RangeError, ReferenceError, ...), errors carrying a system `code` (SQLite,
+// filesystem, network) and anything thrown that is not an Error are
+// unexpected.
+function clientErrorStatus(error: unknown): number | undefined {
+  if (error instanceof z.ZodError) return 400;
+  const status = (error as { statusCode?: unknown } | null)?.statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500)
+    return status;
+  if (
+    !(error instanceof Error) ||
+    error instanceof TypeError ||
+    error instanceof RangeError ||
+    error instanceof ReferenceError ||
+    error instanceof EvalError ||
+    error instanceof URIError ||
+    typeof (error as { code?: unknown }).code === "string"
+  )
+    return undefined;
+  return 400;
+}
+
 function isPublicRoute(config: unknown): boolean {
   return (
     typeof config === "object" &&
@@ -87,10 +136,12 @@ function looksLikeApi(url: string): boolean {
 export function createServer(
   engine: GraphEngine,
   token = randomBytes(32).toString("hex"),
-  options: { dashboardRoot?: string } = {},
+  options: { dashboardRoot?: string; maxEventStreams?: number } = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 1_000_000 });
   app.addHook("onRequest", async (request, reply) => {
+    // First, so refusals and error responses carry the headers too.
+    reply.headers(SECURITY_HEADERS);
     const host = request.headers.host ?? "";
     if (!/^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/.test(host))
       return reply.code(403).send({ error: "Loopback hosts only" });
@@ -110,13 +161,18 @@ export function createServer(
       )
         return reply.code(401).send({ error: "Local access token required" });
     }
-    reply
-      .header("X-Content-Type-Options", "nosniff")
-      .header("Referrer-Policy", "no-referrer")
-      .header("Cache-Control", "no-store");
   });
+  // The API speaks JSON only; Fastify's built-in text/plain parser would hand
+  // a string to the schemas, so drop it and let Fastify answer 415.
+  app.removeContentTypeParser("text/plain");
   app.setErrorHandler((error, _request, reply) => {
-    reply.code(400).send({
+    const status = clientErrorStatus(error);
+    if (status === undefined) {
+      // No message, stack or path from an unexpected fault.
+      reply.code(500).send({ error: "Internal server error" });
+      return;
+    }
+    reply.code(status).send({
       error: error instanceof Error ? error.message : "Request failed",
     });
   });
@@ -357,6 +413,7 @@ export function createServer(
   // and ends it while the engine is still open; a stream whose request was
   // already being handled when closing began ends as soon as it starts.
   const eventStreams = new Set<() => void>();
+  const maxEventStreams = options.maxEventStreams ?? MAX_EVENT_STREAMS;
   let closing = false;
   app.addHook("preClose", async () => {
     closing = true;
@@ -365,12 +422,22 @@ export function createServer(
   app.get("/api/runs/:id/events", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
     engine.store.run(id);
+    if (eventStreams.size >= maxEventStreams)
+      return reply
+        .code(503)
+        .header("Retry-After", String(EVENT_STREAM_RETRY_SECONDS))
+        .send({ error: "Too many open event streams" });
     reply.hijack();
+    // A hijacked reply skips Fastify's header handling, so send them here.
     reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-store",
+      ...(reply.getHeaders() as OutgoingHttpHeaders),
+      "content-type": "text/event-stream",
+      "cache-control": "no-store",
+      "x-accel-buffering": "no",
       Connection: "keep-alive",
     });
+    // Send the headers now: a run with no events yet writes nothing else.
+    reply.raw.flushHeaders();
     let sent = 0;
     const flush = () => {
       const events = engine.store.events(id);
