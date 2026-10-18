@@ -1,0 +1,29 @@
+# Extends the default ruleset. Each allowlist below is limited to one rule and
+# to the files where history holds a synthetic test value or a non-secret
+# identifier (a commit hash, a tokenizer hash, prose). Do not widen a path or
+# drop a rule from targetRules; a real finding elsewhere must still fail CI.
+title = "agile-graph gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic credentials in test files"
+targetRules = ["aws-access-token", "generic-api-key"]
+paths = [
+  '''^packages/engine/tests/(template-runtime-database|decision-batch|installed|managed-dag-safety|mcp-governance|mcp|sealed-public-packet|security-scan-redaction)\.test\.ts$''',
+  '''^evaluation/sealed/tests/(engineering-oracle|module-graph-oracle|public-packet|worker-sandbox)\.test\.mjs$''',
+]
+
+[[allowlists]]
+description = "Pinned Cloudflare audit commit hash, not a key"
+targetRules = ["cloudflare-api-key"]
+paths = ['''^packages/engine/src/security/audit\.ts$''']
+
+[[allowlists]]
+description = "Tokenizer normalization hash and spec prose, not keys"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^sidecars/laya/server\.py$''',
+  '''^specs/providers/installed-worker-identity\.md$''',
+]

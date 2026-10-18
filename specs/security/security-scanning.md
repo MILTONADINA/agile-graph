@@ -116,6 +116,11 @@ Teams need security tools chosen for what their repository actually contains, wi
   - Test: packages/engine/tests/security-owasp-mcp.test.ts :: flags a passthrough flag in a Codex config.toml server's args
   - Test: packages/engine/tests/security-owasp-mcp.test.ts :: treats false-like values, empty lists and non-authorization header lists as off, and still flags authorization header lists
   - Test: packages/engine/tests/security-owasp-mcp.test.ts :: flags a Codex config.toml server whose header tables, env values or env_vars refer to an inbound token variable, naming no value
+- AC31: When CI runs on a pull request or on `main`, the system shall run a `gitleaks` job that scans the full git history (`fetch-depth: 0`) with `--redact` and `--exit-code 1`, so a finding fails the job without printing the secret. The job installs a gitleaks release pinned by version and verified by its published SHA-256, with no third-party action and no license key, and reads `.gitleaks.toml`, which extends the default rules and allowlists only named rules in named files. The job is not a required check; adding it to branch protection is the owner's decision.
+  - Test: scripts/ci-gitleaks.test.mjs :: CI has a gitleaks job scanning the full history
+  - Test: scripts/ci-gitleaks.test.mjs :: the gitleaks job pins a release version and its SHA-256
+  - Test: scripts/ci-gitleaks.test.mjs :: the gitleaks job redacts and fails on findings
+  - Test: scripts/ci-gitleaks.test.mjs :: the gitleaks job stays a non-required check
 
 ## Security considerations
 

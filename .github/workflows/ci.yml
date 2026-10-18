@@ -56,6 +56,8 @@ jobs:
         run: node --test scripts/dist-freshness.test.mjs
       - name: Branch-protection policy
         run: node --test scripts/branch-protection.test.mjs
+      - name: Secret-scan CI job
+        run: node --test scripts/ci-gitleaks.test.mjs
       - name: Promotion key helper (temporary key directories only)
         run: node --test scripts/promotion-key.test.mjs
       - name: Local wrapper strips Jev credentials (temporary directories only)
@@ -162,6 +164,31 @@ jobs:
           node --version
           npm test -w @agile-graph/contracts
           npm test -w @agile-graph/engine
+
+  gitleaks:
+    # Not a required check: adding it to branch protection is the owner's decision.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+      # From gitleaks_8.30.1_checksums.txt at
+      # https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_checksums.txt
+      # (same value as GITLEAKS_SHA256_AMD64 in sidecars/security/Dockerfile).
+      GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the pinned gitleaks release, verified by SHA-256
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan the full history for secrets
+        run: |
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --exit-code 1 --config .gitleaks.toml .
 
   sidecar:
     runs-on: ubuntu-24.04
