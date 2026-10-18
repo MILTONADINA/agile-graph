@@ -31,8 +31,10 @@ import {
 import { GraphEngine } from "../src/service.js";
 import { classifyError } from "../src/feedback.js";
 import { similarFilesNote } from "../src/execution/requested-sources.js";
+import { viewing } from "./worker-view.js";
 import { applyProposal } from "../src/execution/workspace.js";
 import { invokeApiWorker, StructuredOutputError } from "../src/workers/api.js";
+import type { WorkerResult } from "../src/workers/api.js";
 import { findingId } from "../src/workers/review.js";
 import { checked, writeJson } from "../src/util.js";
 import * as util from "../src/util.js";
@@ -142,7 +144,7 @@ describe("managed execution", () => {
     const feedback: (string | undefined)[] = [];
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async (input) => {
+      worker: viewing(["math.cjs"], async (input) => {
         feedback.push(input.feedback);
         return {
           model: "fixture",
@@ -163,7 +165,7 @@ describe("managed execution", () => {
             estimated: false,
           },
         };
-      },
+      }),
       verify: async (workspace, checks, _policy, snapshotHash) => {
         const source = await readFile(path.join(workspace, "math.cjs"), "utf8");
         const passing = source.includes("a + b");
@@ -187,6 +189,59 @@ describe("managed execution", () => {
       "COMPILATION ERROR math.cjs:1 wrong operator",
     );
     expect(feedback[1]).toContain("warning: cache directory is not writable");
+  });
+
+  it("returns an edit of a file the worker was never shown as feedback, then applies it once requested", async () => {
+    const { root } = await fixture();
+    const feedback: (string | undefined)[] = [];
+    let calls = 0;
+    const engine = await GraphEngine.open(root, {
+      dockerAvailable: async () => true,
+      worker: async (input) => {
+        feedback.push(input.feedback);
+        calls++;
+        const edit = { path: "math.cjs", before: "a - b", after: "a + b" };
+        const seen = input.context.items.some(
+          (item) => item.source?.path === "math.cjs",
+        );
+        return {
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            // Edit blind on the first call, then ask, then edit.
+            requests: calls === 2 && !seen ? ["math.cjs"] : [],
+            changes: calls === 2 && !seen ? [] : [edit],
+          },
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cachedTokens: 0,
+            costUsd: 0,
+            estimated: false,
+          },
+        };
+      },
+      verify: async (workspace, checks, _policy, snapshotHash) => {
+        const source = await readFile(path.join(workspace, "math.cjs"), "utf8");
+        return checks.map((check) => ({
+          ...check,
+          code: source.includes("a + b") ? 0 : 1,
+          stdout: "",
+          stderr: "",
+          snapshotHash,
+        }));
+      },
+    });
+    engines.push(engine);
+    const plan = await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["The addition test passes"],
+    });
+    const result = await engine.wait((await engine.start(plan.id)).id);
+    expect(result.status).toBe("succeeded");
+    expect(feedback[0] ?? "").toBe("");
+    expect(feedback[1]).toContain("which were not shown to you");
+    expect(feedback[1]).toContain("math.cjs#L1-L1");
   });
 
   it("warns when a plan may need more model calls than the run-wide turn budget", async () => {
@@ -795,6 +850,7 @@ describe("managed execution", () => {
       { requests: ["lib"], changes: [] },
       { requests: ["lib/missing/nothing.ts"], changes: [] },
       { requests: ["lib/util.cjs"], changes: [] },
+      { requests: ["math.cjs"], changes: [] },
       {
         requests: [],
         changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
@@ -888,7 +944,7 @@ describe("managed execution", () => {
       calls = 0;
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async () => ({
+      worker: viewing(["math.cjs"], async () => ({
         model: "fixture",
         proposal: {
           summary: "Invisible new source",
@@ -910,7 +966,7 @@ describe("managed execution", () => {
           costUsd: 0,
           estimated: false,
         },
-      }),
+      })),
       verify: async (_workspace, checks, _policy, snapshotHash) => {
         checksCalled++;
         return checks.map((check) => ({
@@ -1041,7 +1097,7 @@ describe("managed execution", () => {
     const { root } = await fixture();
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async () => ({
+      worker: viewing(["math.cjs"], async () => ({
         model: "fixture",
         proposal: {
           summary: "Fix addition",
@@ -1055,7 +1111,7 @@ describe("managed execution", () => {
           costUsd: 0,
           estimated: false,
         },
-      }),
+      })),
       verify: async (workspace, checks, _policy, snapshotHash) => {
         expect(
           await readFile(path.join(workspace, "math.cjs"), "utf8"),
@@ -1077,7 +1133,7 @@ describe("managed execution", () => {
     const run = await engine.start(plan.id);
     const result = await engine.wait(run.id);
     expect(result.status).toBe("succeeded");
-    expect(result.usage.inputTokens).toBe(10);
+    expect(result.usage.inputTokens).toBe(11);
     expect(await readFile(path.join(root, "math.cjs"), "utf8")).toContain(
       "a - b",
     );
@@ -1086,9 +1142,10 @@ describe("managed execution", () => {
         .events(run.id)
         .some((e) => e.type === "verification.completed"),
     ).toBe(true);
+    // One turn to read math.cjs, one to edit it.
     expect(
       engine.store.events(run.id).filter((e) => e.type === "worker.dispatched"),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
   it("does not let an optimistic worker override a failed check", async () => {
     const { root } = await fixture();
@@ -1294,7 +1351,7 @@ describe("managed execution", () => {
     // were reserved.
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async () => ({
+      worker: viewing(["math.cjs"], async () => ({
         model: "fixture",
         proposal: {
           summary: "Fix addition",
@@ -1308,7 +1365,7 @@ describe("managed execution", () => {
           costUsd: 0,
           estimated: false,
         },
-      }),
+      })),
       verify: async (_workspace, checks, _policy, snapshotHash) =>
         checks.map((check) => ({
           ...check,
@@ -1376,21 +1433,23 @@ describe("managed execution", () => {
   });
   it("records a worker dispatch only once its call is reserved, so a run cancelled while waiting for a slot resumes", async () => {
     const { root } = await fixture();
-    const worker = vi.fn(async () => ({
-      model: "fixture",
-      proposal: {
-        summary: "Fix addition",
-        requests: [],
-        changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
-      },
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        cachedTokens: 0,
-        costUsd: 0,
-        estimated: false,
-      },
-    }));
+    const worker = vi.fn(
+      viewing(["math.cjs"], async () => ({
+        model: "fixture",
+        proposal: {
+          summary: "Fix addition",
+          requests: [],
+          changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
+        },
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cachedTokens: 0,
+          costUsd: 0,
+          estimated: false,
+        },
+      })),
+    );
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
       worker,
@@ -1439,12 +1498,13 @@ describe("managed execution", () => {
     const resumed = await engine.wait(run.id);
     expect(resumed.error).toBeUndefined();
     expect(resumed.status).toBe("succeeded");
-    expect(worker).toHaveBeenCalledTimes(1);
+    expect(worker).toHaveBeenCalledTimes(2);
+    // One dispatch for the read turn and one for the edit.
     expect(
       engine.store
         .events(run.id)
         .filter((event) => event.type === "worker.dispatched"),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
   it("re-verifies a retained patch on resume without replaying the worker", async () => {
     const { root } = await fixture();
@@ -1452,7 +1512,7 @@ describe("managed execution", () => {
       checks = 0;
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async () => {
+      worker: viewing(["math.cjs"], async () => {
         calls++;
         return {
           model: "fixture",
@@ -1469,7 +1529,7 @@ describe("managed execution", () => {
             estimated: false,
           },
         };
-      },
+      }),
       verify: async (_workspace, commands, _policy, snapshotHash) => {
         if (++checks === 1)
           throw new Error("Verification temporarily unavailable");
@@ -1743,7 +1803,7 @@ describe("managed execution", () => {
         checks = 0;
       const engine = await GraphEngine.open(root, {
         dockerAvailable: async () => true,
-        worker: async () => {
+        worker: viewing(["math.cjs"], async () => {
           calls++;
           return {
             model: "fixture",
@@ -1763,7 +1823,7 @@ describe("managed execution", () => {
               estimated: false,
             },
           };
-        },
+        }),
         verify: async (_workspace, commands, _policy, snapshotHash) => {
           if (++checks === 1)
             throw new Error("Verification temporarily unavailable");
@@ -2232,7 +2292,7 @@ describe("managed execution", () => {
     const inputs: { feedback?: string; context: string }[] = [];
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async (input) => {
+      worker: viewing(["math.cjs"], async (input) => {
         inputs.push({
           feedback: input.feedback,
           context: JSON.stringify(input.context),
@@ -2261,7 +2321,7 @@ describe("managed execution", () => {
             estimated: false,
           },
         };
-      },
+      }),
       verify: async (_workspace, checks, _policy, snapshotHash) =>
         checks.map((check) => ({
           ...check,
@@ -2347,7 +2407,7 @@ describe("managed execution", () => {
         const inputs: { feedback?: string; context: string }[] = [];
         const engine = await GraphEngine.open(root, {
           dockerAvailable: async () => true,
-          worker: async (input) => {
+          worker: viewing(["math.cjs"], async (input) => {
             inputs.push({
               feedback: input.feedback,
               context: JSON.stringify(input.context),
@@ -2367,7 +2427,7 @@ describe("managed execution", () => {
                 estimated: false,
               },
             };
-          },
+          }),
           verify: async (_workspace, checks, _policy, snapshotHash) =>
             checks.map((check) => ({
               ...check,
@@ -2448,6 +2508,7 @@ describe("managed execution", () => {
     vi.stubEnv("GRAPH_TEST_API_KEY", "fixture-only-not-a-real-key");
     const proposals = [
       { summary: "Need the fixture", requests: [named], changes: [] },
+      { summary: "Read the source", requests: ["math.cjs"], changes: [] },
       {
         summary: "Fix addition",
         requests: [],
@@ -2497,8 +2558,9 @@ describe("managed execution", () => {
     const run = await engine.wait((await engine.start(plan.id)).id);
     expect(run.error ?? "").toBe("");
     expect(run.status).toBe("succeeded");
-    // One round of feedback, which counts the path rather than naming it.
-    expect(sent).toHaveLength(2);
+    // One round of feedback, which counts the path rather than naming it,
+    // then a request for the file the change edits.
+    expect(sent).toHaveLength(3);
     expect(sent[1]).toContain(
       "You requested 1 path whose name looks like a credential, which this project does not share with your provider, so nothing was read.",
     );
@@ -2522,21 +2584,23 @@ describe("managed execution", () => {
   // so the run must not be launched once those checks finish.
   it("launches no run when the engine starts closing while start or resume checks it can run", async () => {
     const { root, data, config } = await fixture();
-    const worker = vi.fn(async () => ({
-      model: "fixture",
-      proposal: {
-        summary: "Fix addition",
-        requests: [],
-        changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
-      },
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        cachedTokens: 0,
-        costUsd: 0,
-        estimated: false,
-      },
-    }));
+    const worker = vi.fn(
+      viewing(["math.cjs"], async () => ({
+        model: "fixture",
+        proposal: {
+          summary: "Fix addition",
+          requests: [],
+          changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
+        },
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cachedTokens: 0,
+          costUsd: 0,
+          estimated: false,
+        },
+      })),
+    );
     let checks = 0;
     // Holds the Docker probe once armed, so the test can close the engine
     // while start or resume awaits it.
@@ -2620,7 +2684,7 @@ describe("managed execution", () => {
     const failed = await first.wait((await first.start(plan.id)).id);
     expect(failed.status).toBe("failed");
     expect(failed.workspace).toBeTruthy();
-    expect(worker).toHaveBeenCalledTimes(1);
+    expect(worker).toHaveBeenCalledTimes(2);
     expect(checks).toBe(1);
     const resumed = await closeDuringSetup(first, () =>
       first.resume(failed.id, true),
@@ -2644,7 +2708,7 @@ describe("managed execution", () => {
     });
     expect(stored()).toMatchObject([{ id: failed.id, status: "failed" }]);
     // Neither setup reached the worker or the checks.
-    expect(worker).toHaveBeenCalledTimes(1);
+    expect(worker).toHaveBeenCalledTimes(2);
     expect(checks).toBe(1);
   });
   it.runIf(process.env.GRAPH_ENGINE_DOCKER_TESTS === "1")(
@@ -2652,7 +2716,7 @@ describe("managed execution", () => {
     async () => {
       const { root } = await fixture();
       const engine = await GraphEngine.open(root, {
-        worker: async () => ({
+        worker: viewing(["math.cjs"], async () => ({
           model: "fixture",
           proposal: {
             summary: "Fix addition",
@@ -2666,7 +2730,7 @@ describe("managed execution", () => {
             costUsd: 0,
             estimated: false,
           },
-        }),
+        })),
       });
       engines.push(engine);
       const plan = await engine.createPlan({
@@ -2695,7 +2759,7 @@ describe("security gate", () => {
       stderr: "",
       snapshotHash,
     }));
-  const fixingWorker = async () => ({
+  const fixingProposal = async (): Promise<WorkerResult> => ({
     model: "fixture",
     proposal: {
       summary: "Fix addition",
@@ -2710,6 +2774,7 @@ describe("security gate", () => {
       estimated: false,
     },
   });
+  const fixingWorker = viewing(["math.cjs"], fixingProposal);
   const finding = (fingerprint: string) => ({
     tool: "semgrep",
     rule: "javascript.eval-detected",
@@ -2768,7 +2833,7 @@ describe("security gate", () => {
     }
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker,
+      worker: viewing(["math.cjs"], worker),
       verify: passingVerify,
       securityScan: scan,
     });
@@ -2947,8 +3012,8 @@ describe("security gate", () => {
         unscanned: [],
       }),
       2,
-      async () => ({
-        ...(await fixingWorker()),
+      viewing(["math.cjs"], async () => ({
+        ...(await fixingProposal()),
         proposal: {
           summary: "Fix addition",
           requests: [],
@@ -2962,7 +3027,7 @@ describe("security gate", () => {
                 },
           ],
         },
-      }),
+      })),
     );
     expect(result.status).toBe("succeeded");
     const first = events.find(
@@ -3033,8 +3098,8 @@ describe("security gate", () => {
         errors: [],
         unscanned: [],
       });
-      const lockfileWorker = async () => ({
-        ...(await fixingWorker()),
+      const lockfileWorker = viewing(["math.cjs"], async () => ({
+        ...(await fixingProposal()),
         proposal: {
           summary: "Fix addition and pin a dependency",
           requests: [],
@@ -3047,7 +3112,7 @@ describe("security gate", () => {
             },
           ],
         },
-      });
+      }));
       const changed = await run(["accepted"], clean, 1, lockfileWorker);
       expect(changed.result.status).toBe("failed");
       expect(changed.result.error).toContain(
@@ -3346,7 +3411,7 @@ describe("code review gate", () => {
     await options.prepare?.(root);
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async (input) => {
+      worker: viewing(["math.cjs", "math.test.cjs"], async (input) => {
         feedback.push(input.feedback);
         return {
           model: "fixture",
@@ -3370,7 +3435,7 @@ describe("code review gate", () => {
           },
           usage,
         };
-      },
+      }),
       verify: passingVerify,
       ...(options.securityScan ? { securityScan: options.securityScan } : {}),
       review: async (input) => {

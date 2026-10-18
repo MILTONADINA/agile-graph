@@ -12,6 +12,7 @@ import {
 } from "../src/project.js";
 import { GraphEngine, type EngineDependencies } from "../src/service.js";
 import { checked, hash, writeJson } from "../src/util.js";
+import { viewing } from "./worker-view.js";
 import { inputTokenCeiling, tokensForBytes } from "../src/tokens.js";
 import { stoppedAtReview } from "../src/overview.js";
 import { workspaceFingerprint } from "../src/execution/workspace.js";
@@ -870,6 +871,8 @@ describe("security audit of a run", () => {
       providers?: Parameters<typeof configureProvider>[1][];
       /** The sandbox for an audit reproducer, a call with added files. */
       reproduce?: NonNullable<EngineDependencies["verify"]>;
+      /** The run creates a file in one call instead of reading then editing. */
+      creates?: boolean;
     } = {},
   ) {
     // Docker is up for the run; a test may take it away before an audit.
@@ -930,15 +933,21 @@ describe("security audit of a run", () => {
     );
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => state.docker,
-      worker: async () => ({
-        model: "fixture",
-        proposal: {
-          summary: "Fix addition",
-          requests: [],
-          changes: [{ path: "math.cjs", before: "a - b", after: "a + b" }],
-        },
-        usage,
-      }),
+      worker: (options.creates
+        ? (fn: Parameters<typeof viewing>[1]) => fn
+        : (fn: Parameters<typeof viewing>[1]) => viewing(["math.cjs"], fn))(
+        async () => ({
+          model: "fixture",
+          proposal: {
+            summary: "Fix addition",
+            requests: [],
+            changes: options.creates
+              ? [{ path: "added.cjs", before: null, after: "exports.x = 1;\n" }]
+              : [{ path: "math.cjs", before: "a - b", after: "a + b" }],
+          },
+          usage,
+        }),
+      ),
       verify: async (workspace, checks, policy, snapshotHash, signal, extra) =>
         extra?.added
           ? reproduce(workspace, checks, policy, snapshotHash, signal, extra)
@@ -1105,6 +1114,7 @@ describe("security audit of a run", () => {
     expect(tight.verifier).toHaveBeenCalledTimes(3);
     // A budget with no room for a verification refuses before hunting.
     const none = await finishedRun({
+      creates: true,
       configure: (config) => {
         config.policy.maxTurns = 1;
       },

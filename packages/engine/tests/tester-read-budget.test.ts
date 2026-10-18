@@ -22,6 +22,7 @@ import {
   READ_BUDGET_REFUSAL,
 } from "../src/execution/requested-sources.js";
 import type { WorkerInput, WorkerResult } from "../src/workers/api.js";
+import { viewing } from "./worker-view.js";
 import { ContextEngine } from "../src/context/index.js";
 import { testerFocusPaths } from "../src/execution/tester-context.js";
 import { DEFAULT_TEST_FILES } from "../src/tester.js";
@@ -153,6 +154,15 @@ const implementation = answer({
     },
   ],
 });
+// The implementer edits src/slugify.js, so it must have been shown it.
+const implement = viewing(["src/slugify.js"], async () => implementation);
+// The budget tests spend the whole read budget on the tester, so their
+// implementer creates a file instead of editing one it would have to read.
+const creation = answer({
+  changes: [
+    { path: "src/trim.js", before: null, after: "exports.trim = 1;\n" },
+  ],
+});
 const objective = "Make slugify trim whitespace";
 async function plan(engine: GraphEngine) {
   return engine.createPlan({
@@ -182,7 +192,7 @@ describe("tester's first packet", () => {
     const first = new Map<string, WorkerInput>();
     const worker = vi.fn(async (input: WorkerInput) => {
       if (!first.has(input.provider.id)) first.set(input.provider.id, input);
-      return input.provider.id === "tester" ? testFile : implementation;
+      return input.provider.id === "tester" ? testFile : implement(input, "");
     });
     const engine = await open(root, { worker });
     const run = await engine.wait(
@@ -246,7 +256,7 @@ describe("read budget", () => {
     });
     const feedback: (string | undefined)[] = [];
     const worker = vi.fn(async (input: WorkerInput) => {
-      if (input.provider.id !== "tester") return implementation;
+      if (input.provider.id !== "tester") return creation;
       feedback.push(input.feedback);
       return feedback.length <= 2
         ? answer({ requests: [`part${feedback.length}.js`] })
@@ -278,7 +288,7 @@ describe("read budget", () => {
     });
     const feedback: (string | undefined)[] = [];
     const worker = vi.fn(async (input: WorkerInput) => {
-      if (input.provider.id !== "tester") return implementation;
+      if (input.provider.id !== "tester") return creation;
       feedback.push(input.feedback);
       return feedback.length <= 2
         ? answer({ requests: [`part${feedback.length}.js`] })

@@ -231,8 +231,12 @@ async function checkProject(
 ) {
   const { root, data, graph } = await project();
   const server = createServer((request, response) => {
-    request.resume();
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => chunks.push(chunk));
     request.on("end", () => {
+      // The worker must see math.cjs before it may edit it: it asks for the
+      // file until the prompt carries its contents.
+      const seen = Buffer.concat(chunks).toString("utf8").includes("a - b");
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
@@ -241,10 +245,10 @@ async function checkProject(
               message: {
                 content: JSON.stringify({
                   summary: "Add instead of subtracting.",
-                  changes: [
-                    { path: "math.cjs", before: "a - b", after: "a + b" },
-                  ],
-                  requests: [],
+                  changes: seen
+                    ? [{ path: "math.cjs", before: "a - b", after: "a + b" }]
+                    : [],
+                  requests: seen ? [] : ["math.cjs"],
                 }),
               },
             },

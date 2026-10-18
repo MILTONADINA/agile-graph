@@ -32,8 +32,6 @@ type LineRange = Pick<
 export class SuppliedLines {
   private readonly seen = new Map<string, [number, number][]>();
   private readonly outlines = new Set<string>();
-  // Paths delivered as an outline or a line range rather than whole.
-  readonly partial = new Set<string>();
   private sequence = 0;
   private key(source: Pick<LineRange, "path" | "contentHash">) {
     return `${source.path}\0${source.contentHash}`;
@@ -188,7 +186,6 @@ export async function requestedSourcePacket(options: {
       : undefined;
   let mandatoryFits: boolean | undefined;
   const requested: ContextPacket["items"] = [];
-  const partialIds = new Set<string>();
   const entries = [...new Set(options.requests)];
   // A cloud request for a file the project does not export, or whose name
   // looks like a credential, is refused whole, before any file is read, by
@@ -340,12 +337,6 @@ export async function requestedSourcePacket(options: {
     }
     if (requested.some((next) => next.id === item.id)) continue;
     requested.push(item);
-    if (
-      item.kind === "outline" ||
-      startLine > 1 ||
-      item.source!.endLine < lastLine
-    )
-      partialIds.add(item.id);
   }
   // Rank what adds new evidence above what the worker already has, and
   // earlier requests above later ones, so a tight budget drops repeats and
@@ -398,24 +389,22 @@ export async function requestedSourcePacket(options: {
   for (const item of delivered) {
     if (item.kind === "outline") supplied.recordOutline(item.source!);
     else if (item.source) supplied.record(item.source);
-    if (partialIds.has(item.id)) supplied.partial.add(item.source!.path);
   }
   return packet;
 }
 
-// Returns why a proposal may not apply, or undefined. Only files the worker
-// saw in part (an outline or a line range) are checked: an edit there must
-// lie inside lines it was shown. Creations, other files and edits whose
-// `before` is not a unique match are left to prepareProposal.
+// Returns why a proposal may not apply, or undefined. An edit to an existing
+// file must lie inside lines the worker was shown (a whole file it was sent,
+// a line range or a retrieved excerpt count; an outline does not). Creations
+// and edits whose `before` is not a unique match are left to prepareProposal.
 export async function unseenPatchLocation(
   workspace: string,
   proposal: Pick<WorkerProposal, "changes">,
   shown: SuppliedLines,
-  partial: ReadonlySet<string>,
   policy: WorkerInput["policy"],
 ): Promise<string | undefined> {
   for (const change of proposal.changes) {
-    if (change.before === null || !partial.has(change.path)) continue;
+    if (change.before === null) continue;
     let content: string;
     try {
       content = await readFile(

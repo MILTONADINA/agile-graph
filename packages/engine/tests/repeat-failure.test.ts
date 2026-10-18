@@ -11,6 +11,7 @@ import {
 import { GraphEngine } from "../src/service.js";
 import { classifyError } from "../src/feedback.js";
 import { checked, writeJson } from "../src/util.js";
+import { viewing } from "./worker-view.js";
 
 const roots: string[] = [];
 const engines: GraphEngine[] = [];
@@ -133,7 +134,7 @@ async function run(options: {
         findings: [],
       },
     }),
-    worker: async (input) => {
+    worker: viewing(["math.cjs"], async (input) => {
       feedback.push(input.feedback ?? "");
       const next = options.edits[feedback.length - 1] ?? body;
       const changes =
@@ -150,7 +151,7 @@ async function run(options: {
           estimated: false,
         },
       };
-    },
+    }),
   });
   engines.push(engine);
   const plan = await engine.createPlan({

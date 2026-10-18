@@ -15,8 +15,9 @@ Workers often need to change large files that do not fit in their context budget
 - AC2: A file too large to fit is delivered as an outline listing parsed symbols with their line ranges.
   - Test: packages/engine/tests/requested-sources.test.ts :: lists parsed symbols with line ranges in an outline
   - Test: packages/engine/tests/requested-sources.test.ts :: outlines a file that cannot fit and reports mandatory overflow as mandatory
-- AC3: Edits to a partly seen file are held to the lines the worker was shown, and an ambiguous or out-of-view edit is returned to the worker as feedback instead of failing the run.
+- AC3: When a worker proposes an edit to an existing file, the engine accepts it only if the worker was shown every line the edit's `before` text covers in the file's current content (a whole file it was sent, a line range or a retrieved excerpt counts; an outline does not), and otherwise returns feedback naming the lines and the `path#L<start>-L<end>` request to make, instead of failing the run. A creation (`before` null) is not held to this, only to write scope and export policy, and an ambiguous or missing `before` is returned as the existing patch feedback.
   - Test: packages/engine/tests/requested-sources.test.ts :: holds edits of a partly seen file to the lines the worker was shown
+  - Test: packages/engine/tests/execution.test.ts :: returns an edit of a file the worker was never shown as feedback, then applies it once requested
   - Test: packages/engine/tests/execution.test.ts :: returns an ambiguous patch to the worker instead of failing the run
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: returns a DAG edit of unseen lines in a partly seen file as feedback
 - AC4: A worker that repeats a request without receiving new evidence is stopped.

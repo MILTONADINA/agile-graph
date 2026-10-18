@@ -10,6 +10,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { ExecutionPlan, RunRecord } from "@agile-graph/contracts";
 import { GraphEngine } from "../src/service.js";
+import { viewing } from "./worker-view.js";
 import { initializeProject, projectDataDir } from "../src/project.js";
 import { createMcpServer } from "../src/mcp.js";
 import { estimateTokens } from "../src/tokens.js";
@@ -906,7 +907,7 @@ it("lets a connected client plan, start, follow, list and cancel runs only when 
         },
       };
     },
-    worker: async () => ({
+    worker: viewing(["math.cjs"], async () => ({
       model: "fixture",
       proposal: {
         summary: "Fix addition",
@@ -920,7 +921,7 @@ it("lets a connected client plan, start, follow, list and cancel runs only when 
         costUsd: 0,
         estimated: false,
       },
-    }),
+    })),
     verify: async (_workspace, checks, _policy, snapshotHash) =>
       checks.map((check) => ({
         ...check,
@@ -1241,7 +1242,7 @@ it("refuses a connected client's run_start and the dashboard's start of a plan t
   });
   const engine = await GraphEngine.open(root, {
     dockerAvailable: async () => true,
-    worker: async () => ({
+    worker: viewing(["math.cjs"], async () => ({
       model: "fixture",
       proposal: {
         summary: "Fix addition",
@@ -1255,7 +1256,7 @@ it("refuses a connected client's run_start and the dashboard's start of a plan t
         costUsd: 0,
         estimated: false,
       },
-    }),
+    })),
     verify: async (_workspace, checks, _policy, snapshotHash) =>
       checks.map((check) => ({
         ...check,
@@ -1753,7 +1754,7 @@ it("follows a run another engine is executing until that run stops", async () =>
   // another MCP server would in its own process.
   const runner = await GraphEngine.open(root, {
     dockerAvailable: async () => true,
-    worker: async () => {
+    worker: viewing(["math.cjs"], async () => {
       working();
       await released;
       return {
@@ -1771,7 +1772,7 @@ it("follows a run another engine is executing until that run stops", async () =>
           estimated: false,
         },
       };
-    },
+    }),
     verify: async (_workspace, checks, _policy, snapshotHash) =>
       checks.map((check) => ({
         ...check,

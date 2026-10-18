@@ -41,6 +41,7 @@ import {
   type WorkerResult,
 } from "../src/workers/api.js";
 import * as installedWorkers from "../src/workers/installed.js";
+import { viewingEdits } from "./worker-view.js";
 
 const directories: string[] = [],
   engines: GraphEngine[] = [];
@@ -184,11 +185,15 @@ const passing: NonNullable<EngineDependencies["verify"]> = async (
     stderr: "",
     snapshotHash,
   }));
-async function open(root: string, deps: EngineDependencies) {
+// `view` makes a scripted worker read each existing file before it edits it,
+// as a real worker must; pass false for a test whose edit is refused, or
+// whose run stops, before that matters.
+async function open(root: string, deps: EngineDependencies, view = true) {
   const engine = await GraphEngine.open(root, {
     dockerAvailable: async () => true,
     verify: passing,
     ...deps,
+    worker: view && deps.worker ? viewingEdits(deps.worker) : deps.worker,
   });
   engines.push(engine);
   return engine;
@@ -348,9 +353,17 @@ describe("managed DAG safety boundaries", () => {
     const { root } = await fixture((config) => {
       config.policy.maxTurns = 1;
     });
-    const worker = vi.fn(async (input) => result(input.objective));
+    // The worker only reads, so the one turn the ceiling allows is spent on a
+    // request, not on an edit that would be returned for being unseen.
+    const worker = vi.fn(async (input: WorkerInput) => {
+      const base = result(input.objective);
+      return {
+        ...base,
+        proposal: { ...base.proposal, requests: ["first.js"], changes: [] },
+      };
+    });
     const verify = vi.fn(passing);
-    const engine = await open(root, { worker, verify });
+    const engine = await open(root, { worker, verify }, false);
     const planned = await plan(engine);
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).toBe("failed");
@@ -752,19 +765,23 @@ describe("managed DAG safety boundaries", () => {
           model: "fixture",
         });
         const inputs: WorkerInput[] = [];
-        const engine = await open(root, {
-          worker: async (input) => {
-            inputs.push(input);
-            return {
-              ...result("one"),
-              proposal: {
-                summary: "Change the second export",
-                requests: [],
-                changes: [change],
-              },
-            };
+        const engine = await open(
+          root,
+          {
+            worker: async (input) => {
+              inputs.push(input);
+              return {
+                ...result("one"),
+                proposal: {
+                  summary: "Change the second export",
+                  requests: [],
+                  changes: [change],
+                },
+              };
+            },
           },
-        });
+          false,
+        );
         const planned = await engine.createPlan({
           objective: "Update the second export",
           acceptance: ["The second constant is updated"],
@@ -1278,7 +1295,7 @@ describe("managed DAG safety boundaries", () => {
     const { root, data } = await fixture((value) => {
       value.policy.providers = ["local", "reviewer"];
       value.review = { providerId: "reviewer" };
-      value.policy.maxTurns = 12;
+      value.policy.maxTurns = 16;
       value.policy.maxAttempts = 2;
     });
     await withReviewer(data);
