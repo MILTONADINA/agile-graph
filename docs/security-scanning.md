@@ -487,7 +487,8 @@ budget. Findings are redacted in the event and the printed result.
 The platform job on Linux x64 runs `npm audit --omit=dev --audit-level=high`
 after `npm ci`, so a high or critical advisory in a production dependency fails
 CI. Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm
-and GitHub Actions, each grouped into one. An npm update changes the
+(minor and patch updates grouped into one; majors open separately) and GitHub
+Actions (grouped). An npm update changes the
 hash-pinned `package-lock.json`, so a maintainer must update the pin before it
 can merge.
 
