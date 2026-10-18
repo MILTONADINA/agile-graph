@@ -188,6 +188,11 @@ docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   graph-laya:0.1.0
 ```
 
+The Dockerfile pins `python:3.12-slim` by index digest; refresh it as described
+under "Base image digest" in `docs/verification-images.md`, using
+`library/python` and tag `3.12-slim`, then update line 1 of
+`sidecars/laya/Dockerfile`.
+
 The Docker image uses CPU PyTorch. The container-specific bind mode requires the
 image's environment flag; the native service always binds `127.0.0.1`. Requests
 require a bearer token, reject browser origins and unexpected Host headers,

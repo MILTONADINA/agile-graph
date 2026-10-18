@@ -11,8 +11,9 @@
 
 - The verification image now pins its base image by digest
   (`node:24-bookworm@sha256:...`), and a test requires every registry `FROM`
-  in `infra/*.Dockerfile` and the engine test fixture Dockerfiles to carry a
-  digest.
+  in `infra/*.Dockerfile`, the engine test fixture Dockerfiles and
+  `sidecars/*/Dockerfile` to carry a digest. The Laya sidecar image now pins
+  `python:3.12-slim` by digest.
 - CI now runs `npm audit --omit=dev --audit-level=high` and fails on a high or
   critical advisory in production dependencies. Dependabot opens weekly
   grouped update pull requests for npm and GitHub Actions.
