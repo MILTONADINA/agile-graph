@@ -350,12 +350,7 @@ export function readRunReceipt(
   }
 }
 
-// Two processes can open a new data directory at once (an MCP client
-// starting `graph-engine mcp` while the operator runs a command). Switching
-// the new run database to WAL can then report SQLITE_BUSY at once without
-// honoring busy_timeout, so it is retried with the context database's bounded
-// backoff (context/database.ts).
-// Full jitter keeps two contending processes from retrying in lockstep: the
+// Equal jitter keeps two contending processes from retrying in lockstep: the
 // wait is random in [delay/2, delay] of the capped exponential delay.
 export function busyBackoffMs(
   attempt: number,
@@ -365,6 +360,11 @@ export function busyBackoffMs(
   return Math.floor(delay / 2 + random() * (delay / 2));
 }
 
+// Two processes can open a new data directory at once (an MCP client
+// starting `graph-engine mcp` while the operator runs a command). Switching
+// the new run database to WAL can then report SQLITE_BUSY at once without
+// honoring busy_timeout, so it is retried with the context database's bounded
+// backoff (context/database.ts).
 function useWriteAheadLog(db: Database.Database): void {
   for (let attempt = 0; ; attempt++) {
     try {
