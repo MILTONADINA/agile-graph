@@ -355,10 +355,22 @@ export function readRunReceipt(
 // the new run database to WAL can then report SQLITE_BUSY at once without
 // honoring busy_timeout, so it is retried with the context database's bounded
 // backoff (context/database.ts).
+// Full jitter keeps two contending processes from retrying in lockstep: the
+// wait is random in [delay/2, delay] of the capped exponential delay.
+export function busyBackoffMs(
+  attempt: number,
+  random: () => number = Math.random,
+): number {
+  const delay = Math.min(50 * 2 ** attempt, 500);
+  return Math.floor(delay / 2 + random() * (delay / 2));
+}
+
 function useWriteAheadLog(db: Database.Database): void {
   for (let attempt = 0; ; attempt++) {
     try {
       db.pragma("journal_mode = WAL");
+      // Explicit, so durability does not depend on how SQLite was compiled.
+      db.pragma("synchronous = FULL");
       return;
     } catch (error) {
       if ((error as { code?: string }).code !== "SQLITE_BUSY" || attempt >= 6)
@@ -367,7 +379,7 @@ function useWriteAheadLog(db: Database.Database): void {
         new Int32Array(new SharedArrayBuffer(4)),
         0,
         0,
-        Math.min(50 * 2 ** attempt, 500),
+        busyBackoffMs(attempt),
       );
     }
   }
