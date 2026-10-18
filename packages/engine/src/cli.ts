@@ -223,32 +223,41 @@ function onStopSignal(stop: () => void): () => void {
 // ones are ignored until that has finished, so a repeated Ctrl-C cannot end
 // the process while those runs' checks and agents are being stopped.
 function closeOnStopSignal(message: string, close: () => Promise<void>) {
-  let closing = false;
+  let closing: Promise<void> | undefined;
+  // One close, whether a signal or a fatal error asks for it first.
+  const closeOnce = () => (closing ??= close());
   const release = onStopSignal(() => {
     if (closing) return;
-    closing = true;
     process.stderr.write(message);
     // A failure to close is left unhandled, so it ends the process with the
     // error instead of leaving it up on an engine that did not close.
-    void close().finally(release);
+    void closeOnce().finally(release);
   });
-  closeOnFatalError(() => {
-    // A fatal error during a signal's cleanup must not start a second close.
-    closing = true;
-    release();
-    return close();
-  });
+  // The signal handlers stay registered, so a signal during a fatal error's
+  // cleanup cannot end the process before it exits 1.
+  closeOnFatalError(closeOnce);
 }
 // How long a fatal error waits for serve, mcp or watch to close before the
 // process exits anyway.
 const FATAL_CLOSE_TIMEOUT_MS = 5000;
-/** A one-line, bounded error text with no secrets or absolute paths. */
+/** A one-line, bounded error line with no secrets, controls or absolute paths. */
 function fatalErrorLine(error: unknown): string {
   const text = redact(errorMessage(error))
-    .replace(/(?:[A-Za-z]:\\|\/)[^\s"'`:;,)]+/g, "<path>")
+    .replace(
+      /\b(password|passwd|pwd|secret|token|api[_-]?key|authorization)\b(\s*[:=]\s*)\S+/gi,
+      "$1$2<redacted>",
+    )
+    // Absolute POSIX, drive and UNC paths, including spaces inside folders.
+    .replace(
+      /(?<![\w.])(?:[A-Za-z]:[\\/]|\\\\|\/)(?:[^"'`:;,)<>|\r\n\\/]*[\\/])*[^\s"'`:;,)<>|]*/g,
+      "<path>",
+    )
+    // Terminal escape sequences and any other control character.
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]|[\u0000-\u001f\u007f-\u009f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return `Fatal error: ${text.slice(0, 300) || "unknown error"}`;
+  return `Fatal error: ${text || "unknown error"}`.slice(0, 300);
 }
 let fatalCloses: (() => Promise<void>)[] | undefined;
 // An unhandled rejection or uncaught exception in serve, mcp or watch writes

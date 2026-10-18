@@ -1288,7 +1288,7 @@ describe("command line", () => {
     const stubs = await mkdtemp(path.join(tmpdir(), "graph-cli-stub-"));
     directories.push(stubs);
     const secret = "sk-" + "a".repeat(40);
-    const leaked = `/Users/someone/private/${secret}/file.txt`;
+    const leaked = `/Users/some one/private/${secret}/file.txt password=hunter2 \u001b[2E`;
     const hook = (stub: string, from: string, file: string) =>
       [
         'import { registerHooks } from "node:module";',
@@ -1360,7 +1360,10 @@ describe("command line", () => {
       expect(lines).toHaveLength(1);
       expect(lines[0]).toMatch(/^Fatal error: boom at <path>/);
       expect(stderr).not.toContain(secret);
-      expect(stderr).not.toContain("/Users/someone");
+      expect(stderr).not.toContain("/Users/some");
+      expect(stderr).not.toContain("private");
+      expect(stderr).not.toContain("hunter2");
+      expect(stderr).not.toContain("\u001b");
       // The store closed: no write-ahead log is left open, and a new command
       // can open the project.
       expect(await walFiles(data)).toEqual([]);
