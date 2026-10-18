@@ -20,5 +20,8 @@
 
 ### Fixed
 
+- The SQLITE_BUSY retry when opening the run and context databases now uses
+  jittered backoff, and both databases set `synchronous = FULL` explicitly
+  with WAL.
 - A patch whose before text matches at overlapping positions is now refused
   instead of patching the first match (#179).

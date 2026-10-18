@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RunStore } from "../src/store.js";
+import { RunStore, busyBackoffMs } from "../src/store.js";
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -53,5 +53,31 @@ it("waits for another process that holds a new run database's write lock instead
   } finally {
     holder.kill("SIGKILL");
     await closed;
+  }
+});
+
+it("jitters the busy backoff within [delay/2, delay] and keeps the cap", () => {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const delay = Math.min(50 * 2 ** attempt, 500);
+    expect(busyBackoffMs(attempt, () => 0)).toBe(Math.floor(delay / 2));
+    expect(busyBackoffMs(attempt, () => 0.999999)).toBeLessThanOrEqual(delay);
+    expect(busyBackoffMs(attempt, () => 0.999999)).toBeGreaterThan(delay / 2);
+    const wait = busyBackoffMs(attempt);
+    expect(wait).toBeGreaterThanOrEqual(Math.floor(delay / 2));
+    expect(wait).toBeLessThanOrEqual(delay);
+  }
+});
+
+it("sets the run database to WAL with synchronous FULL (2)", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "graph-run-sync-"));
+  directories.push(dataDir);
+  const store = new RunStore(dataDir, "sync-project");
+  try {
+    const db = (store as unknown as { db: import("better-sqlite3").Database })
+      .db;
+    expect(db.pragma("journal_mode", { simple: true })).toBe("wal");
+    expect(db.pragma("synchronous", { simple: true })).toBe(2);
+  } finally {
+    store.close();
   }
 });

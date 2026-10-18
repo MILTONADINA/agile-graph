@@ -29,10 +29,10 @@ export class ContextDatabase {
       // Two client processes can initialize the same project simultaneously.
       // Changing journal mode may report BUSY without honoring busy_timeout.
       for (let attempt = 0; !workerData.readonly; attempt++) {
-        try { db.pragma('journal_mode = WAL'); break; }
+        try { db.pragma('journal_mode = WAL'); db.pragma('synchronous = FULL'); break; }
         catch (error) {
           if (error.code !== 'SQLITE_BUSY' || attempt >= 6) throw error;
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(50 * 2 ** attempt, 500));
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, (delay => Math.floor(delay / 2 + Math.random() * (delay / 2)))(Math.min(50 * 2 ** attempt, 500)));
         }
       }
       db.pragma('foreign_keys = ON');
