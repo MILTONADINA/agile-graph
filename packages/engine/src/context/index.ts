@@ -7,6 +7,7 @@ import {
   readFile,
   readdir,
   realpath,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import {
@@ -2323,8 +2324,22 @@ export class ContextEngine {
       keepLatest?: number;
       dryRun?: boolean;
       protectedSnapshotIds?: string[];
+      /** Reclaim disk space after deleting (default true; never on a dry run). */
+      vacuum?: boolean;
     } = {},
-  ): Promise<{ dryRun: boolean; removed: string[]; protected: string[] }> {
+  ): Promise<{
+    dryRun: boolean;
+    removed: string[];
+    protected: string[];
+    vacuum?: {
+      attempted: boolean;
+      reclaimed: boolean;
+      reason: string | null;
+      bytesBefore: number;
+      bytesAfter: number;
+      reclaimedBytes: number;
+    };
+  }> {
     await this.ready;
     await this.indexing;
     await Promise.all(this.embeddingIndexes.values());
@@ -2342,11 +2357,53 @@ export class ContextEngine {
     // All checks/deletions share one IMMEDIATE transaction: a concurrent memory
     // writer cannot race the provenance pin check. Callers must also pass refs
     // owned by separate stores (plans/runs), under their maintenance lock.
-    return this.db.prune({
+    const size = async () => {
+      let total = 0;
+      for (const suffix of ["", "-wal"])
+        total += await stat(join(this.dataDir, `context.sqlite${suffix}`))
+          .then((info) => info.size)
+          .catch(() => 0);
+      return total;
+    };
+    const dryRun = options.dryRun !== false;
+    const bytesBefore = dryRun ? 0 : await size();
+    const result = await this.db.prune({
       keepLatest: keep,
-      dryRun: options.dryRun !== false,
+      dryRun,
       protectedSnapshotIds,
     });
+    if (result.dryRun) return result;
+    if (result.removed.length === 0 || options.vacuum === false)
+      return {
+        ...result,
+        vacuum: {
+          attempted: false,
+          reclaimed: false,
+          reason:
+            result.removed.length === 0
+              ? "no snapshots were removed"
+              : "skipped (--no-vacuum)",
+          bytesBefore,
+          bytesAfter: await size(),
+          reclaimedBytes: 0,
+        },
+      };
+    // Outside the delete transaction: VACUUM cannot run inside one.
+    const outcome = await this.db.reclaim().catch((error: unknown) => ({
+      reclaimed: false,
+      reason: `vacuum failed: ${errorMessage(error)}`,
+    }));
+    const bytesAfter = await size();
+    return {
+      ...result,
+      vacuum: {
+        attempted: true,
+        ...outcome,
+        bytesBefore,
+        bytesAfter,
+        reclaimedBytes: Math.max(0, bytesBefore - bytesAfter),
+      },
+    };
   }
   async backup(destination: string): Promise<BackupReceipt> {
     await this.ready;

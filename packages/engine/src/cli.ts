@@ -568,11 +568,16 @@ cli
     20,
   )
   .option("--apply", "Delete unreferenced snapshots (default previews only)")
+  .option(
+    "--no-vacuum",
+    "Skip the checkpoint and VACUUM that reclaim disk space after --apply",
+  )
   .action((options) =>
     withEngine((engine) =>
       engine.context.pruneSnapshots({
         keepLatest: options.keep,
         dryRun: !options.apply,
+        vacuum: options.vacuum,
         protectedSnapshotIds: engine.store.planSnapshotIds(),
       }),
     ),

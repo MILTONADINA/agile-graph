@@ -14,6 +14,11 @@
 - The engine test suite no longer writes project data folders into the
   user's data directory: each run uses a temporary `GRAPH_ENGINE_DATA_DIR`
   that is removed afterwards (#176).
+- `snapshots-prune --apply` now checkpoints the WAL and runs `VACUUM` after
+  deleting snapshots, so the data folder shrinks (#177). The output reports
+  `vacuum.reclaimedBytes`; if another process holds the database the prune
+  still succeeds and reports why space was not reclaimed. `--no-vacuum` skips
+  it, and a dry run never vacuums.
 
 ## [0.2.0] - 2026-10-18
 
