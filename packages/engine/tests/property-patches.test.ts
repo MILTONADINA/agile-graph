@@ -61,9 +61,8 @@ function mutate(random: Random, original: string): string {
   return out;
 }
 /**
- * Counts overlapping occurrences. The engine's own precondition counts
- * non-overlapping ones (`split`), so it accepts "\n\n" in "\n\n\n" and
- * patches the first; the generator must not rely on that.
+ * Counts overlapping occurrences, as the engine's precondition does (it once
+ * counted non-overlapping ones and accepted "\n\n" in "\n\n\n").
  */
 function occurrences(haystack: string, needle: string): number {
   let count = 0;

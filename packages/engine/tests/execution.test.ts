@@ -1007,6 +1007,34 @@ describe("managed execution", () => {
     expect(calls).toBe(2);
     expect(checksCalled).toBe(1);
   });
+  it("refuses a patch whose before text matches at overlapping positions", async () => {
+    const { root } = await fixture();
+    await writeFile(path.join(root, "gaps.txt"), "a\n\n\nb\n", "utf8");
+    await writeFile(path.join(root, "mid.txt"), "x aaa y\n", "utf8");
+    for (const [file, before] of [
+      ["gaps.txt", "\n\n"],
+      ["mid.txt", "aa"],
+    ] as const)
+      await expect(
+        applyProposal(
+          root,
+          {
+            summary: "overlap",
+            requests: [],
+            changes: [{ path: file, before, after: "Z" }],
+          },
+          DEFAULT_POLICY,
+        ),
+      ).rejects.toThrow(
+        `Patch precondition failed: ${file} must contain exactly one matching substring`,
+      );
+    expect(await readFile(path.join(root, "gaps.txt"), "utf8")).toBe(
+      "a\n\n\nb\n",
+    );
+    expect(await readFile(path.join(root, "mid.txt"), "utf8")).toBe(
+      "x aaa y\n",
+    );
+  });
   it("validates a whole patch before changing any file", async () => {
     const { root } = await fixture();
     await expect(

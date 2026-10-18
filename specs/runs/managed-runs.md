@@ -107,6 +107,8 @@ An operator wants a worker model to implement a planned change without touching 
 - AC27: Over seeded generated texts, applying the patch made from (original, modified) leaves exactly modified, and a patch whose path escapes the workspace or runs through a symlink is refused with nothing written.
   - Test: packages/engine/tests/property-patches.test.ts :: applies a diff of (original, modified) to give modified exactly
   - Test: packages/engine/tests/property-patches.test.ts :: refuses a patch whose target escapes the workspace or goes through a symlink
+- AC28: A change's `before` text must occur exactly once in the target file, counting overlapping matches: `\n\n` in `a\n\n\nb` and `aa` in `aaa` are refused with `Patch precondition failed: <path> must contain exactly one matching substring`, and nothing is written.
+  - Test: packages/engine/tests/execution.test.ts :: refuses a patch whose before text matches at overlapping positions
 
 ## Security considerations
 
