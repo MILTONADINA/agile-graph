@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { GraphEngine } from "../src/service.js";
+import { viewing } from "./worker-view.js";
 import {
   configureProvider,
   initializeProject,
@@ -50,7 +51,7 @@ describe("managed DAG integration", () => {
     const called: string[] = [];
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async (input, workspace) => {
+      worker: viewing(["first.js", "second.js"], async (input, workspace) => {
         called.push(input.objective);
         if (input.objective === "Finalize first")
           expect(
@@ -82,7 +83,7 @@ describe("managed DAG integration", () => {
                   ],
           },
         };
-      },
+      }),
       verify: async (workspace, checks, _policy, snapshotHash) => {
         expect(
           await readFile(path.join(workspace, "first.js"), "utf8"),
@@ -131,7 +132,8 @@ describe("managed DAG integration", () => {
     const result = await engine.wait((await engine.start(plan.id)).id);
     expect(result.error).toBeUndefined();
     expect(result.status).toBe("succeeded");
-    expect(result.usage.inputTokens).toBe(30);
+    // Three steps, each with one read turn of 1 input token before its edit.
+    expect(result.usage.inputTokens).toBe(33);
     expect(called.at(-1)).toBe("Finalize first");
     expect(await readFile(path.join(root, "first.js"), "utf8")).toContain(
       "= 1",

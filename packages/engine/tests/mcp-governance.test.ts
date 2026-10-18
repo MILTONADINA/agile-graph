@@ -6,6 +6,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { GraphEngine } from "../src/service.js";
+import { viewing } from "./worker-view.js";
 import {
   configureProvider,
   initializeProject,
@@ -60,7 +61,7 @@ async function fixture() {
   });
   const engine = await GraphEngine.open(root, {
     dockerAvailable: async () => true,
-    worker: async () => ({
+    worker: viewing(["math.cjs"], async () => ({
       model: "fixture",
       proposal: {
         summary: "Fix addition",
@@ -74,7 +75,7 @@ async function fixture() {
         costUsd: 0,
         estimated: false,
       },
-    }),
+    })),
     verify: async (_workspace, checks, _policy, snapshotHash) =>
       checks.map((check) => ({
         ...check,

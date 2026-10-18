@@ -4302,7 +4302,6 @@ export class GraphEngine {
                   workspace,
                   result.proposal,
                   shown,
-                  supplied.partial,
                   this.config.policy,
                 );
                 // A step limited to some files (a tester writes only tests)
@@ -4932,7 +4931,6 @@ export class GraphEngine {
               workspace,
               result.proposal,
               shown,
-              supplied.partial,
               this.config.policy,
             );
             // A step limited to some files never applies an edit outside them.

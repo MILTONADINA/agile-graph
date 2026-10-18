@@ -331,15 +331,27 @@ describe("requested source packets", () => {
         root,
         { changes: [{ path, before, after: "changed;" }] },
         shown,
-        supplied.partial,
         policy,
       );
     await expect(edit("file.ts", "line3;")).resolves.toBeUndefined();
     await expect(edit("file.ts", "line15;")).resolves.toBe(
       "The change to file.ts edits lines 15-15, which were not shown to you; request file.ts#L15-L15 first.",
     );
-    // Files never seen in part keep today's rules.
+    // A file the worker was never shown cannot be edited either.
+    await expect(edit("other.ts", "x = 1;")).resolves.toBe(
+      "The change to other.ts edits lines 1-1, which were not shown to you; request other.ts#L1-L1 first.",
+    );
+    // A file it was sent whole can, and so can a creation.
+    recordShown(shown, await request(root, ["other.ts"], supplied));
     await expect(edit("other.ts", "x = 1;")).resolves.toBeUndefined();
+    await expect(
+      unseenPatchLocation(
+        root,
+        { changes: [{ path: "new.ts", before: null, after: "y;" }] },
+        new SuppliedLines(),
+        policy,
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it("gives cloud workers patch details only for exportable paths", () => {
@@ -459,7 +471,6 @@ describe("requested source packets", () => {
     const shown = new SuppliedLines();
     const result = await request(root, ["a.ts#L2-L3", "a.ts#L2-L9"], supplied);
     expect(result.items).toHaveLength(1);
-    expect(supplied.partial.has("a.ts")).toBe(true);
     await expect(request(root, ["a.ts#L4-L4"])).rejects.toThrow(
       "Line range starts after the end of a.ts (3 lines)",
     );
@@ -469,7 +480,6 @@ describe("requested source packets", () => {
         root,
         { changes: [{ path: "a.ts", before: "three\n", after: "3\n" }] },
         shown,
-        supplied.partial,
         input().policy,
       ),
     ).resolves.toBeUndefined();

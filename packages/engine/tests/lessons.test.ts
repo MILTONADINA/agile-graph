@@ -10,6 +10,7 @@ import {
 } from "../src/project.js";
 import { GraphEngine } from "../src/service.js";
 import { checked, writeJson } from "../src/util.js";
+import { viewing } from "./worker-view.js";
 
 const roots: string[] = [];
 const engines: GraphEngine[] = [];
@@ -85,7 +86,7 @@ async function project(options: { cloud?: boolean } = {}) {
   const engine = await GraphEngine.open(root, {
     dockerAvailable: async () => true,
     verify,
-    worker: async (input) => {
+    worker: viewing(["math.cjs"], async (input) => {
       feedback.push(input.feedback ?? "");
       const next = edits[feedback.length - 1] ?? body;
       const changes =
@@ -102,7 +103,7 @@ async function project(options: { cloud?: boolean } = {}) {
           estimated: false,
         },
       };
-    },
+    }),
   });
   engines.push(engine);
   return {
