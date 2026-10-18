@@ -121,6 +121,9 @@ Teams need security tools chosen for what their repository actually contains, wi
   - Test: scripts/ci-gitleaks.test.mjs :: the gitleaks job pins a release version and its SHA-256
   - Test: scripts/ci-gitleaks.test.mjs :: the gitleaks job redacts and fails on findings
   - Test: scripts/ci-gitleaks.test.mjs :: the gitleaks job stays a non-required check
+- AC32: When CI runs on a pull request or on `main`, the system shall fail the platform job if `npm audit --omit=dev --audit-level=high` reports a high or critical advisory in production dependencies, and an update bot shall open weekly grouped pull requests for npm and GitHub Actions.
+  - Test: scripts/ci-gitleaks.test.mjs :: CI audits production dependencies and fails on high advisories
+  - Test: scripts/ci-gitleaks.test.mjs :: the update bot runs weekly for npm and GitHub Actions
 
 ## Security considerations
 

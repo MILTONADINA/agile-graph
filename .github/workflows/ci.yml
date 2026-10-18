@@ -42,6 +42,9 @@ jobs:
           npm ci || { sleep 5; npm ci; }
       - run: npm run format:check
       - run: npm run lint
+      - name: Audit production dependencies
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: npm audit --omit=dev --audit-level=high
       - name: Git branch and push safety
         run: node --test scripts/git-safety.test.mjs
       - name: Cursor private-context exclusions

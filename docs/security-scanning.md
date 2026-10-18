@@ -482,6 +482,15 @@ the run touched a path outside `policy.exportPaths` and the auditor is not
 local; the hunter's and each verifier's request must fit the context
 budget. Findings are redacted in the event and the printed result.
 
+## Dependency audit and updates
+
+The platform job on Linux x64 runs `npm audit --omit=dev --audit-level=high`
+after `npm ci`, so a high or critical advisory in a production dependency fails
+CI. Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm
+and GitHub Actions, each grouped into one. An npm update changes the
+hash-pinned `package-lock.json`, so a maintainer must update the pin before it
+can merge.
+
 ## What needs someone else
 
 - **Dependency advisories.** OSV-Scanner (pinned in the scanner image)
