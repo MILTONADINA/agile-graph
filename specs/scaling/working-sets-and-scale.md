@@ -27,6 +27,9 @@ The same tool must serve a first project with a few files and a monorepo with hu
   - Test: packages/engine/tests/scale.test.ts :: refuses more than 100,000 candidate files with guidance
   - Test: packages/engine/tests/scale.test.ts :: reports a failed Git listing inside a repository instead of walking
   - Test: packages/engine/tests/scale.test.ts :: counts only files the index would read
+- AC8: Over seeded generated globs, a policy glob is either refused by `globComplexityError` or matches a 255-character path within 50 ms, and no glob in `exportPaths` or a working set allows a path with a `..` segment.
+  - Test: packages/engine/tests/property-globs.test.ts :: refuses a glob or matches a 255-character path within the time bound
+  - Test: packages/engine/tests/property-globs.test.ts :: never allows a path with a .. segment through exportPaths, excludedPaths or the working set
 
 ## Security considerations
 
