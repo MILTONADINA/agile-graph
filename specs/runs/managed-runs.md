@@ -104,6 +104,9 @@ An operator wants a worker model to implement a planned change without touching 
 - AC26: When resuming a retained single-step patch, if the step's last verification event completed every planned check with matching commands, at least one check failed without an infrastructure failure, and its snapshot hash matches the current workspace, the engine shall reuse that failure as the next worker attempt's feedback and record `verification.reused` without running checks again; when the snapshot changed, verification was interrupted or the checks passed, the engine shall re-verify as before.
   - Test: packages/engine/tests/execution.test.ts :: reuses an unchanged failed snapshot on resume and gives the next worker its stored failure
   - Test: packages/engine/tests/execution.test.ts :: re-verifies a changed failed snapshot on resume
+- AC27: Over seeded generated texts, applying the patch made from (original, modified) leaves exactly modified, and a patch whose path escapes the workspace or runs through a symlink is refused with nothing written.
+  - Test: packages/engine/tests/property-patches.test.ts :: applies a diff of (original, modified) to give modified exactly
+  - Test: packages/engine/tests/property-patches.test.ts :: refuses a patch whose target escapes the workspace or goes through a symlink
 
 ## Security considerations
 
