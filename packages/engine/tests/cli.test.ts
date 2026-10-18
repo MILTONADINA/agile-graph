@@ -1282,6 +1282,92 @@ describe("command line", () => {
     }
   }, 120_000);
 
+  it("closes the database and exits 1 with one stderr line when serve or mcp hits an unhandled rejection or uncaught exception", async () => {
+    const { graph, data } = await project();
+    await graph("init");
+    const stubs = await mkdtemp(path.join(tmpdir(), "graph-cli-stub-"));
+    directories.push(stubs);
+    const secret = "sk-" + "a".repeat(40);
+    const leaked = `/Users/someone/private/${secret}/file.txt`;
+    const hook = (stub: string, from: string, file: string) =>
+      [
+        'import { registerHooks } from "node:module";',
+        "registerHooks({",
+        "  resolve(specifier, context, nextResolve) {",
+        `    if (specifier === ${JSON.stringify(from)} && context.parentURL?.endsWith("/src/cli.ts"))`,
+        `      return { url: new URL(${JSON.stringify(stub)}, import.meta.url).href, shortCircuit: true };`,
+        "    return nextResolve(specifier, context);",
+        "  },",
+        "});",
+        "",
+      ].join("\n");
+    // A server that starts, then fails later from an unawaited promise.
+    const fault = (how: string) =>
+      how === "reject"
+        ? `Promise.reject(new Error(${JSON.stringify(`boom at ${leaked}\nsecond line`)}))`
+        : `throw new Error(${JSON.stringify(`boom at ${leaked}`)})`;
+    const preloads: Record<string, string> = {};
+    for (const how of ["reject", "throw"]) {
+      await writeFile(
+        path.join(stubs, `mcp-${how}.mjs`),
+        `export async function serveMcp() { setTimeout(() => { ${fault(how)}; }, 200); return { close: async () => {} }; }\nexport function createMcpServer() {}\nexport function mcpToolHashes() { return {}; }\nexport function mcpToolHashUnion() { return {}; }\n`,
+      );
+      await writeFile(
+        path.join(stubs, `server-${how}.mjs`),
+        `export function createServer() { return { token: "t", app: { listen: async () => { setTimeout(() => { ${fault(how)}; }, 200); return "http://127.0.0.1:1"; }, close: async () => {} } }; }\n`,
+      );
+      for (const [kind, from] of [
+        ["mcp", "./mcp.js"],
+        ["server", "./server.js"],
+      ] as const) {
+        const register = path.join(stubs, `register-${kind}-${how}.mjs`);
+        await writeFile(register, hook(`${kind}-${how}.mjs`, from, register));
+        preloads[`${kind}-${how}`] = register;
+      }
+    }
+    const walFiles = async (directory: string): Promise<string[]> => {
+      const found: string[] = [];
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const full = path.join(directory, entry.name);
+        if (entry.isDirectory()) found.push(...(await walFiles(full)));
+        else if (/-(wal|shm)$/.test(entry.name)) found.push(full);
+      }
+      return found;
+    };
+    const cases: [string, string[]][] = [
+      ["mcp-reject", ["mcp", "--client", "local"]],
+      ["mcp-throw", ["mcp", "--client", "local"]],
+      ["server-reject", ["serve", "--port", "0"]],
+      ["server-throw", ["serve", "--port", "0"]],
+    ];
+    for (const [name, args] of cases) {
+      const child = graph.startPreloaded([preloads[name]!], ...args);
+      let stderr = "";
+      child.stdout.resume();
+      child.stderr.on("data", (chunk) => (stderr += chunk));
+      const closed = once(child, "close");
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const exit = await Promise.race([
+        closed,
+        new Promise<string>((resolve) => {
+          timer = setTimeout(() => resolve("still running"), 30_000);
+        }),
+      ]);
+      clearTimeout(timer);
+      child.kill("SIGKILL");
+      expect({ name, exit }).toEqual({ name, exit: [1, null] });
+      const lines = stderr.split("\n").filter((line) => line.trim());
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(/^Fatal error: boom at <path>/);
+      expect(stderr).not.toContain(secret);
+      expect(stderr).not.toContain("/Users/someone");
+      // The store closed: no write-ahead log is left open, and a new command
+      // can open the project.
+      expect(await walFiles(data)).toEqual([]);
+      expect((await graph("runs")).code).toBe(0);
+    }
+  }, 180_000);
+
   it("prints the MCP call log with mcp-log, newest first, filtered by --tool and bounded by --limit", async () => {
     const { root, data, graph } = await project();
     await graph("init");

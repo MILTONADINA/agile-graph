@@ -66,6 +66,8 @@ Developers use AI clients such as Claude Code, Codex and Cursor, which should be
   - Test: packages/engine/tests/cli.test.ts :: keeps a plain init offline, so cloud MCP clients stay refused by default
 - AC14: When a cloud-backed client is refused because the project's policy keeps context offline, the refusal says how to fix it, naming `init --cloud-mcp --export '<glob>'` for a new project and `policy.inference`, `policy.network` and `policy.exportPaths` in `.graph/project.json` for an existing one, and names no local path.
   - Test: packages/engine/tests/mcp.test.ts :: tells a cloud client how to export an offline project's context
+- AC15: When an unhandled promise rejection or an uncaught exception occurs while `serve`, `mcp` or `watch` is running, the command shall write one line to stderr (`Fatal error: ` and the message, redacted of secrets, with absolute paths replaced by `<path>`, on one line of at most 300 characters), close the server or watcher and then the engine (and so the SQLite stores) within 5 seconds, and exit 1. The error is never swallowed. One-shot commands register no such handler and keep Node's default crash behaviour.
+  - Test: packages/engine/tests/cli.test.ts :: closes the database and exits 1 with one stderr line when serve or mcp hits an unhandled rejection or uncaught exception
 
 ## Security considerations
 

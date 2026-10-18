@@ -232,6 +232,55 @@ function closeOnStopSignal(message: string, close: () => Promise<void>) {
     // error instead of leaving it up on an engine that did not close.
     void close().finally(release);
   });
+  closeOnFatalError(() => {
+    // A fatal error during a signal's cleanup must not start a second close.
+    closing = true;
+    release();
+    return close();
+  });
+}
+// How long a fatal error waits for serve, mcp or watch to close before the
+// process exits anyway.
+const FATAL_CLOSE_TIMEOUT_MS = 5000;
+/** A one-line, bounded error text with no secrets or absolute paths. */
+function fatalErrorLine(error: unknown): string {
+  const text = redact(errorMessage(error))
+    .replace(/(?:[A-Za-z]:\\|\/)[^\s"'`:;,)]+/g, "<path>")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `Fatal error: ${text.slice(0, 300) || "unknown error"}`;
+}
+let fatalCloses: (() => Promise<void>)[] | undefined;
+// An unhandled rejection or uncaught exception in serve, mcp or watch writes
+// one stderr line, closes what that command opened within a short bound and
+// exits 1. The error is never swallowed. One-shot commands do not register
+// this, so Node's default crash behaviour applies to them.
+function closeOnFatalError(close: () => Promise<void>) {
+  if (fatalCloses) {
+    fatalCloses.push(close);
+    return;
+  }
+  fatalCloses = [close];
+  let failing = false;
+  const fail = (error: unknown) => {
+    if (failing) return;
+    failing = true;
+    try {
+      process.stderr.write(`${fatalErrorLine(error)}\n`);
+    } catch {
+      // The terminal may be gone; still close and exit.
+    }
+    process.exitCode = 1;
+    const timer = setTimeout(() => process.exit(1), FATAL_CLOSE_TIMEOUT_MS);
+    Promise.allSettled(fatalCloses!.map((closeOne) => closeOne())).finally(
+      () => {
+        clearTimeout(timer);
+        process.exit(1);
+      },
+    );
+  };
+  process.on("unhandledRejection", fail);
+  process.on("uncaughtException", fail);
 }
 // security-scan and security-db-update run scanner containers in their own
 // process groups, so a terminal's Ctrl-C reaches only this process. Exiting
