@@ -1,16 +1,18 @@
 # Flaky tests
 
-A test is flaky when it passes and fails on the same commit. A failure that
-goes away after a fix is not flaky; a failure on one platform only still is.
+A test is flaky when it passes and fails on the same commit under the same
+conditions, including the same platform. A failure that goes away after a fix,
+or one that always happens on one platform, is not flaky.
 
 ## When one appears
 
 1. Rerun only the failed job, once. Do not rerun the whole workflow.
-2. If it fails again, or the same test flakes twice in a week, file an issue.
-   Include the run id, the test name, the platform and the exact assertion
+2. If it fails again, or the same test flakes twice in a week, an issue is
+   needed. Agents ask the owner before filing it; a person files it. Include the run id, the test name, the platform and the exact assertion
    message. Issues #185 and #188 are the model.
-3. Say in the PR that the failure was a known or suspected flake and link the
-   issue. Do not merge on a red check that nobody has explained.
+3. On a first flake that passes on rerun, name the failed run in the PR
+   instead of an issue. Merging still needs every required check green on the
+   head commit, explained or not.
 
 ## Rules
 
