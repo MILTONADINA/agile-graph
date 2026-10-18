@@ -177,6 +177,56 @@ describe("built-in verification container deadlines", () => {
     },
   );
 
+  it.each([
+    { label: "getuid and getgid are available", ids: true },
+    { label: "getuid and getgid are unavailable", ids: false },
+  ])(
+    "runs the container as a non-root user when $label",
+    async ({ ids }) => {
+      const state = await fixture(async () => ({
+        code: 0,
+        stdout: "",
+        stderr: "",
+      }));
+      const saved = {
+        getuid: process.getuid,
+        getgid: process.getgid,
+      };
+      if (ids) {
+        process.getuid = () => 501;
+        process.getgid = () => 20;
+      } else {
+        Object.defineProperty(process, "getuid", {
+          value: undefined,
+          configurable: true,
+          writable: true,
+        });
+        Object.defineProperty(process, "getgid", {
+          value: undefined,
+          configurable: true,
+          writable: true,
+        });
+      }
+      try {
+        await verifyInContainer(
+          state.root,
+          checks.slice(0, 1),
+          DEFAULT_POLICY,
+          "toy-snapshot",
+        );
+      } finally {
+        process.getuid = saved.getuid;
+        process.getgid = saved.getgid;
+      }
+      const run = state.commands.find((entry) => entry.argv[0] === "run")!;
+      const user = run.argv[run.argv.indexOf("--user") + 1]!;
+      expect(user).toBe(ids ? "501:20" : "1000:1000");
+      expect(user.split(":")[0]).not.toBe("0");
+      expect(user).toMatch(/^[1-9]\d*:\d+$/);
+      await state.assertRemoved();
+    },
+  );
+
   it("passes literal null through the normal verifier to real command transport and waits for terminal success", async () => {
     const actualCommand = util.command;
     let runOptions: CommandOptions;

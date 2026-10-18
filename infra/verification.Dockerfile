@@ -7,4 +7,5 @@ COPY packages/dashboard/package.json packages/dashboard/package.json
 RUN npm ci --no-audit --no-fund
 COPY scripts/verify-project.mjs /opt/verify-project.mjs
 WORKDIR /workspace
+USER node
 CMD ["node", "/opt/verify-project.mjs"]
