@@ -353,13 +353,23 @@ describe("managed DAG safety boundaries", () => {
     const { root } = await fixture((config) => {
       config.policy.maxTurns = 1;
     });
-    // The worker only reads, so the one turn the ceiling allows is spent on a
-    // request, not on an edit that would be returned for being unseen.
+    // The one turn the ceiling allows is spent on a real proposal. A creation
+    // is not held to shown lines, so no read request races the sibling that
+    // meets the shared ceiling.
     const worker = vi.fn(async (input: WorkerInput) => {
       const base = result(input.objective);
       return {
         ...base,
-        proposal: { ...base.proposal, requests: ["first.js"], changes: [] },
+        proposal: {
+          ...base.proposal,
+          changes: [
+            {
+              path: `${input.objective}-notes.js`,
+              before: null,
+              after: "export const note = 1;\n",
+            },
+          ],
+        },
       };
     });
     const verify = vi.fn(passing);
