@@ -160,6 +160,8 @@ npm run check
 GRAPH_ENGINE_DOCKER_TESTS=1 npm test -w @agile-graph/engine
 ```
 
+For a test that passes and fails on the same commit, see the [flaky-test policy](flaky-tests.md).
+
 The launch target matrix is macOS ARM64, Linux x64/ARM64 on glibc, and Windows x64. CI checks native dependencies and all language parsers on those runners. The optional embedding integration test uses real weights, downloading them only when its explicitly configured cache is missing; default tests remain offline. A passing synthetic/mock test is not evidence that every provider, device, or production workload has been validated.
 
 Runner labels follow GitHub's [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners); the configured `macos-15` runner is ARM64.
