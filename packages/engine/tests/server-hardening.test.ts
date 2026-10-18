@@ -211,7 +211,7 @@ describe("dashboard server hardening", () => {
       context: {
         listMemories: () => {
           throw new TypeError(
-            "boom at /Users/someone/private/file.ts password=hunter2hunter2hunter2",
+            `boom at /Users/someone/private/file.ts password=hunter2hunter2hunter2 ${TOKEN} q=reflected-query&token=secret`,
           );
         },
       },
@@ -258,7 +258,7 @@ describe("dashboard server hardening", () => {
       const lines = capture();
       const { app } = createServer(engine, TOKEN, { logRequests: true });
       const response = await app.inject({
-        url: "/api/memories?token=secret",
+        url: "/api/memories?q=reflected-query&token=secret",
         headers: auth,
       });
       await app.close();
@@ -267,7 +267,13 @@ describe("dashboard server hardening", () => {
       expect(lines.filter((l) => l.startsWith("ERROR "))).toHaveLength(1);
       expect(all).toContain("ERROR GET /api/memories TypeError: boom at");
       expect(all).toMatch(/GET \/api\/memories 500 \d+ms/);
-      for (const leak of ["hunter2", "/Users/someone", "secret"])
+      for (const leak of [
+        "hunter2",
+        "/Users/someone",
+        "secret",
+        TOKEN,
+        "reflected-query",
+      ])
         expect(all).not.toContain(leak);
     });
   });
