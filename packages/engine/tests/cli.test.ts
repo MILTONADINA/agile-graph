@@ -1371,6 +1371,182 @@ describe("command line", () => {
     }
   }, 180_000);
 
+  it("runs the real close methods on a fatal error, bounds a close that hangs at 5 seconds, and covers watch", async () => {
+    const { graph, data } = await project();
+    await graph("init");
+    const stubs = await mkdtemp(path.join(tmpdir(), "graph-cli-stub-"));
+    directories.push(stubs);
+    const marks = path.join(stubs, "marks.log");
+    const service = pathToFileURL(
+      fileURLToPath(new URL("../src/service.ts", import.meta.url)),
+    ).href;
+    const hook = (stub: string, from: string) =>
+      [
+        'import { registerHooks } from "node:module";',
+        "registerHooks({",
+        "  resolve(specifier, context, nextResolve) {",
+        `    if (specifier === ${JSON.stringify(from)} && context.parentURL?.endsWith("/src/cli.ts"))`,
+        `      return { url: new URL(${JSON.stringify(stub)}, import.meta.url).href, shortCircuit: true };`,
+        "    return nextResolve(specifier, context);",
+        "  },",
+        "});",
+        "",
+      ].join("\n");
+    // The real engine, with a watcher that fails later and a close that
+    // records its call, and hangs when GRAPH_TEST_HANG is set.
+    await writeFile(
+      path.join(stubs, "service.mjs"),
+      [
+        'import { appendFileSync } from "node:fs";',
+        `import { GraphEngine as Real } from ${JSON.stringify(service)};`,
+        `export * from ${JSON.stringify(service)};`,
+        "const mark = (name) => appendFileSync(process.env.GRAPH_TEST_MARKS, name + '\\n');",
+        "const hang = () => process.env.GRAPH_TEST_HANG ? new Promise(() => {}) : undefined;",
+        "export const GraphEngine = {",
+        "  async open(...args) {",
+        "    const engine = await Real.open(...args);",
+        "    const close = engine.close.bind(engine);",
+        "    engine.close = async () => { mark('engine-close'); await close(); };",
+        "    engine.context.watch = async () => {",
+        "      setTimeout(() => {",
+        "        if (process.env.GRAPH_TEST_FAULT === 'reject') Promise.reject(new Error('watch boom'));",
+        "        else throw new Error('watch boom');",
+        "      }, 200);",
+        "      return { close: async () => { mark('watcher-close'); await hang(); } };",
+        "    };",
+        "    return engine;",
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+    );
+    const watchHook = path.join(stubs, "register-watch.mjs");
+    await writeFile(watchHook, hook("service.mjs", "./service.js"));
+    // serve and mcp: servers whose close methods record their calls.
+    await writeFile(
+      path.join(stubs, "mcp.mjs"),
+      `import { appendFileSync } from "node:fs";\nexport async function serveMcp() { setTimeout(() => { throw new Error("mcp boom"); }, 200); return { close: async () => { appendFileSync(process.env.GRAPH_TEST_MARKS, "server-close\\n"); } }; }\nexport function createMcpServer() {}\nexport function mcpToolHashes() { return {}; }\nexport function mcpToolHashUnion() { return {}; }\n`,
+    );
+    await writeFile(
+      path.join(stubs, "server.mjs"),
+      `import { appendFileSync } from "node:fs";\nexport function createServer() { return { token: "t", app: { listen: async () => { setTimeout(() => { throw new Error("serve boom"); }, 200); return "http://127.0.0.1:1"; }, close: async () => { appendFileSync(process.env.GRAPH_TEST_MARKS, "server-close\\n"); } } }; }\n`,
+    );
+    const mcpHook = path.join(stubs, "register-mcp.mjs");
+    await writeFile(mcpHook, hook("mcp.mjs", "./mcp.js"));
+    const serveHook = path.join(stubs, "register-serve.mjs");
+    await writeFile(serveHook, hook("server.mjs", "./server.js"));
+    const walFiles = async (directory: string): Promise<string[]> => {
+      const found: string[] = [];
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const full = path.join(directory, entry.name);
+        if (entry.isDirectory()) found.push(...(await walFiles(full)));
+        else if (/-(wal|shm)$/.test(entry.name)) found.push(full);
+      }
+      return found;
+    };
+    const cases: {
+      name: string;
+      args: string[];
+      hook: string;
+      env: Record<string, string>;
+      marks: string[];
+      slow?: boolean;
+    }[] = [
+      {
+        name: "watch rejection",
+        args: ["watch", "--interval", "1000"],
+        hook: watchHook,
+        env: { GRAPH_TEST_FAULT: "reject" },
+        marks: ["watcher-close", "engine-close"],
+      },
+      {
+        name: "watch exception",
+        args: ["watch", "--interval", "1000"],
+        hook: watchHook,
+        env: { GRAPH_TEST_FAULT: "throw" },
+        marks: ["watcher-close", "engine-close"],
+      },
+      {
+        name: "mcp",
+        args: ["mcp", "--client", "local"],
+        hook: mcpHook,
+        env: {},
+        marks: ["server-close"],
+      },
+      {
+        name: "serve",
+        args: ["serve", "--port", "0"],
+        hook: serveHook,
+        env: {},
+        marks: ["server-close"],
+      },
+      {
+        // A watcher whose close never finishes: the process still exits 1
+        // after the 5 second bound, and the engine's close is never reached.
+        name: "watch with a close that hangs",
+        args: ["watch", "--interval", "1000"],
+        hook: watchHook,
+        env: { GRAPH_TEST_FAULT: "throw", GRAPH_TEST_HANG: "1" },
+        marks: ["watcher-close"],
+        slow: true,
+      },
+    ];
+    for (const item of cases) {
+      await rm(marks, { force: true });
+      await writeFile(marks, "");
+      const child = graph.startPreloadedWith(
+        { ...item.env, GRAPH_TEST_MARKS: marks },
+        [item.hook],
+        ...item.args,
+      );
+      let stderr = "";
+      let stdout = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk));
+      child.stderr.on("data", (chunk) => (stderr += chunk));
+      const closed = once(child, "close");
+      let faultedAt: number | undefined;
+      const poll = setInterval(() => {
+        if (stderr.includes("Fatal error")) faultedAt ??= Date.now();
+      }, 20);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const exit = await Promise.race([
+        closed,
+        new Promise<string>((resolve) => {
+          timer = setTimeout(() => resolve("still running"), 30_000);
+        }),
+      ]);
+      const endedAt = Date.now();
+      clearInterval(poll);
+      clearTimeout(timer);
+      child.kill("SIGKILL");
+      expect({ name: item.name, exit }).toEqual({
+        name: item.name,
+        exit: [1, null],
+      });
+      const lines = stderr.split("\n").filter((line) => line.trim());
+      expect({ name: item.name, lines: lines.length }).toEqual({
+        name: item.name,
+        lines: 1,
+      });
+      expect(lines[0]).toMatch(/^Fatal error: (watch|mcp|serve) boom/);
+      expect(stdout).not.toContain("Fatal error");
+      expect({
+        name: item.name,
+        marks: (await readFile(marks, "utf8")).split("\n").filter(Boolean),
+      }).toEqual({ name: item.name, marks: item.marks });
+      if (item.slow) {
+        // The bound is 5 seconds from the error, not sooner and not never.
+        expect(faultedAt).toBeDefined();
+        const waited = endedAt - faultedAt!;
+        expect(waited).toBeGreaterThanOrEqual(4_500);
+        expect(waited).toBeLessThan(15_000);
+      } else {
+        expect(await walFiles(data)).toEqual([]);
+        expect((await graph("runs")).code).toBe(0);
+      }
+    }
+  }, 240_000);
+
   it("prints the MCP call log with mcp-log, newest first, filtered by --tool and bounded by --limit", async () => {
     const { root, data, graph } = await project();
     await graph("init");
