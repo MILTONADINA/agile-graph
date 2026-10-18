@@ -225,3 +225,156 @@ describe("project archive lifecycle", () => {
     expect(() => new RunStore(data.dataDir, data.projectId)).toThrow("newer");
   });
 });
+
+describe("run store project indexes and orphan check", () => {
+  const INDEXED = [
+    "plans",
+    "runs",
+    "decisions",
+    "plan_approvals",
+    "worker_leases",
+    "owner_proofs",
+  ];
+  const leading = (db: Database.Database, table: string) =>
+    (db.pragma(`index_list(${table})`) as { name: string }[]).filter(
+      (index) =>
+        (
+          db.pragma(`index_info(${index.name})`) as {
+            seqno: number;
+            name: string;
+          }[]
+        ).find((column) => column.seqno === 0)?.name === "project_id",
+    );
+  it("adds project_id indexes to an existing database without changing its version", async () => {
+    const data = await fixture();
+    data.store.close();
+    const databasePath = join(data.dataDir, "runs.sqlite"),
+      legacy = new Database(databasePath);
+    for (const table of INDEXED)
+      for (const index of leading(legacy, table))
+        if (index.name.endsWith("_project"))
+          legacy.exec(`DROP INDEX ${index.name}`);
+    legacy.pragma("user_version=5");
+    for (const table of INDEXED) expect(leading(legacy, table)).toEqual([]);
+    legacy.close();
+    const migrated = new RunStore(data.dataDir, data.projectId);
+    stores.push(migrated);
+    migrated.close();
+    const inspect = new Database(databasePath);
+    expect(inspect.pragma("user_version", { simple: true })).toBe(5);
+    for (const table of INDEXED)
+      expect(leading(inspect, table).length).toBeGreaterThan(0);
+    const plan = inspect
+      .prepare(
+        "EXPLAIN QUERY PLAN SELECT json FROM plan_approvals WHERE project_id=?",
+      )
+      .all("p") as { detail: string }[];
+    expect(plan.map((row) => row.detail).join(" ")).toMatch(
+      /USING (COVERING )?INDEX plan_approvals_project/,
+    );
+    const ordered = inspect
+      .prepare(
+        "EXPLAIN QUERY PLAN SELECT json FROM decisions WHERE project_id=? ORDER BY rowid",
+      )
+      .all("p") as { detail: string }[];
+    expect(ordered.map((row) => row.detail).join(" ")).toContain(
+      "decisions_project",
+    );
+    inspect.close();
+  });
+  it("counts orphan rows as a warning and reports zero for a clean store", async () => {
+    const data = await fixture();
+    const warnings: string[] = [];
+    data.store.saveRun({
+      id: "run-1",
+      planId: "plan-1",
+      projectId: data.projectId,
+      status: "succeeded",
+    } as any);
+    const { countRunStoreOrphans: countClean } =
+      await import("../src/operations.js");
+    const { ContextDatabase: Ctx } = await import("../src/context/database.js");
+    const cleanRuns = new Ctx(join(data.dataDir, "runs.sqlite"), {
+      readonly: true,
+    });
+    try {
+      expect(await countClean(cleanRuns)).toEqual({
+        runEvents: 0,
+        runOutcomes: 0,
+        planApprovals: 0,
+      });
+    } finally {
+      await cleanRuns.close();
+    }
+    await backupProject({
+      ...data,
+      destination: join(data.directory, "clean"),
+      onWarning: (message) => warnings.push(message),
+    });
+    expect(warnings).toEqual([]);
+    data.store.close();
+    const db = new Database(join(data.dataDir, "runs.sqlite"));
+    db.prepare(
+      "INSERT INTO run_events(id,run_id,project_id,json) VALUES(?,?,?,?)",
+    ).run("e1", "ghost", data.projectId, "{}");
+    db.prepare(
+      "INSERT INTO run_events(id,run_id,project_id,json) VALUES(?,?,?,?)",
+    ).run("e2", "ghost", data.projectId, "{}");
+    db.prepare(
+      "INSERT INTO run_events(id,run_id,project_id,json) VALUES(?,?,?,?)",
+    ).run("e3", "run-1", data.projectId, "{}");
+    db.prepare(
+      "INSERT INTO run_outcomes(run_id,project_id,json) VALUES(?,?,?)",
+    ).run("ghost", data.projectId, "{}");
+    db.prepare(
+      "INSERT INTO plan_approvals(plan_id,project_id,json) VALUES(?,?,?)",
+    ).run("no-plan", data.projectId, "{}");
+    db.close();
+    const store = new RunStore(data.dataDir, data.projectId);
+    stores.push(store);
+    const { countRunStoreOrphans } = await import("../src/operations.js");
+    const { ContextDatabase } = await import("../src/context/database.js");
+    const runs = new ContextDatabase(join(data.dataDir, "runs.sqlite"), {
+      readonly: true,
+    });
+    try {
+      expect(await countRunStoreOrphans(runs)).toEqual({
+        runEvents: 2,
+        runOutcomes: 1,
+        planApprovals: 1,
+      });
+    } finally {
+      await runs.close();
+    }
+    await backupProject({
+      ...data,
+      store,
+      destination: join(data.directory, "orphaned"),
+      onWarning: (message) => warnings.push(message),
+    });
+    expect(warnings).toEqual([
+      "Run store has orphan rows (run_events: 2, run_outcomes: 1, plan_approvals: 1); nothing was deleted",
+    ]);
+  });
+  it("treats a table missing from an older archive as zero orphans", async () => {
+    const data = await fixture();
+    data.store.close();
+    const db = new Database(join(data.dataDir, "runs.sqlite"));
+    db.exec("DROP TABLE run_outcomes; DROP TABLE plan_approvals;");
+    db.close();
+    const { countRunStoreOrphans } = await import("../src/operations.js");
+    const { ContextDatabase } = await import("../src/context/database.js");
+    const runs = new ContextDatabase(join(data.dataDir, "runs.sqlite"), {
+      readonly: true,
+    });
+    try {
+      expect(await countRunStoreOrphans(runs)).toEqual({
+        runEvents: 0,
+        runOutcomes: 0,
+        planApprovals: 0,
+      });
+    } finally {
+      await runs.close();
+    }
+  });
+});

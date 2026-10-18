@@ -46,6 +46,8 @@ function legacyOwnerState(pid: number | undefined): "dead" | "unknown" {
 
 // 5 added mcp_calls, the MCP call log. Each version only adds tables (CREATE
 // TABLE IF NOT EXISTS), so opening an older database migrates it in place.
+// Indexes led by project_id were added within version 5 (CREATE INDEX IF NOT
+// EXISTS, no row change), so an older engine still opens the same database.
 export const RUN_SCHEMA_VERSION = 5;
 
 /** The result of one MCP tool call as the call log records it. */
@@ -423,6 +425,12 @@ export class RunStore {
       CREATE INDEX IF NOT EXISTS outcomes_run ON run_outcomes(project_id,run_id,seq);
       CREATE TABLE IF NOT EXISTS mcp_calls(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,at TEXT NOT NULL,tool TEXT NOT NULL,client_kind TEXT NOT NULL,args_sha256 TEXT NOT NULL,outcome TEXT,plan_id TEXT,run_id TEXT);
       CREATE INDEX IF NOT EXISTS mcp_calls_tool ON mcp_calls(project_id,tool,seq);
+      CREATE INDEX IF NOT EXISTS plans_project ON plans(project_id);
+      CREATE INDEX IF NOT EXISTS runs_project ON runs(project_id);
+      CREATE INDEX IF NOT EXISTS decisions_project ON decisions(project_id);
+      CREATE INDEX IF NOT EXISTS plan_approvals_project ON plan_approvals(project_id);
+      CREATE INDEX IF NOT EXISTS worker_leases_project ON worker_leases(project_id);
+      CREATE INDEX IF NOT EXISTS owner_proofs_project ON owner_proofs(project_id);
       PRAGMA user_version = 5;`);
         // Added within version 5 as a nullable column, so an older engine
         // still opens and writes the same database.
