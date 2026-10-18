@@ -80,6 +80,20 @@ export interface AddedFile {
  * `options.replaced` overwrites files the view already has, in the view
  * only; a replaced path the view lacks is refused.
  */
+// Hosts without getuid/getgid (Windows) get the image's fixed non-root `node`
+// user. A root host would map to root in the container (and a private view
+// owned by root is unreadable to any other user), so it is refused.
+function verificationUser(): string {
+  if (!process.getuid || !process.getgid) return "1000:1000";
+  const uid = process.getuid();
+  const gid = process.getgid();
+  if (uid === 0 || gid === 0)
+    throw new Error(
+      "Verification containers must not run as root: run the engine as a non-root user.",
+    );
+  return `${uid}:${gid}`;
+}
+
 export async function verifyInContainer(
   workspace: string,
   checks: ProjectConfig["verification"],
@@ -204,12 +218,8 @@ export async function verifyInContainer(
             // With all capabilities dropped, container root cannot traverse a
             // private (0700) bind mount owned by the Linux host user. Match the
             // owner instead of granting DAC_OVERRIDE or opening private files.
-            // Hosts without getuid/getgid (Windows) get the image's fixed
-            // non-root `node` user, so the container never runs as root.
             "--user",
-            process.getuid && process.getgid
-              ? `${process.getuid()}:${process.getgid()}`
-              : "1000:1000",
+            verificationUser(),
             "--mount",
             `type=bind,source=${view},target=/workspace`,
             "--workdir",
