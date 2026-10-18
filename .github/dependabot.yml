@@ -1,0 +1,23 @@
+# Weekly update PRs. npm PRs change package-lock.json, which is hash-pinned by
+# its third-party resolutions (see docs/publishing.md and the pin tests), so a
+# maintainer must update the pin before an npm update PR can merge.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

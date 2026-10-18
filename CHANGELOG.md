@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Security
+
+- CI now runs `npm audit --omit=dev --audit-level=high` and fails on a high or
+  critical advisory in production dependencies. Dependabot opens weekly
+  grouped update pull requests for npm and GitHub Actions.
+
 ### Changed
 
 - Verification containers now run as a non-root user on every platform, and

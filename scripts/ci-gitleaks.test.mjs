@@ -48,3 +48,33 @@ test("the gitleaks job pin matches the scanner Dockerfile pin", () => {
   assert.ok(docker.includes(`GITLEAKS_VERSION=${version}`));
   assert.ok(docker.includes(`GITLEAKS_SHA256_AMD64=${sum}`));
 });
+
+test("CI audits production dependencies and fails on high advisories", () => {
+  assert.match(
+    workflow,
+    /^ {6}- name: Audit production dependencies\n(?: {8}if: .*\n)? {8}run: npm audit --omit=dev --audit-level=high$/m,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /npm audit[^\n]*(\|\| true|--audit-level=(low|moderate))/,
+  );
+});
+
+test("the update bot runs weekly for npm and GitHub Actions", () => {
+  const bot = readFileSync(
+    new URL("../.github/dependabot.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(bot, /^version: 2$/m);
+  for (const eco of ["npm", "github-actions"]) {
+    const block = bot
+      .split(/^ {2}- /m)
+      .find((b) => b.includes(`package-ecosystem: ${eco}\n`));
+    assert.ok(block, `${eco} ecosystem is missing`);
+    assert.match(block, /directory: "\/"/);
+    assert.match(block, /interval: "weekly"/);
+    assert.match(block, /groups:/);
+  }
+  assert.match(bot, /open-pull-requests-limit: 5/);
+  assert.match(bot, /hash-pinned/);
+});
