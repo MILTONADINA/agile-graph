@@ -102,6 +102,8 @@ function clientErrorStatus(error: unknown): number | undefined {
     return status;
   if (
     !(error instanceof Error) ||
+    (typeof status === "number" && status >= 500) ||
+    error instanceof SyntaxError ||
     error instanceof TypeError ||
     error instanceof RangeError ||
     error instanceof ReferenceError ||

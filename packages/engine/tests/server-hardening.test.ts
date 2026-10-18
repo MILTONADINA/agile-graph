@@ -21,6 +21,22 @@ async function listen(
       listMemories: () => {
         throw new TypeError("secret detail at /Users/someone/private/file.ts");
       },
+      listSnapshots: () => {
+        throw new SyntaxError("secret parse detail in /Users/someone/x.json");
+      },
+      currentSnapshot: () => {
+        throw Object.assign(new Error("secret sqlite path /Users/someone/db"), {
+          code: "SQLITE_BUSY",
+        });
+      },
+      searchSymbols: () => {
+        throw Object.assign(new Error("secret upstream detail"), {
+          statusCode: 503,
+        });
+      },
+      neighbors: () => {
+        throw new Error("Symbol is not in this snapshot");
+      },
       getContext: () => ({ ok: true }),
     },
     refresh: async () => ({}),
@@ -111,6 +127,7 @@ describe("dashboard server hardening", () => {
       body: "{not json",
     });
     expect(malformed.status).toBe(400);
+    expectSecurityHeaders(malformed, "400");
     const invalid = await fetch(`${address}/api/context`, {
       method: "POST",
       headers: { ...auth, "content-type": "application/json" },
@@ -127,6 +144,28 @@ describe("dashboard server hardening", () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({ error: "Internal server error" });
     expect(text).not.toMatch(/secret|\/Users|\.ts|at /);
+  });
+
+  it("keeps 500 generic for syntax, system-code and 5xx errors and 400 for a plain engine refusal", async () => {
+    const { address } = await listen();
+    for (const url of [
+      "/api/snapshots",
+      "/api/snapshots/current",
+      "/api/symbols",
+    ]) {
+      const response = await fetch(`${address}${url}`, { headers: auth });
+      expect(response.status, url).toBe(500);
+      expect(await response.json(), url).toEqual({
+        error: "Internal server error",
+      });
+    }
+    const refusal = await fetch(`${address}/api/neighbors?symbolId=a`, {
+      headers: auth,
+    });
+    expect(refusal.status).toBe(400);
+    expect(await refusal.json()).toEqual({
+      error: "Symbol is not in this snapshot",
+    });
   });
 
   it("marks event streams uncacheable and unbuffered, caps them with 503, and ends them on shutdown", async () => {
