@@ -45,6 +45,10 @@ function dashboardPlan(plan: ExecutionPlan) {
     withoutGeneratorRegistrations(plan);
   return visible;
 }
+const DEFAULT_RUN_EVENTS_PAGE = 1000;
+const MAX_RUN_EVENTS_PAGE = 5000;
+const EVENT_STREAM_PAGE = 500;
+
 function dashboardRun(run: RunRecord) {
   return { ...run, plan: dashboardPlan(run.plan) };
 }
@@ -377,9 +381,27 @@ export function createServer(
   });
   app.get("/api/runs/:id", async (request) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
+    const { after, limit } = z
+      .object({
+        after: z.coerce.number().int().min(0).default(0),
+        limit: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_RUN_EVENTS_PAGE)
+          .default(DEFAULT_RUN_EVENTS_PAGE),
+      })
+      .strict()
+      .parse(request.query);
+    const run = dashboardRun(engine.store.run(id));
+    const page = engine.store.eventsAfter(id, after, limit + 1);
+    const more = page.events.length > limit;
+    const events = page.events.slice(0, limit);
     return {
-      run: dashboardRun(engine.store.run(id)),
-      events: engine.store.events(id).map(dashboardEvent),
+      run,
+      events: events.map(dashboardEvent),
+      // The cursor for the next page; absent when no events remain.
+      ...(more ? { nextAfter: page.seqs[limit - 1] } : {}),
     };
   });
   app.post("/api/plans", async (request) => {
@@ -489,10 +511,14 @@ export function createServer(
     reply.raw.flushHeaders();
     let sent = 0;
     const flush = () => {
-      const events = engine.store.events(id);
-      for (const event of events.slice(sent))
-        reply.raw.write(`data: ${JSON.stringify(dashboardEvent(event))}\n\n`);
-      sent = events.length;
+      // Read only events after the last one sent, a bounded page at a time.
+      for (;;) {
+        const page = engine.store.eventsAfter(id, sent, EVENT_STREAM_PAGE);
+        for (const event of page.events)
+          reply.raw.write(`data: ${JSON.stringify(dashboardEvent(event))}\n\n`);
+        sent = page.lastSeq;
+        if (page.events.length < EVENT_STREAM_PAGE) return;
+      }
     };
     flush();
     const timer = setInterval(flush, 1000);

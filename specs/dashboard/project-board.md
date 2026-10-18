@@ -49,6 +49,10 @@ A team lead wants to open one page and see what the graph is doing, what is done
   - Test: packages/engine/tests/server-hardening.test.ts :: keeps 500 generic for syntax, system-code and 5xx errors and 400 for a plain engine refusal
 - AC14: An event stream is sent `Cache-Control: no-store` and `X-Accel-Buffering: no` and its headers are flushed at once; no more than 16 streams are open at a time, and a further request is refused with 503 and `Retry-After`; open streams end when the server closes.
   - Test: packages/engine/tests/server-hardening.test.ts :: marks event streams uncacheable and unbuffered, caps them with 503, and ends them on shutdown
+- AC14a: A run's event stream reads events after the last one it sent, at most 500 per read, and never re-reads earlier events. `GET /api/runs/:id` accepts `after` (default 0) and `limit` (default 1000, 1 to 5000; otherwise 400) and returns at most `limit` events after `after`, plus `nextAfter` (pass it as `after`) only when more remain.
+  - Test: packages/engine/tests/server.test.ts :: streams only events after the last one sent, in bounded pages
+  - Test: packages/engine/tests/server.test.ts :: returns a bounded page of run events with a nextAfter cursor
+  - Test: packages/engine/tests/store-events-after.test.ts :: reads a run's events after a position, in order, with a bounded limit
 - AC15: By default the dashboard server writes no request or error log. With `serve --log-requests` it writes one line per request to stderr (method, route pattern, status, duration in ms) and one line per 5xx error (error name and redacted message). It never logs the query string, headers, body, token, cookies or file paths: the route is the matched pattern, an unmatched request is logged as `(unmatched)`, a quoted file path is removed even when it holds spaces, and an event stream is logged once when it closes.
   - Test: packages/engine/tests/server-hardening.test.ts :: writes nothing by default
   - Test: packages/engine/tests/server-hardening.test.ts :: logs the route pattern, status and duration, not the query

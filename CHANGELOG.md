@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Run events are read a bounded page at a time. The event stream fetches only
+  events after the last one it sent instead of re-reading the whole run every
+  second, and `GET /api/runs/:id` returns at most `limit` events (default
+  1000, maximum 5000) after `after`, with `nextAfter` when more remain.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added
