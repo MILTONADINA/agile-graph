@@ -138,11 +138,65 @@ async function validateJsonFiles(
   return result;
 }
 
+/** Counts only, never row contents. Orphans warn; they never fail a check. */
+export interface RunStoreOrphans {
+  runEvents: number;
+  runOutcomes: number;
+  planApprovals: number;
+}
+const ORPHAN_QUERIES: readonly [keyof RunStoreOrphans, string, string][] = [
+  [
+    "runEvents",
+    "run_events",
+    "SELECT count(*) AS n FROM run_events e WHERE NOT EXISTS (SELECT 1 FROM runs r WHERE r.id=e.run_id)",
+  ],
+  [
+    "runOutcomes",
+    "run_outcomes",
+    "SELECT count(*) AS n FROM run_outcomes o WHERE NOT EXISTS (SELECT 1 FROM runs r WHERE r.id=o.run_id)",
+  ],
+  [
+    "planApprovals",
+    "plan_approvals",
+    "SELECT count(*) AS n FROM plan_approvals a WHERE NOT EXISTS (SELECT 1 FROM plans p WHERE p.id=a.plan_id)",
+  ],
+];
+export async function countRunStoreOrphans(
+  runs: Pick<ContextDatabase, "get">,
+): Promise<RunStoreOrphans> {
+  const counts: RunStoreOrphans = {
+    runEvents: 0,
+    runOutcomes: 0,
+    planApprovals: 0,
+  };
+  // An archive from an older engine may lack a table; absent means zero.
+  for (const [key, table, sql] of ORPHAN_QUERIES)
+    if (
+      await runs.get(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        [table],
+      )
+    )
+      counts[key] = (await runs.get<{ n: number }>(sql))?.n ?? 0;
+  return counts;
+}
+function orphanWarning(orphans: RunStoreOrphans): string | undefined {
+  const parts = [
+    ["run_events", orphans.runEvents],
+    ["run_outcomes", orphans.runOutcomes],
+    ["plan_approvals", orphans.planApprovals],
+  ].filter(([, n]) => (n as number) > 0);
+  return parts.length === 0
+    ? undefined
+    : `Run store has orphan rows (${parts.map(([t, n]) => `${t}: ${n}`).join(", ")}); nothing was deleted`;
+}
+
 async function inspectDatabases(
   directory: string,
   projectId: string,
   schema: ProjectBackupManifest["schema"],
-): Promise<void> {
+  onWarning?: (message: string) => void,
+): Promise<RunStoreOrphans> {
   const context = new ContextDatabase(join(directory, "context.sqlite"), {
     readonly: true,
   });
@@ -214,6 +268,10 @@ async function inspectDatabases(
         throw new Error(
           "Cannot archive active runs; stop work before backing up",
         );
+    const orphans = await countRunStoreOrphans(runs);
+    const warning = orphanWarning(orphans);
+    if (warning) onWarning?.(warning);
+    return orphans;
   } finally {
     await Promise.all([context.close(), runs.close()]);
   }
@@ -227,6 +285,7 @@ export async function backupProject(options: {
   projectId: string;
   destination: string;
   config?: ProjectConfig;
+  onWarning?: (message: string) => void;
 }): Promise<ProjectBackupManifest> {
   if (options.context.projectId !== options.projectId)
     throw new Error("Context project identity mismatch");
@@ -274,7 +333,12 @@ export async function backupProject(options: {
       context: receipt.schemaVersion,
       runs: options.store.schemaVersion,
     };
-    await inspectDatabases(destination, options.projectId, schema);
+    await inspectDatabases(
+      destination,
+      options.projectId,
+      schema,
+      options.onWarning,
+    );
     if (canonicalJson(options.store.runs()) !== before)
       throw new Error(
         "Run state changed during backup; incomplete archive must not be restored",
@@ -338,6 +402,7 @@ export async function restoreProject(options: {
   backupDirectory: string;
   dataDir: string;
   projectId: string;
+  onWarning?: (message: string) => void;
 }): Promise<ProjectBackupManifest> {
   const directory = await realpath(options.backupDirectory);
   const manifestInfo = await lstat(join(directory, "manifest.json"));
@@ -375,7 +440,12 @@ export async function restoreProject(options: {
   for (const name of validatedConfigs.keys())
     if (!manifest.files.some((file) => file.path === name))
       throw new Error("Unmanifested backup config file");
-  await inspectDatabases(directory, options.projectId, manifest.schema);
+  await inspectDatabases(
+    directory,
+    options.projectId,
+    manifest.schema,
+    options.onWarning,
+  );
   // New destination only. No live repository/config or workspace is overwritten.
   await ContextEngine.restoreBackup({
     backupPath: join(directory, "context.sqlite"),

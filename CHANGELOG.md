@@ -8,6 +8,17 @@
   events after the last one it sent instead of re-reading the whole run every
   second, and `GET /api/runs/:id` returns at most `limit` events (default
   1000, maximum 5000) after `after`, with `nextAfter` when more remain.
+- The run store indexes `plans`, `runs`, `decisions`, `plan_approvals`,
+  `worker_leases` and `owner_proofs` by `project_id`, so per-project lookups
+  no longer scan the table. The indexes are added on open without changing
+  any row or the schema version, so an older engine still opens the database.
+
+### Added
+
+- `backup` and `restore` warn when the run store holds orphan rows
+  (`run_events` or `run_outcomes` without a run, `plan_approvals` without a
+  plan). Only counts are reported; nothing is deleted and the check still
+  passes.
 
 ### Fixed
 

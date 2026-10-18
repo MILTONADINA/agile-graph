@@ -604,6 +604,7 @@ cli
         projectId: engine.config.projectId,
         destination: path.resolve(destination),
         config: engine.config,
+        onWarning: (message) => console.error(`warning: ${message}`),
       }),
     ),
   );
@@ -619,6 +620,7 @@ cli
         backupDirectory: path.resolve(backup),
         dataDir: path.resolve(destination),
         projectId: project.projectId,
+        onWarning: (message) => console.error(`warning: ${message}`),
       }),
     );
   });

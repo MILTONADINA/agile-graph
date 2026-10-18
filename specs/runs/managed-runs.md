@@ -113,10 +113,16 @@ An operator wants a worker model to implement a planned change without touching 
 - AC28: A change's `before` text must occur exactly once in the target file, counting overlapping matches: `\n\n` in `a\n\n\nb` and `aa` in `aaa` are refused with `Patch precondition failed: <path> must contain exactly one matching substring`, and nothing is written.
   - Test: packages/engine/tests/execution.test.ts :: refuses a patch whose before text matches at overlapping positions
 
+- AC29: When the run store is opened, the system shall create an index led by `project_id` on each of `plans`, `runs`, `decisions`, `plan_approvals`, `worker_leases` and `owner_proofs` if it is missing, without changing any row or the schema version (5), so an older engine still opens the same database; a database newer than the engine is still refused.
+  - Test: packages/engine/tests/operations.test.ts :: adds project_id indexes to an existing database without changing its version
+  - Test: packages/engine/tests/operations.test.ts :: run-store migration preserves legacy rows and refuses a newer database
+- AC30: While a backup or restore inspects the run store, the system shall count `run_events` and `run_outcomes` rows whose run has no `runs` row and `plan_approvals` rows whose plan has no `plans` row, and shall report only those counts as a warning; orphans shall not fail the check and nothing shall be deleted. A clean store reports no warning.
+  - Test: packages/engine/tests/operations.test.ts :: counts orphan rows as a warning and reports zero for a clean store
+
 ## Security considerations
 
 Worker output is untrusted: patches are validated before application, confined to the run workspace, and judged only by checks the engine runs itself. Plans are bound to a hash of the policy and source, so a policy loosened or source changed after review cannot be exploited by a pending run. Verification logs exported for a run must not carry private source or file names (see `packages/engine/tests/execution.test.ts`, "does not export private source or filenames from verification logs"). Budgets (`maxAttempts`, `maxTurns`, `maxCostUsd`) are ceilings set by the owner and are never raised by the engine.
 
 ## Non-goals
 
-A succeeded run is not human acceptance and does not merge or publish on its own authority. Managed runs do not grant workers network access, shell access or write access to the operator's checkout.
+A succeeded run is not human acceptance and does not merge or publish on its own authority. Managed runs do not grant workers network access, shell access or write access to the operator's checkout. SQLite foreign keys are not added to the run store: its tables hold JSON documents, and adding constraints needs a table rebuild of user data. The orphan check (AC30) is the chosen alternative.
