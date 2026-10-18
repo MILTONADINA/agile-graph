@@ -31,7 +31,7 @@ import {
 import { GraphEngine } from "../src/service.js";
 import { classifyError } from "../src/feedback.js";
 import { similarFilesNote } from "../src/execution/requested-sources.js";
-import { viewing } from "./worker-view.js";
+import { viewing, viewingEdits } from "./worker-view.js";
 import { applyProposal } from "../src/execution/workspace.js";
 import { invokeApiWorker, StructuredOutputError } from "../src/workers/api.js";
 import type { WorkerResult } from "../src/workers/api.js";
@@ -1569,7 +1569,7 @@ describe("managed execution", () => {
     const feedback: (string | undefined)[] = [];
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async (input) => {
+      worker: viewingEdits(async (input) => {
         feedback.push(input.feedback);
         calls++;
         if (calls === 2) throw new Error("Worker temporarily unavailable");
@@ -1595,7 +1595,7 @@ describe("managed execution", () => {
             estimated: false,
           },
         };
-      },
+      }),
       verify: async (_workspace, commands, _policy, snapshotHash) => {
         checks++;
         return commands.map((check) => ({
@@ -1642,7 +1642,7 @@ describe("managed execution", () => {
     let checks = 0;
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async () => {
+      worker: viewingEdits(async () => {
         if (++calls === 2) throw new Error("Worker temporarily unavailable");
         return {
           model: "fixture",
@@ -1659,7 +1659,7 @@ describe("managed execution", () => {
             estimated: false,
           },
         };
-      },
+      }),
       verify: async (_workspace, commands, _policy, snapshotHash) => {
         checks++;
         return commands.map((check) => ({
@@ -1709,7 +1709,7 @@ describe("managed execution", () => {
     let checks = 0;
     const engine = await GraphEngine.open(root, {
       dockerAvailable: async () => true,
-      worker: async () => {
+      worker: viewingEdits(async () => {
         if (++calls > 1) throw new Error("Worker temporarily unavailable");
         return {
           model: "fixture",
@@ -1726,7 +1726,7 @@ describe("managed execution", () => {
             estimated: false,
           },
         };
-      },
+      }),
       verify: async (_workspace, commands, _policy, snapshotHash) => {
         checks++;
         return commands.map((check) => ({
