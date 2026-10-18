@@ -220,7 +220,7 @@ export async function prepareProposal(
     } else {
       if (content === undefined)
         throw new Error(`Patch target does not exist: ${change.path}`);
-      if (!change.before || content.split(change.before).length !== 2)
+      if (!change.before || !occursExactlyOnce(content, change.before))
         throw new Error(
           `Patch precondition failed: ${change.path} must contain exactly one matching substring`,
         );
@@ -231,6 +231,11 @@ export async function prepareProposal(
     staged.set(change.path, { absolute, content });
   }
   return staged;
+}
+/** True when `needle` occurs once, counting overlapping matches. */
+function occursExactlyOnce(haystack: string, needle: string): boolean {
+  const first = haystack.indexOf(needle);
+  return first >= 0 && haystack.indexOf(needle, first + 1) < 0;
 }
 export async function applyProposal(
   workspace: string,
