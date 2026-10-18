@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
 ### Added
 
 - `serve --log-requests` writes one stderr line per request (method, route
@@ -11,6 +13,12 @@
 
 ### Security
 
+- The dashboard server sends a Content-Security-Policy with
+  `frame-ancestors 'none'` and `X-Frame-Options: DENY` on every response,
+  including event streams; answers 413, 415 and a generic 500 instead of
+  masking faults as 400; and caps concurrent event streams (503 with
+  Retry-After).
+- CI scans the full Git history for secrets with a pinned gitleaks.
 - The verification image now pins its base image by digest
   (`node:24-bookworm@sha256:...`), and a test requires every registry `FROM`
   in `infra/*.Dockerfile`, the engine test fixture Dockerfiles and
@@ -22,12 +30,16 @@
 
 ### Changed
 
+- A worker's edit to an existing file must change only lines the worker was
+  shown; other edits are held back with feedback instead of applied.
 - Verification containers now run as a non-root user on every platform, and
   the verification image ends with `USER node`. Running the engine as root is
   refused for verification; run it as a non-root user.
 
 ### Fixed
 
+- `serve`, `mcp` and `watch` close their stores and exit 1 on a fatal error
+  instead of hanging, with closing bounded at 5 seconds.
 - The SQLITE_BUSY retry when opening the run and context databases now uses
   jittered backoff, and both databases set `synchronous = FULL` explicitly
   with WAL.
