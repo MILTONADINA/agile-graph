@@ -9,6 +9,12 @@
   second, and `GET /api/runs/:id` returns at most `limit` events (default
   1000, maximum 5000) after `after`, with `nextAfter` when more remain.
 
+### Fixed
+
+- The engine test suite no longer writes project data folders into the
+  user's data directory: each run uses a temporary `GRAPH_ENGINE_DATA_DIR`
+  that is removed afterwards (#176).
+
 ## [0.2.0] - 2026-10-18
 
 ### Added
