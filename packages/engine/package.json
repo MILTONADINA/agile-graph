@@ -1,6 +1,6 @@
 {
   "name": "@agile-graph/engine",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "An AI agile team for your repository: test-first AI workers in isolated Git worktrees, behind the checks, code review and security scans you approve.",
   "keywords": [
     "agile-graph",
@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "@fastify/static": "10.1.4",
-    "@agile-graph/contracts": "0.1.1",
+    "@agile-graph/contracts": "0.1.2",
     "@modelcontextprotocol/sdk": "1.31.0",
     "better-sqlite3": "13.0.3",
     "commander": "^14.0.0",
