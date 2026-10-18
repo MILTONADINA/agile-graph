@@ -20,7 +20,14 @@ async function listen(
   } = {},
 ) {
   const engine = {
-    store: { run: () => ({}), events: () => [] },
+    store: {
+      run: () => ({}),
+      eventsAfter: (_id: string, after: number) => ({
+        events: [],
+        seqs: [],
+        lastSeq: after,
+      }),
+    },
     context: {
       listMemories: () => {
         throw new TypeError("secret detail at /Users/someone/private/file.ts");

@@ -1007,6 +1007,30 @@ export class RunStore {
       .all(this.projectId, runId)
       .map((r) => JSON.parse((r as { json: string }).json));
   }
+  /**
+   * One bounded page of a run's events with `seq` greater than `afterSeq`,
+   * oldest first. `lastSeq` is the cursor to pass back for the next page
+   * (`afterSeq` when the page is empty); `seqs` holds each event's position.
+   */
+  eventsAfter(
+    runId: string,
+    afterSeq: number,
+    limit: number,
+  ): { events: RunEvent[]; seqs: number[]; lastSeq: number } {
+    const rows = this.db
+      .prepare(
+        "SELECT seq,json FROM run_events WHERE project_id=? AND run_id=? AND seq>? ORDER BY seq LIMIT ?",
+      )
+      .all(this.projectId, runId, afterSeq, limit) as {
+      seq: number;
+      json: string;
+    }[];
+    return {
+      events: rows.map((r) => JSON.parse(r.json) as RunEvent),
+      seqs: rows.map((r) => r.seq),
+      lastSeq: rows.length ? rows[rows.length - 1]!.seq : afterSeq,
+    };
+  }
   event(
     runId: string,
     type: string,
