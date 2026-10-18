@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -146,6 +146,16 @@ export function createServer(
   } = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 1_000_000 });
+  // One opt-in line per request. Hijacked event streams skip onResponse, so
+  // they call this themselves when the stream closes.
+  const logRequest = options.logRequests
+    ? (request: FastifyRequest, status: number, elapsedMs: number): void => {
+        const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
+        process.stderr.write(
+          `${request.method} ${route ?? "(unmatched)"} ${status} ${Math.round(elapsedMs)}ms\n`,
+        );
+      }
+    : undefined;
   if (options.logRequests) {
     // Opt-in, one line each to stderr. Only the method, the route pattern
     // (never request.url, which holds the query string), the status and the
@@ -155,16 +165,17 @@ export function createServer(
       const query = request.url.split("?").slice(1).join("?");
       let scrubbed = text.split(token).join("[REDACTED]");
       if (query) scrubbed = scrubbed.split(query).join("[query]");
-      return redact(scrubbed)
-        .replace(/(?:[A-Za-z]:)?(?:[\\/][\w.@~-]+){2,}/g, "[path]")
-        .replace(/\s+/g, " ")
-        .slice(0, 300);
+      return (
+        redact(scrubbed)
+          // A quoted path may hold spaces (Node's fs errors quote theirs).
+          .replace(/(['"`])[^'"`\n]*[\\/][^'"`\n]*\1/g, "[path]")
+          .replace(/(?:[A-Za-z]:)?(?:[\\/][\w.@~-]+){2,}/g, "[path]")
+          .replace(/\s+/g, " ")
+          .slice(0, 300)
+      );
     };
     app.addHook("onResponse", async (request, reply) => {
-      const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
-      process.stderr.write(
-        `${request.method} ${route ?? "(unmatched)"} ${reply.statusCode} ${Math.round(reply.elapsedTime)}ms\n`,
-      );
+      logRequest?.(request, reply.statusCode, reply.elapsedTime);
     });
     app.addHook("onError", async (request, _reply, error) => {
       if (clientErrorStatus(error) !== undefined) return;
@@ -495,7 +506,10 @@ export function createServer(
       reply.raw.end();
     };
     eventStreams.add(end);
-    reply.raw.on("close", stop);
+    reply.raw.on("close", () => {
+      stop();
+      logRequest?.(request, 200, reply.elapsedTime);
+    });
     if (closing) end();
   });
   // An installed package serves the copy packed into it, never files from a
