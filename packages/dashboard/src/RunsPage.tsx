@@ -127,9 +127,15 @@ export function RunsPage({
 }) {
   const runs = useResource<RunRecord[]>(api, active ? "/api/runs" : null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const detail = useResource<{ run: RunRecord; events: RunEvent[] }>(
+  const detail = useResource<{
+    run: RunRecord;
+    events: RunEvent[];
+    nextAfter?: number;
+  }>(
     api,
-    active && selectedId ? `/api/runs/${encodeURIComponent(selectedId)}` : null,
+    active && selectedId
+      ? `/api/runs/${encodeURIComponent(selectedId)}?limit=5000`
+      : null,
   );
   const [creating, setCreating] = useState(false);
   const [objective, setObjective] = useState("");
@@ -603,7 +609,16 @@ export function RunsPage({
                 )}
               </div>
               {detail.data?.events.length ? (
-                <RunTimeline events={detail.data.events} />
+                <>
+                  <RunTimeline events={detail.data.events} />
+                  {detail.data.nextAfter !== undefined && (
+                    <p className="inline-hint">
+                      Showing the first {detail.data.events.length} events of
+                      this run. Later events are available from the API with
+                      ?after={detail.data.nextAfter}.
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="inline-hint">
                   No events have been recorded for this run.
