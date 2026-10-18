@@ -1,6 +1,8 @@
 # Explicitly provision the verified binary into the rust_tool build context.
 # This build performs no downloads. Runtime has no Cargo/rustc on PATH.
 FROM graph-engineering-verify:local
+# The base image ends as the non-root node user; build as root, then drop.
+USER root
 COPY --from=rust_tool /rust-analyzer /opt/graph-rust/rust-analyzer
 WORKDIR /opt/graph-deps
 COPY tsconfig.base.json ./

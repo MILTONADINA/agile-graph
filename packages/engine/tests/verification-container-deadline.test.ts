@@ -230,8 +230,9 @@ describe("built-in verification container deadlines", () => {
       stdout: "",
       stderr: "",
     }));
-    const saved = process.getuid;
+    const saved = { getuid: process.getuid, getgid: process.getgid };
     process.getuid = () => 0;
+    process.getgid = () => 0;
     try {
       await expect(
         verifyInContainer(
@@ -242,7 +243,8 @@ describe("built-in verification container deadlines", () => {
         ),
       ).rejects.toThrow(/must not run as root/);
     } finally {
-      process.getuid = saved;
+      process.getuid = saved.getuid;
+      process.getgid = saved.getgid;
     }
     expect(state.commands.filter((e) => e.argv[0] === "run")).toHaveLength(0);
     await state.assertRemoved();

@@ -1,4 +1,6 @@
 FROM graph-engineering-verify:local
+# The base image ends as the non-root node user; build as root, then drop.
+USER root
 COPY --from=mcr.microsoft.com/dotnet/sdk@sha256:78235e09001f52b6592c458ac010775ebac6725422e80cd0c1650590f67b2743 /usr/share/dotnet/ /usr/share/dotnet/
 WORKDIR /opt/graph-deps
 COPY tsconfig.base.json ./
