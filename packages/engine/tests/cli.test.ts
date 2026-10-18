@@ -1289,7 +1289,7 @@ describe("command line", () => {
     directories.push(stubs);
     const secret = "sk-" + "a".repeat(40);
     const leaked = `/Users/some one/private/${secret}/file.txt password=hunter2 \u001b[2E`;
-    const hook = (stub: string, from: string, file: string) =>
+    const hook = (stub: string, from: string) =>
       [
         'import { registerHooks } from "node:module";',
         "registerHooks({",
@@ -1321,7 +1321,7 @@ describe("command line", () => {
         ["server", "./server.js"],
       ] as const) {
         const register = path.join(stubs, `register-${kind}-${how}.mjs`);
-        await writeFile(register, hook(`${kind}-${how}.mjs`, from, register));
+        await writeFile(register, hook(`${kind}-${how}.mjs`, from));
         preloads[`${kind}-${how}`] = register;
       }
     }
