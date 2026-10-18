@@ -49,6 +49,10 @@ A team lead wants to open one page and see what the graph is doing, what is done
   - Test: packages/engine/tests/server-hardening.test.ts :: keeps 500 generic for syntax, system-code and 5xx errors and 400 for a plain engine refusal
 - AC14: An event stream is sent `Cache-Control: no-store` and `X-Accel-Buffering: no` and its headers are flushed at once; no more than 16 streams are open at a time, and a further request is refused with 503 and `Retry-After`; open streams end when the server closes.
   - Test: packages/engine/tests/server-hardening.test.ts :: marks event streams uncacheable and unbuffered, caps them with 503, and ends them on shutdown
+- AC15: By default the dashboard server writes no request or error log. With `serve --log-requests` it writes one line per request to stderr (method, route pattern, status, duration in ms) and one line per 5xx error (error name and redacted message). It never logs the query string, headers, body, token, cookies or file paths: the route is the matched pattern, and an unmatched request is logged as `(unmatched)`.
+  - Test: packages/engine/tests/server-hardening.test.ts :: writes nothing by default
+  - Test: packages/engine/tests/server-hardening.test.ts :: logs the route pattern, status and duration, not the query
+  - Test: packages/engine/tests/server-hardening.test.ts :: logs a 5xx error with a redacted message
 
 ## Security considerations
 
