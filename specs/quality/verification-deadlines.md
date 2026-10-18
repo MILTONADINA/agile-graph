@@ -56,6 +56,8 @@ malformed question was refused, then corrected; Jev was not called.
   - Test: packages/engine/tests/verification-container-deadline.test.ts :: runs the container as a non-root user when $label
   - Test: packages/engine/tests/verification-container-deadline.test.ts :: refuses to run a verification container as root when the host user is root
   - Test: packages/engine/tests/verification-container-deadline.test.ts :: runs a non-root host user whose primary group is 0
+- AC7: The verification image pins its base image by an immutable digest (`FROM node:24-bookworm@sha256:...`, tag kept for readability), and every registry `FROM` in `infra/*.Dockerfile` and `packages/engine/tests/fixtures/*/Dockerfile` carries `@sha256:`.
+  - Test: scripts/verification-setup.test.mjs :: every registry base image is pinned by digest
 
 ## Security considerations
 
