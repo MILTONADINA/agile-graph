@@ -1,6 +1,6 @@
 {
   "name": "@agile-graph/contracts",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Versioned schemas shared by the Agile Graph engine: project policy, context, execution plans, runs and decisions.",
   "keywords": [
     "agile-graph",
