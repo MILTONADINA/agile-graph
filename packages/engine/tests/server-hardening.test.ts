@@ -102,11 +102,21 @@ describe("dashboard server hardening", () => {
   });
 
   it("answers 413 for an oversized body and 415 for a wrong content type", async () => {
-    const { address } = await listen();
-    const tooLarge = await fetch(`${address}/api/context`, {
+    const { app, address } = await listen();
+    // Injected, not sent over a socket: the server answers 413 and closes the
+    // connection while a real client is still writing the body, which some
+    // platforms report to the client as ECONNRESET instead of the response.
+    const injected = await app.inject({
       method: "POST",
+      url: "/api/context",
       headers: { ...auth, "content-type": "application/json" },
-      body: JSON.stringify({ query: "x".repeat(1_100_000) }),
+      payload: JSON.stringify({ query: "x".repeat(1_100_000) }),
+    });
+    const tooLarge = new Response(null, {
+      status: injected.statusCode,
+      headers: Object.entries(injected.headers).map(
+        ([name, value]) => [name, String(value)] as [string, string],
+      ),
     });
     expect(tooLarge.status).toBe(413);
     expectSecurityHeaders(tooLarge, "413");
