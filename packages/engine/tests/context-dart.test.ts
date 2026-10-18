@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +10,13 @@ import {
   type CodeSymbol,
   type GraphEdge,
 } from "@agile-graph/contracts";
+// Syntax-level indexing only: a graph-dart-analyzer image on this machine (CI
+// builds one for tests/context-dart-runtime.test.ts) would replace the
+// heuristic edges this file checks with compiler-resolved ones.
+vi.mock("../src/context/dart.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/context/dart.js")>()),
+  dartRuntime: async () => null,
+}));
 import { ContextEngine } from "../src/context/index.js";
 import { parseFile } from "../src/context/parser.js";
 
