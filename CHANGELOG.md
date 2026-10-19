@@ -11,7 +11,7 @@
   The private data folder is now `agile-graph` in the per-user data
   directory; an existing `graph-engineering` folder is still used when it is
   the only one, and nothing is moved. `npm run verify:image` builds
-  `agile-graph-verify:local`, live-scan containers are labelled
+  `agile-graph-verify:local` (the old tag is still applied too), live-scan containers are labelled
   `agile-graph.live-scan`, SARIF reports name the tool `agile-graph`, and the
   default key backup file is `agile-graph-keys.backup.json`. The dashboard
   moves a token stored under the old session key. Signature domains, record
