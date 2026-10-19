@@ -115,7 +115,7 @@ export function engineDataRoot(
   env: NodeJS.ProcessEnv = process.env,
   exists?: (dir: string) => boolean,
 ): string {
-  if (env.GRAPH_ENGINE_DATA_DIR) return env.GRAPH_ENGINE_DATA_DIR;
+  if (env.GRAPH_ENGINE_DATA_DIR !== undefined) return env.GRAPH_ENGINE_DATA_DIR;
   return pickDataDir(
     envPaths(DATA_DIR_NAME, { suffix: "" }).data,
     envPaths(LEGACY_DATA_DIR_NAME, { suffix: "" }).data,

@@ -32,7 +32,6 @@ const present =
 describe("engineDataRoot", () => {
   it("uses the agile-graph folder for a new install", () => {
     expect(engineDataRoot({}, present())).toBe(current);
-    vi.stubEnv("GRAPH_ENGINE_DATA_DIR", "");
     expect(path.basename(projectDataDir("project-aaaa"))).toBe("project-aaaa");
   });
 
