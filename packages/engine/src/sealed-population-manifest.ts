@@ -167,6 +167,7 @@ const rank = (
   identity: string,
 ) =>
   hashJson({
+    // Stable identifier from before the Agile Graph rename; do not change.
     domain: `graph-engineering/sealed-declared-inventory-selection/${stage}/v2`,
     seed,
     identity,

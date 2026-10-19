@@ -155,7 +155,7 @@ export const SECURITY_TOOLS: readonly SecurityTool[] = [
   {
     // Built in: runs in-process, with no container.
     id: "agent-config",
-    name: "Graph Engineering agent configuration review",
+    name: "Agile Graph agent configuration review",
     category: "agent-configuration",
     mode: "offline",
     license: "open-source",

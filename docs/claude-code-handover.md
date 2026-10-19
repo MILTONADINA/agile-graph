@@ -1571,7 +1571,7 @@ model. In particular:
   clone has none of these private assets. Never print, paste, stage, or commit
   provider keys, tokens, private memory, or raw sealed evidence.
 - Serena's registered Cursor project name is `GRAPH ENGINEERING`. It is
-  **separate** from the project's `graph-engineering` MCP server and is shared
+  **separate** from the project's `agile-graph` MCP server and is shared
   with other sessions/projects. Do not reconfigure or deactivate Serena or
   global client servers. `.cursorignore` is defense in depth, not a guarantee
   that a cloud client's terminal, open files, or native indexing cannot see

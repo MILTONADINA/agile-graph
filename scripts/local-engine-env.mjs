@@ -2,7 +2,7 @@
 // graph:local wrapper. Without --with-jev every one of them is removed.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import envPaths from "env-paths";
+import { engineDataDirFromEnvPaths } from "./data-dir.mjs";
 
 /** Built-in names the engine and TypeSafe clients read a Jev key from. */
 export const builtInJevKeyEnvNames = Object.freeze([
@@ -42,9 +42,7 @@ export async function jevKeyEnvNames(root, env = process.env) {
   const projectId = project?.projectId;
   if (typeof projectId !== "string" || !/^[a-zA-Z0-9_-]{8,80}$/.test(projectId))
     throw new Error("Project config has an invalid projectId");
-  const base =
-    env.GRAPH_ENGINE_DATA_DIR ??
-    envPaths("graph-engineering", { suffix: "" }).data;
+  const base = env.GRAPH_ENGINE_DATA_DIR ?? engineDataDirFromEnvPaths();
   const providers = await readOptionalJson(
     path.join(base, "projects", projectId, "decisions.json"),
     "Decision provider config",

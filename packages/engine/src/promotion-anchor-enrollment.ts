@@ -214,6 +214,7 @@ export function buildPromotionTrustAnchor(input: {
   const { keys } = input;
   const anchor = promotionTrustAnchorSchema.parse({
     version: "1.1.0",
+    // Stable identifier from before the Agile Graph rename; do not change.
     kind: "graph-engineering-promotion-trust-anchor",
     enrolledProjects: input.projects.map((project) => ({
       projectId: project.projectId,
@@ -566,6 +567,7 @@ export async function verifyInstalledPromotionTrustAnchor(options: {
 const enrollmentSchema = z
   .object({
     version: z.literal(1),
+    // Stable identifier from before the Agile Graph rename; do not change.
     kind: z.literal("graph-engineering-promotion-enrollment"),
     anchorSha256: digestSchema,
     witness: z

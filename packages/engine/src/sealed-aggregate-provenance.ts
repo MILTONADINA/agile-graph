@@ -2472,7 +2472,7 @@ function evaluationModule(name: string): string {
   const checkout = sourceCheckoutRoot();
   if (!checkout)
     throw new Error(
-      "Checking call-bound evidence needs a Agile Graph source checkout; an installed package does not include the evaluation harness",
+      "Checking call-bound evidence needs an Agile Graph source checkout; an installed package does not include the evaluation harness",
     );
   return pathToFileURL(
     path.join(checkout, "evaluation", "sealed", "worker-runtime", name),
@@ -3427,6 +3427,7 @@ async function inspectAggregateWithOriginalEvidence(
       !verify(
         null,
         Buffer.from(
+          // Stable identifier from before the Agile Graph rename; do not change.
           `graph-engineering/sealed-aggregate-provenance/v1\n${canonicalJson(envelope)}`,
         ),
         key.publicKey,

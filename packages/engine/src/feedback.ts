@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import envPaths from "env-paths";
+import { engineDataRoot } from "./project.js";
 import { containsSecret } from "./policy.js";
 
 /** Fixed public destination for automatic and separately reviewed reports. */
@@ -257,11 +257,7 @@ export interface DifficultyLog {
 
 /** The private, per-person log directory, outside any repository. */
 export function feedbackDir(): string {
-  return path.join(
-    process.env.GRAPH_ENGINE_DATA_DIR ??
-      envPaths("graph-engineering", { suffix: "" }).data,
-    "feedback",
-  );
+  return path.join(engineDataRoot(), "feedback");
 }
 
 export async function readDifficulties(

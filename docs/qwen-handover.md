@@ -90,7 +90,7 @@ Use it for every merge. It's written for PR 144; for another PR, replace 144 wit
 3. Count unresolved review threads; this must print 0:
 
    ```
-   gh api graphql -f query='{repository(owner:"MILTONADINA",name:"graph-engineering"){pullRequest(number:144){reviewThreads(first:50){nodes{isResolved}}}}}' -q '[.data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved|not)]|length'
+   gh api graphql -f query='{repository(owner:"MILTONADINA",name:"agile-graph"){pullRequest(number:144){reviewThreads(first:50){nodes{isResolved}}}}}' -q '[.data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved|not)]|length'
    ```
 
 4. Merge only when all of these hold:

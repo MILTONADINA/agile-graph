@@ -21,7 +21,7 @@ npm run label                              # every time after that
 ```
 
 It opens the newest `packet-<stamp>.json` in the labelling directory
-(`~/Library/Application Support/graph-engineering/labelling/` on macOS) and
+(`~/Library/Application Support/agile-graph/labelling/` on macOS) and
 reads this project's recorded runs for context. Use an actor ID, never an
 email address; it is saved with your progress. `--packet <file>` picks
 another packet, `--export` writes the export and exits, and `--help` lists
@@ -142,7 +142,7 @@ per arm, then collect the pair:
 ```sh
 npm run collect-paired -- --list
 npm run collect-paired -- --pair BASELINE_RUN:CANDIDATE_RUN [--pair ...]
-npm run label -- --packet ~/Library/Application\ Support/graph-engineering/labelling/packet-<stamp>.json
+npm run label -- --packet ~/Library/Application\ Support/agile-graph/labelling/packet-<stamp>.json
 ```
 
 `--list` groups finished runs by task. Both runs of a pair must be finished

@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "graph-engineering": {
+    "agile-graph": {
       "type": "stdio",
       "command": "node",
       "args": [

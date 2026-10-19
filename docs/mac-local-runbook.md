@@ -136,7 +136,7 @@ lexical retrieval for bounded cold latency.
 Request `retrieval: "hybrid"` explicitly when the local embedding index is
 prepared and semantic recall is needed.
 Cursor has activated Serena in this workspace under the registered project
-name `GRAPH ENGINEERING`. Serena is separate from the `graph-engineering`
+name `GRAPH ENGINEERING`. Serena is separate from the `agile-graph`
 project MCP server. Its ignored project-only
 `.cursor/mcp.json` now uses explicit `type: "stdio"`, an absolute local Node
 executable, and Cursor's `${workspaceFolder}` interpolation. The exact

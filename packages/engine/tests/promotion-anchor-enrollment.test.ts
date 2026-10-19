@@ -140,7 +140,7 @@ const refusalOf = async (run: () => unknown): Promise<string> => {
 
 /** Point the user data dir at a temporary base. */
 async function temporaryUserDataDir(): Promise<string> {
-  const base = path.join(await temporary("anchor-data"), "graph-engineering");
+  const base = path.join(await temporary("anchor-data"), "agile-graph");
   vi.spyOn(localPaths, "promotionUserDataDir").mockReturnValue(base);
   return base;
 }

@@ -192,6 +192,7 @@ export function verifyOriginalReviewSignatures(
       !verify(
         null,
         Buffer.from(
+          // Stable identifier from before the Agile Graph rename; do not change.
           `graph-engineering/calibration-review/v1\n${canonical(envelope)}`,
         ),
         key.publicKey,

@@ -228,7 +228,7 @@ each upload's proof bundle, and would need an adapter for tile proofs.
 
 The high-water mark is `<stateDir>/<logId>.json`. By default `stateDir` is
 under the per-user data directory that the promotion-key tool uses:
-`~/Library/Application Support/graph-engineering/rekor-witness/` on macOS,
+`~/Library/Application Support/agile-graph/rekor-witness/` on macOS,
 and `$XDG_DATA_HOME` or `~/.local/share` elsewhere. The file discipline
 matches `scripts/promotion-key.mjs`:
 

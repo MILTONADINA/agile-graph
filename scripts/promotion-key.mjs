@@ -21,6 +21,7 @@ import {
 import {
   closeSync,
   constants,
+  existsSync,
   fchmodSync,
   fstatSync,
   fsyncSync,
@@ -34,8 +35,10 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { userDataDir } from "./data-dir.mjs";
 
 export const ROLES = Object.freeze(["approver", "issuer", "labeler"]);
+// Stable identifier from before the Agile Graph rename; do not change.
 export const KEY_FORMAT = "graph-engineering.promotion-key";
 export const BACKUP_FORMAT = "graph-engineering.promotion-key-backup";
 export const BACKUP_SET_FORMAT = "graph-engineering.promotion-key-backup-set";
@@ -100,25 +103,14 @@ export function defaultKeyDir(
   platform = process.platform,
   env = process.env,
   home = os.homedir(),
+  exists = existsSync,
 ) {
-  if (platform === "darwin")
-    return path.join(
-      home,
-      "Library",
-      "Application Support",
-      "graph-engineering",
-      "promotion-keys",
-    );
-  const data =
-    env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME)
-      ? env.XDG_DATA_HOME
-      : path.join(home, ".local", "share");
-  return path.join(data, "graph-engineering", "promotion-keys");
+  return path.join(userDataDir(platform, env, home, exists), "promotion-keys");
 }
 
 /** Where `setup` writes the combined backup unless given a path. */
 export function defaultBackupPath(home = os.homedir()) {
-  return path.join(home, "graph-engineering-keys.backup.json");
+  return path.join(home, "agile-graph-keys.backup.json");
 }
 
 // Windows has no POSIX mode bits or uids; only the symlink check applies.

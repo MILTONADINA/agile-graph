@@ -59,6 +59,10 @@ A team lead wants to open one page and see what the graph is doing, what is done
   - Test: packages/engine/tests/server-hardening.test.ts :: logs a 5xx error with a redacted message
   - Test: packages/engine/tests/server-hardening.test.ts :: redacts a quoted path that contains spaces
   - Test: packages/engine/tests/server-hardening.test.ts :: logs an event stream when it closes
+- AC16: When the dashboard loads with a token in session storage under the pre-rename key `graph-engineering-token` and none under `agile-graph-token`, it shall use that token, store it under `agile-graph-token` and remove the old key; a token in the URL fragment shall be stored under the new key and the old key removed.
+  - Test: packages/dashboard/src/api.test.ts :: moves a token stored under the pre-rename key to the new key once
+  - Test: packages/dashboard/src/api.test.ts :: prefers the new key over a leftover pre-rename key and returns nothing when neither is set
+  - Test: packages/dashboard/src/api.test.ts :: moves a token into session storage and clears it from the address bar
 
 ## Security considerations
 

@@ -13,6 +13,11 @@ import {
   type ProjectPolicy,
   type ProviderConfig,
 } from "@agile-graph/contracts";
+import {
+  DATA_DIR_NAME,
+  LEGACY_DATA_DIR_NAME,
+  pickDataDir,
+} from "./promotion-local-paths.js";
 import { id, readJson, writeJson } from "./util.js";
 
 export const PROJECT_FILE = ".graph/project.json";
@@ -101,15 +106,26 @@ export async function initializeProject(
   await writeJson(path.join(absolute, PROJECT_FILE), config);
   return config;
 }
+/**
+ * The engine's private data root: GRAPH_ENGINE_DATA_DIR when set, else the
+ * per-user `agile-graph` folder, or the legacy `graph-engineering` folder when
+ * only that exists. Nothing is moved or deleted.
+ */
+export function engineDataRoot(
+  env: NodeJS.ProcessEnv = process.env,
+  exists?: (dir: string) => boolean,
+): string {
+  if (env.GRAPH_ENGINE_DATA_DIR) return env.GRAPH_ENGINE_DATA_DIR;
+  return pickDataDir(
+    envPaths(DATA_DIR_NAME, { suffix: "" }).data,
+    envPaths(LEGACY_DATA_DIR_NAME, { suffix: "" }).data,
+    exists,
+  );
+}
 export function projectDataDir(projectId: string): string {
   if (!/^[a-zA-Z0-9_-]{8,80}$/.test(projectId))
     throw new Error("Invalid project ID");
-  return path.join(
-    process.env.GRAPH_ENGINE_DATA_DIR ??
-      envPaths("graph-engineering", { suffix: "" }).data,
-    "projects",
-    projectId,
-  );
+  return path.join(engineDataRoot(), "projects", projectId);
 }
 const providerSchema = z
   .object({

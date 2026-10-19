@@ -10,7 +10,7 @@ Limits: 64 C# files plus 32 metadata files; 4 MiB source; 16 MiB input; 100,000 
 
 ## Reproduce
 
-Preprovision `graph-engineering-verify:local` and this exact SDK image. The fixture does not install host .NET or evaluate target code:
+Preprovision `agile-graph-verify:local` and this exact SDK image. The fixture does not install host .NET or evaluate target code:
 
 ```sh
 docker pull mcr.microsoft.com/dotnet/sdk@sha256:78235e09001f52b6592c458ac010775ebac6725422e80cd0c1650590f67b2743

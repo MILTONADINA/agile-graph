@@ -100,8 +100,8 @@ with the template kit on 2026-10-11, leaving Juice Shop.
   (`--network none`, with the probe and ZAP on `--network container:<target>`)
   instead, where the same probe reports ENETUNREACH for the bridge gateway,
   the address the internal network's gateway had, and 1.1.1.1. Every container carries the
-  labels `graph-engineering.live-scan=1` and
-  `graph-engineering.live-scan.id=<scan id>`; cleanup removes whatever
+  labels `agile-graph.live-scan=1` and
+  `agile-graph.live-scan.id=<scan id>`; cleanup removes whatever
   carries the scan's ID and checks nothing is left. There is no network to
   label or remove. Ctrl-C, SIGTERM and SIGHUP (sent when the terminal
   closes) all cancel the scan, and repeated signals are ignored until cleanup

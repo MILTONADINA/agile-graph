@@ -176,7 +176,7 @@ const toolHashesByServer = new WeakMap<McpServer, Record<string, string>>();
 /** The definition hash of every tool a server created here exposes. */
 export function mcpToolHashes(server: McpServer): Record<string, string> {
   const hashes = toolHashesByServer.get(server);
-  if (!hashes) throw new Error("Not a Graph Engineering MCP server");
+  if (!hashes) throw new Error("Not an Agile Graph MCP server");
   return Object.fromEntries(
     Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)),
   );
@@ -229,7 +229,7 @@ export function createMcpServer(
   options: McpServerOptions,
 ) {
   const server = new McpServer(
-    { name: "graph-engineering", version: ENGINE_VERSION },
+    { name: "agile-graph", version: ENGINE_VERSION },
     {
       instructions:
         options.client === "cloud"

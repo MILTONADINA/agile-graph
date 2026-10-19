@@ -1,4 +1,6 @@
-const TOKEN_KEY = "graph-engineering-token";
+const TOKEN_KEY = "agile-graph-token";
+// Stable identifier from before the Agile Graph rename; do not change.
+const LEGACY_TOKEN_KEY = "graph-engineering-token";
 
 export class ApiError extends Error {
   constructor(
@@ -15,15 +17,27 @@ export function tokenFromHash(hash: string): string | null {
   return token?.trim() || null;
 }
 
+/** The stored token; a token under the pre-rename key moves to the new key once. */
+function storedToken(): string {
+  const current = sessionStorage.getItem(TOKEN_KEY);
+  if (current) return current;
+  const legacy = sessionStorage.getItem(LEGACY_TOKEN_KEY);
+  if (!legacy) return "";
+  sessionStorage.setItem(TOKEN_KEY, legacy);
+  sessionStorage.removeItem(LEGACY_TOKEN_KEY);
+  return legacy;
+}
+
 export function captureToken(): string {
   const incoming = tokenFromHash(window.location.hash);
   if (incoming) {
     sessionStorage.setItem(TOKEN_KEY, incoming);
+    sessionStorage.removeItem(LEGACY_TOKEN_KEY);
     const clean = new URL(window.location.href);
     clean.hash = "";
     window.history.replaceState(null, "", clean.pathname + clean.search);
   }
-  return incoming ?? sessionStorage.getItem(TOKEN_KEY) ?? "";
+  return incoming ?? storedToken();
 }
 
 export function createApi(token: string, request: typeof fetch = fetch) {

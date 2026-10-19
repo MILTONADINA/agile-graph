@@ -14,6 +14,7 @@ import { digestSchema, hashJson } from "./sealed-collection-schema.js";
 import { hash } from "./util.js";
 
 /** Version tag of the decision implementation bound into every route. */
+// Stable identifier from before the Agile Graph rename; do not change.
 export const DECISION_IMPLEMENTATION_VERSION =
   "graph-engineering/decision-batch/v1";
 const name = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);

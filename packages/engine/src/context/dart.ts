@@ -116,6 +116,7 @@ export function validDartImage(image: unknown): image is ImageInspect {
     /^sha256:[a-f0-9]{64}$/.test(inspected.Id) &&
     inspected.Os === "linux" &&
     inspected.Architecture === "amd64" &&
+    // Stable identifier from before the Agile Graph rename; do not change.
     labels?.["org.graph-engineering.dart.source"] === DART_SOURCE_IMAGE &&
     labels?.["org.graph-engineering.dart.sdk"] === "3.13.3" &&
     labels?.["org.graph-engineering.dart.seccomp-sha256"] ===

@@ -182,7 +182,7 @@ test("built mcp --client cloud refuses a stale dist", async () => {
 test("built mcp --client local warns about a stale dist and still serves", async () => {
   const result = await runMcp(stale, ["--client", "local"]);
   assert.equal(result.timedOut, false, result.stderr);
-  assert.equal(result.response?.result?.serverInfo?.name, "graph-engineering");
+  assert.equal(result.response?.result?.serverInfo?.name, "agile-graph");
   assert.match(result.stderr, new RegExp(`^warning: ${STALE}`, "m"));
 });
 
@@ -198,6 +198,6 @@ test("built non-MCP commands warn about a stale dist and still run", async () =>
 test("built mcp starts as a cloud server from an unmodified dist", async () => {
   const result = await runMcp(fresh, []);
   assert.equal(result.timedOut, false, result.stderr);
-  assert.equal(result.response?.result?.serverInfo?.name, "graph-engineering");
+  assert.equal(result.response?.result?.serverInfo?.name, "agile-graph");
   assert.doesNotMatch(result.stderr, /stale/);
 });

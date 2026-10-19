@@ -25,7 +25,7 @@ export const ENGINE_VERSION = (() => {
 })();
 
 /**
- * The repository root when the engine runs from a Agile Graph source
+ * The repository root when the engine runs from an Agile Graph source
  * checkout, or null when it runs as an installed package. Paths outside the
  * package are only ever resolved against a checkout: next to an installed
  * package, a relative path would reach into whatever else is installed.

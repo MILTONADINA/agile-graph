@@ -21,6 +21,7 @@ import {
   hashJson,
 } from "./sealed-collection-schema.js";
 
+// Stable identifier from before the Agile Graph rename; do not change.
 export const SIGNED_WORKER_DELIVERY_DOMAIN =
   "graph-engineering/sealed-worker-delivery/v1\n";
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);

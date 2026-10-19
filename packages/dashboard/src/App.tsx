@@ -197,7 +197,7 @@ export function App() {
           )}
         </main>
         <footer className="main-footer">
-          <span>GRAPH ENGINEERING</span>
+          <span>AGILE GRAPH</span>
           <span>Built around your code. Grounded in evidence.</span>
         </footer>
       </div>
