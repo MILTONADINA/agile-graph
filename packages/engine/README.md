@@ -65,9 +65,9 @@ docker build -t graph-security:local "$(npm root --global)/@agile-graph/engine/s
 ## Data and privacy
 
 Each project's databases, runs and workspaces are stored in your per-user
-data directory (`~/Library/Application Support/graph-engineering` on macOS,
-`~/.local/share/graph-engineering` on Linux, `%LOCALAPPDATA%\graph-engineering\Data`
-on Windows), never in the package. Nothing leaves your machine unless a
+data directory (`~/Library/Application Support/agile-graph` on macOS,
+`~/.local/share/agile-graph` on Linux, `%LOCALAPPDATA%\agile-graph\Data`
+on Windows), never in the package (an older `graph-engineering` folder is still used when it is the only one). Nothing leaves your machine unless a
 project policy you write allows it.
 
 Automatic difficulty reports are on by default but only send when a

@@ -113,7 +113,7 @@ export function toSarif(
       {
         tool: {
           driver: {
-            name: "graph-engineering",
+            name: "agile-graph",
             version,
             informationUri: "https://github.com/MILTONADINA/agile-graph",
             rules,

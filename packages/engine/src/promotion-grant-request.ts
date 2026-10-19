@@ -8,6 +8,7 @@ import { z } from "zod";
 import { grantedPromotionRouteSchema } from "./promotion-route.js";
 import { digestSchema } from "./sealed-collection-schema.js";
 
+// Stable identifier from before the Agile Graph rename; do not change.
 export const PROMOTION_RUNTIME_GRANT_PURPOSE =
   "graph-engineering/promotion-runtime-grant/v1";
 /** Owner decision: the strict, key-order-sensitive `util.hash(policy)`. */

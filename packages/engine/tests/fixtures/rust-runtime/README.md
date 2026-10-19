@@ -12,7 +12,7 @@ checks its pinned archive SHA256, decompresses with a size bound, then checks
 the binary SHA256. It refuses to overwrite a binary. Nothing is installed
 globally or added to PATH; binaries/cache must not be committed.
 
-Preprovision `graph-engineering-verify:local`, then from the repository root:
+Preprovision `agile-graph-verify:local`, then from the repository root:
 
 ```sh
 RUST_FIXTURE_TOOLS=$(mktemp -d)

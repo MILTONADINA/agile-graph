@@ -11,6 +11,7 @@ import {
 } from "./sealed-collection-schema.js";
 import type { CurrentSealedWitnessReader } from "./sealed-governance-witness.js";
 
+// Stable identifier from before the Agile Graph rename; do not change.
 export const SIGNED_CURRENT_WITNESS_DOMAIN =
   "graph-engineering/sealed-governance-current-checkpoint/v1\n";
 const MAX_ENVELOPE_BYTES = 16_384;

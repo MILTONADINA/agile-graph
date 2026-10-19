@@ -26,7 +26,7 @@ is cached until process restart. Helper/version identity must be included in the
 snapshot cache identity by the caller.
 
 Run native tests with `npx vitest run packages/engine/tests/context-java.test.ts`.
-For offline Linux proof, preprovision `graph-engineering-verify:local` and the
+For offline Linux proof, preprovision `agile-graph-verify:local` and the
 digest-pinned Temurin image in `Dockerfile`, then run from repository root:
 
 ```sh

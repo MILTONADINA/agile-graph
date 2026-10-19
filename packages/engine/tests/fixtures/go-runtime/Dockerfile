@@ -1,5 +1,5 @@
-# Explicitly preprovision graph-engineering-verify:local before this offline build.
-FROM graph-engineering-verify:local
+# Explicitly preprovision agile-graph-verify:local before this offline build.
+FROM agile-graph-verify:local
 # The base image ends as the non-root node user; build as root, then drop.
 USER root
 ENV GRAPH_ENGINE_REQUIRE_GO_RUNTIME=1

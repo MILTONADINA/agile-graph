@@ -12,7 +12,7 @@ npm run promotion-key -- setup
    not echoed. If the two entries differ, or it is too short, you are asked
    again.
 2. It prints three public keys and their SHA-256 fingerprints (approver,
-   issuer, labeler), then `Move ~/graph-engineering-keys.backup.json off
+   issuer, labeler), then `Move ~/agile-graph-keys.backup.json off
 this laptop.`
 3. Copy that one file to storage that is not this laptop (for example a USB
    drive kept elsewhere), then delete it from the laptop.
@@ -35,9 +35,9 @@ nonce. They are plain Ed25519 keys, so the engine's verifiers accept them
 unchanged, and the printed fingerprint is the engine's (SHA-256 of the SPKI
 DER).
 
-Keys live in `~/Library/Application Support/graph-engineering/promotion-keys/`
+Keys live in `~/Library/Application Support/agile-graph/promotion-keys/`
 on macOS (`$XDG_DATA_HOME` or `~/.local/share`, then
-`graph-engineering/promotion-keys/`, elsewhere), or in the directory given
+`agile-graph/promotion-keys/`, elsewhere), or in the directory given
 with `--key-dir <dir>`: `<role>.key.json` (encrypted) and `<role>.pub.pem`
 for each role. The directory is mode 0700 and the files 0600; the helper
 refuses a key file or directory that is a symlink or that group or others
@@ -66,8 +66,8 @@ or canonical form a claim needs must already be in the file.
 ## Check and restore the backup
 
 ```sh
-npm run promotion-key -- verify-backup /Volumes/backup/graph-engineering-keys.backup.json
-npm run promotion-key -- restore-all /Volumes/backup/graph-engineering-keys.backup.json
+npm run promotion-key -- verify-backup /Volumes/backup/agile-graph-keys.backup.json
+npm run promotion-key -- restore-all /Volumes/backup/agile-graph-keys.backup.json
 ```
 
 `verify-backup` asks for the passphrase once, decrypts each key in memory,
@@ -88,7 +88,7 @@ npm run graph:local -- promotion anchor-prepare
 
 It reads only your `<role>.pub.pem` files (it refuses with `run npm run
 promotion-key -- setup first` if one is missing), writes
-`~/Library/Application Support/graph-engineering/promotion-trust-anchor.prepared.json`
+`~/Library/Application Support/agile-graph/promotion-trust-anchor.prepared.json`
 (or `--out <file>`; it never overwrites), and prints the anchor's SHA-256,
 your three key fingerprints and the commands to install it. Check the
 fingerprints against what `setup` printed, then run the printed commands
@@ -117,7 +117,7 @@ does not match the anchor you installed.
 
 `anchor-verify` prints `OK` or a refusal code. `enroll` records the
 anchor's witness and key fingerprints in
-`~/Library/Application Support/graph-engineering/promotion-enrollment/enrollment.json`
+`~/Library/Application Support/agile-graph/promotion-enrollment/enrollment.json`
 and makes one read-only request to `rekor.sigstore.dev` to set the log's
 first high-water mark. Running it again changes nothing; after a key
 change it refuses until you remove that file yourself. None of this

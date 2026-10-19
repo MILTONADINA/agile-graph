@@ -181,7 +181,7 @@ Create `.mcp.json` in the project root:
 ```json
 {
   "mcpServers": {
-    "graph-engineering": {
+    "agile-graph": {
       "type": "stdio",
       "command": "node",
       "args": [
@@ -206,7 +206,7 @@ Add a server table to `.codex/config.toml` in the project (or to your user
 Codex configuration):
 
 ```toml
-[mcp_servers.graph-engineering]
+[mcp_servers.agile-graph]
 command = "node"
 args = [
   "<path-to-repo>/packages/engine/dist/cli.js",

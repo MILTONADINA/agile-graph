@@ -295,7 +295,7 @@ The command, which has no MCP tool or dashboard action:
    from `ghcr.io/zaproxy/zaproxy` pinned by digest (ZAP 2.17.0), writing its
    JSON report to a private temporary directory;
 6. always removes every container labelled with the scan's ID
-   (`graph-engineering.live-scan.id`), found with `docker ps --filter`, so a
+   (`agile-graph.live-scan.id`), found with `docker ps --filter`, so a
    container whose `docker run` was cancelled before it returned is removed
    too; then checks nothing with that label is left, deletes the report
    directory, and names anything it could not remove. This happens when the

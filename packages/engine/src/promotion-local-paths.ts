@@ -5,27 +5,51 @@
 // Project data dirs are `<this>/projects/<id>`, and backups copy only named
 // files from a project data dir, so nothing here is ever backed up, restored
 // or indexed for an MCP client.
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-/** `~/Library/Application Support/graph-engineering` on macOS, XDG elsewhere. */
+export const DATA_DIR_NAME = "agile-graph";
+// Stable identifier from before the Agile Graph rename; do not change.
+export const LEGACY_DATA_DIR_NAME = "graph-engineering";
+
+/**
+ * The new data folder unless only the legacy one exists, so an install that
+ * predates the rename keeps its data. Nothing is moved, copied or deleted.
+ */
+export function pickDataDir(
+  current: string,
+  legacy: string,
+  exists: (dir: string) => boolean = existsSync,
+): string {
+  return exists(current) || !exists(legacy) ? current : legacy;
+}
+
+function userDataBase(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  home: string,
+): string {
+  if (platform === "darwin")
+    return path.join(home, "Library", "Application Support");
+  return env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME)
+    ? env.XDG_DATA_HOME
+    : path.join(home, ".local", "share");
+}
+
+/** `~/Library/Application Support/agile-graph` on macOS, XDG elsewhere (or the legacy `graph-engineering` folder when only that exists). */
 export function promotionUserDataDir(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
   home = os.homedir(),
+  exists: (dir: string) => boolean = existsSync,
 ): string {
-  if (platform === "darwin")
-    return path.join(
-      home,
-      "Library",
-      "Application Support",
-      "graph-engineering",
-    );
-  const data =
-    env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME)
-      ? env.XDG_DATA_HOME
-      : path.join(home, ".local", "share");
-  return path.join(data, "graph-engineering");
+  const base = userDataBase(platform, env, home);
+  return pickDataDir(
+    path.join(base, DATA_DIR_NAME),
+    path.join(base, LEGACY_DATA_DIR_NAME),
+    exists,
+  );
 }
 
 /** Where the owner's key tool keeps `<role>.pub.pem` unless told otherwise. */

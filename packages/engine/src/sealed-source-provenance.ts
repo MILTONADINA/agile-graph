@@ -13,6 +13,7 @@ import {
 } from "./sealed-collection-schema.js";
 import { sealedSourceInventorySchema } from "./sealed-population-manifest.js";
 
+// Stable identifier from before the Agile Graph rename; do not change.
 export const SIGNED_SOURCE_INVENTORY_DOMAIN =
   "graph-engineering/sealed-source-inventory/v1\n";
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);

@@ -481,6 +481,7 @@ export async function inspectSealedHeldOutReviewSignatures(
         !verify(
           null,
           Buffer.from(
+            // Stable identifier from before the Agile Graph rename; do not change.
             `graph-engineering/sealed-held-out-review/v1\n${canonicalJson(envelope)}`,
           ),
           createPublicKey(key.publicKeyPem),

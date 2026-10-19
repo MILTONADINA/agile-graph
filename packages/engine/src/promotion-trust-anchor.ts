@@ -19,6 +19,7 @@ import { digestSchema, parseBoundedJson } from "./sealed-collection-schema.js";
 
 /** Compiled anchor locations. Other platforms are refused. */
 export const PROMOTION_TRUST_ANCHOR_PATHS = Object.freeze({
+  // Stable identifier from before the Agile Graph rename; do not change.
   darwin:
     "/Library/Application Support/GraphEngineering/promotion-trust-anchor.json",
   linux: "/etc/graph-engineering/promotion-trust-anchor.json",
@@ -47,6 +48,7 @@ const keyPins = <K extends string>(actor: K) =>
     .min(1)
     .max(20);
 const anchorCommon = {
+  // Stable identifier from before the Agile Graph rename; do not change.
   kind: z.literal("graph-engineering-promotion-trust-anchor"),
   enrolledProjects: z
     .array(

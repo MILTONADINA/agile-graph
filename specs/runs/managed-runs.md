@@ -118,6 +118,14 @@ An operator wants a worker model to implement a planned change without touching 
   - Test: packages/engine/tests/operations.test.ts :: run-store migration preserves legacy rows and refuses a newer database
 - AC30: While a backup or restore inspects the run store, the system shall count `run_events` and `run_outcomes` rows whose run has no `runs` row and `plan_approvals` rows whose plan has no `plans` row, and shall report only those counts as a warning; orphans shall not fail the check and nothing shall be deleted. A clean store reports no warning.
   - Test: packages/engine/tests/operations.test.ts :: counts orphan rows as a warning and reports zero for a clean store
+- AC31: When `GRAPH_ENGINE_DATA_DIR` is unset, the system shall keep a project's private data (run store, feedback log) under the per-user `agile-graph` folder, and shall use the per-user `graph-engineering` folder from before the Agile Graph rename only while that is the only one of the two that exists; it shall never move, copy or delete either folder. The owner key, enrollment and Rekor state folders shall follow the same rule.
+  - Test: packages/engine/tests/data-root.test.ts :: uses the agile-graph folder for a new install
+  - Test: packages/engine/tests/data-root.test.ts :: keeps a legacy graph-engineering folder when only it exists
+  - Test: packages/engine/tests/data-root.test.ts :: prefers the agile-graph folder when both exist, and moves nothing
+  - Test: packages/engine/tests/data-root.test.ts :: applies the same fallback to the owner key, enrollment and Rekor paths
+  - Test: packages/engine/tests/data-root.test.ts :: keeps a legacy Rekor state folder when only the legacy data folder exists
+- AC32: Where `GRAPH_ENGINE_DATA_DIR` is set, the system shall use it as the data root whichever of the two per-user folders exists.
+  - Test: packages/engine/tests/data-root.test.ts :: lets GRAPH_ENGINE_DATA_DIR win over both folders
 
 ## Security considerations
 

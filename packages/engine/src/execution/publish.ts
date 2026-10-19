@@ -246,7 +246,7 @@ export async function publishRun(
   const bodyFile = path.join(path.dirname(run.workspace), `${run.id}-pr.md`);
   await writeFile(
     bodyFile,
-    `Implements: ${run.plan.objective}\n\nAcceptance criteria:\n${run.plan.acceptance.map((a) => `- ${a}`).join("\n")}\n\nAutomated verification completed for this run. Review the changes before merging.\n\nGraph Engineering run: ${run.id}\n`,
+    `Implements: ${run.plan.objective}\n\nAcceptance criteria:\n${run.plan.acceptance.map((a) => `- ${a}`).join("\n")}\n\nAutomated verification completed for this run. Review the changes before merging.\n\nAgile Graph run: ${run.id}\n`,
     { mode: 0o600 },
   );
   const pullRequest = await checked(

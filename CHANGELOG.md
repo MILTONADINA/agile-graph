@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Renamed Graph Engineering to Agile Graph. This ships in 0.3.0. Visible
+  changes: the MCP server now reports the name `agile-graph` (client
+  configurations and `mcp__graph-engineering__` tool permissions need the new
+  name, see `docs/platform.md`), and the dashboard header reads AGILE GRAPH.
+  The private data folder is now `agile-graph` in the per-user data
+  directory; an existing `graph-engineering` folder is still used when it is
+  the only one, and nothing is moved. `npm run verify:image` builds
+  `agile-graph-verify:local`, live-scan containers are labelled
+  `agile-graph.live-scan`, SARIF reports name the tool `agile-graph`, and the
+  default key backup file is `agile-graph-keys.backup.json`. The dashboard
+  moves a token stored under the old session key. Signature domains, record
+  kinds, the trust anchor location and the Dart image labels keep their old
+  spelling.
 - Run events are read a bounded page at a time. The event stream fetches only
   events after the last one it sent instead of re-reading the whole run every
   second, and `GET /api/runs/:id` returns at most `limit` events (default

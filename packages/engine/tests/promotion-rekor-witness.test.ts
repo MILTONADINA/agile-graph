@@ -1211,13 +1211,13 @@ describe("Rekor witness refusals", () => {
         "/Users/o",
         "Library",
         "Application Support",
-        "graph-engineering",
+        "agile-graph",
         "rekor-witness",
       ),
     );
     expect(
       defaultRekorStateDir("linux", { XDG_DATA_HOME: "/x" }, "/home/o"),
-    ).toBe(path.join("/x", "graph-engineering", "rekor-witness"));
+    ).toBe(path.join("/x", "agile-graph", "rekor-witness"));
     expect(
       ownerStatementSubjectDigest({ kind: "freeze", projectId, collectionId }),
     ).toBe(

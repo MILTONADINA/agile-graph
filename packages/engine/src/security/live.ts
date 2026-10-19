@@ -86,9 +86,9 @@ const RISKS = new Map<string, LiveRisk>([
 ]);
 
 /** On every container a live scan starts. */
-export const LIVE_SCAN_LABEL = "graph-engineering.live-scan";
+export const LIVE_SCAN_LABEL = "agile-graph.live-scan";
 /** Carries the scan's own ID, so cleanup finds what a cancelled call left. */
-export const LIVE_SCAN_ID_LABEL = "graph-engineering.live-scan.id";
+export const LIVE_SCAN_ID_LABEL = "agile-graph.live-scan.id";
 /** Engines before 26 forwarded DNS out of internal networks; defence in depth. */
 export const MIN_DOCKER_MAJOR = 26;
 const MAX_REPORT_BYTES = 20_000_000;

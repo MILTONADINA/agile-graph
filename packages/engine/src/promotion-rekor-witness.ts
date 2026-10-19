@@ -42,6 +42,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { promotionUserDataDir } from "./promotion-local-paths.js";
 import type {
   SignedCollectionCheckpoint,
   SignedGrantStatus,
@@ -95,6 +96,7 @@ const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);
 const positiveCount = z.number().int().positive().safe();
 
 /** The in-toto predicate type of every owner statement, version 1. */
+// Stable identifier from before the Agile Graph rename; do not change.
 export const OWNER_STATEMENT_PREDICATE_TYPE =
   "urn:graph-engineering:promotion-owner-statement:v1";
 /** Owner statements are DSSE payloads of this type, so Rekor indexes their subject. */
@@ -515,19 +517,7 @@ export function defaultRekorStateDir(
   env: NodeJS.ProcessEnv = process.env,
   home = os.homedir(),
 ): string {
-  if (platform === "darwin")
-    return path.join(
-      home,
-      "Library",
-      "Application Support",
-      "graph-engineering",
-      "rekor-witness",
-    );
-  const data =
-    env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME)
-      ? env.XDG_DATA_HOME
-      : path.join(home, ".local", "share");
-  return path.join(data, "graph-engineering", "rekor-witness");
+  return path.join(promotionUserDataDir(platform, env, home), "rekor-witness");
 }
 
 const posix = process.platform !== "win32";

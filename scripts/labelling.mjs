@@ -19,8 +19,9 @@ import {
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import envPaths from "env-paths";
+import { engineDataDirFromEnvPaths } from "./data-dir.mjs";
 
+// Stable identifier from before the Agile Graph rename; do not change.
 export const PROGRESS_FORMAT = "graph-engineering.labelling-progress";
 export const PAIRS_FORMAT = "graph-engineering.paired-runs";
 export const FORMAT_VERSION = 1;
@@ -189,10 +190,7 @@ export function writeNewFile(target, text) {
 
 /** The engine's data root: GRAPH_ENGINE_DATA_DIR or the per-user data dir. */
 export function dataRoot(env = process.env) {
-  return (
-    env.GRAPH_ENGINE_DATA_DIR ??
-    envPaths("graph-engineering", { suffix: "" }).data
-  );
+  return env.GRAPH_ENGINE_DATA_DIR ?? engineDataDirFromEnvPaths();
 }
 
 export const labellingDir = (env = process.env) =>

@@ -30,7 +30,7 @@ describe("SARIF export", () => {
     expect(log.$schema).toBe(SARIF_SCHEMA);
     expect(log.runs).toHaveLength(1);
     const run = log.runs[0]!;
-    expect(run.tool.driver.name).toBe("graph-engineering");
+    expect(run.tool.driver.name).toBe("agile-graph");
     expect(run.tool.driver.version).toBe("1.2.3");
     expect(run.tool.driver.rules.map((rule) => rule.id)).toEqual([
       "semgrep/js.eval",

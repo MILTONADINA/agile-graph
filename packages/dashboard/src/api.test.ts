@@ -13,6 +13,7 @@ describe("local dashboard API boundary", () => {
   it("moves a token into session storage and clears it from the address bar", () => {
     const replaceState = vi.fn();
     const setItem = vi.fn();
+    const removeItem = vi.fn();
     vi.stubGlobal("window", {
       location: {
         hash: "#token=new-secret",
@@ -22,13 +23,12 @@ describe("local dashboard API boundary", () => {
     });
     vi.stubGlobal("sessionStorage", {
       setItem,
+      removeItem,
       getItem: vi.fn().mockReturnValue("previous-secret"),
     });
     expect(captureToken()).toBe("new-secret");
-    expect(setItem).toHaveBeenCalledWith(
-      "graph-engineering-token",
-      "new-secret",
-    );
+    expect(setItem).toHaveBeenCalledWith("agile-graph-token", "new-secret");
+    expect(removeItem).toHaveBeenCalledWith("graph-engineering-token");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/?view=context");
   });
 
@@ -43,6 +43,42 @@ describe("local dashboard API boundary", () => {
     });
     expect(captureToken()).toBe("stored-secret");
     expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it("moves a token stored under the pre-rename key to the new key once", () => {
+    const store = new Map([["graph-engineering-token", "legacy-secret"]]);
+    vi.stubGlobal("window", {
+      location: { hash: "", href: "http://127.0.0.1:4317/" },
+      history: { replaceState: vi.fn() },
+    });
+    vi.stubGlobal("sessionStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: (key: string) => store.delete(key),
+    });
+    expect(captureToken()).toBe("legacy-secret");
+    expect(store.get("agile-graph-token")).toBe("legacy-secret");
+    expect(store.has("graph-engineering-token")).toBe(false);
+    expect(captureToken()).toBe("legacy-secret");
+  });
+
+  it("prefers the new key over a leftover pre-rename key and returns nothing when neither is set", () => {
+    const store = new Map([
+      ["agile-graph-token", "new-secret"],
+      ["graph-engineering-token", "old-secret"],
+    ]);
+    vi.stubGlobal("window", {
+      location: { hash: "", href: "http://127.0.0.1:4317/" },
+      history: { replaceState: vi.fn() },
+    });
+    vi.stubGlobal("sessionStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: (key: string) => store.delete(key),
+    });
+    expect(captureToken()).toBe("new-secret");
+    store.clear();
+    expect(captureToken()).toBe("");
   });
 
   it("sends authentication in headers and JSON bodies only to local API paths", async () => {

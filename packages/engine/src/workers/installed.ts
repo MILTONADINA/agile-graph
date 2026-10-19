@@ -503,7 +503,7 @@ async function inspect(
       result.supportsSubscription = true;
       result.mode = "restricted-read";
       result.limits.push(
-        "Restricted-read App Server worker: some internal tools can remain visible; execution permissions are enforced by Codex, not intercepted by Graph Engineering.",
+        "Restricted-read App Server worker: some internal tools can remain visible; execution permissions are enforced by Codex, not intercepted by Agile Graph.",
         "Output/context limits are observed after usage events; no exact provider token cap is available.",
       );
     } catch (error) {
@@ -841,7 +841,7 @@ async function invokeCodexWorker(
       selection.executable,
     ));
     await rpc.request("initialize", {
-      clientInfo: { name: "graph_engineering", version: ENGINE_VERSION },
+      clientInfo: { name: "agile_graph", version: ENGINE_VERSION },
       capabilities: { experimentalApi: true },
     });
     rpc.initialized();

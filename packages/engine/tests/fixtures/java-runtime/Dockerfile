@@ -1,5 +1,5 @@
 # Preprovision both images explicitly. Build and generated execution need no network.
-FROM graph-engineering-verify:local
+FROM agile-graph-verify:local
 # The base image ends as the non-root node user; build as root, then drop.
 USER root
 ENV GRAPH_ENGINE_REQUIRE_JAVA_RUNTIME=1

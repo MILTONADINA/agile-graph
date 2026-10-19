@@ -15,6 +15,7 @@ import {
   hashJson,
 } from "./sealed-collection-schema.js";
 
+// Stable identifier from before the Agile Graph rename; do not change.
 export const SIGNED_PROMOTION_APPROVAL_DOMAIN =
   "graph-engineering/promotion-approval/v1\n";
 const MAX_PIN_BYTES = 2_048;

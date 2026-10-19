@@ -195,7 +195,7 @@ test("every registry base image is pinned by digest", async () => {
       const [, image, alias] = m;
       const local =
         image === "scratch" ||
-        image === "graph-engineering-verify:local" ||
+        image === "agile-graph-verify:local" ||
         stages.has(image);
       if (alias) stages.add(alias);
       if (!local) {

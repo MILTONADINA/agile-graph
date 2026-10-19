@@ -86,6 +86,28 @@ function engineFingerprint(key) {
     .digest("hex");
 }
 
+test("promotion-key keeps using a legacy graph-engineering folder only when it alone exists", () => {
+  const legacy = path.join("/data", "graph-engineering");
+  const current = path.join("/data", "agile-graph");
+  const env = { XDG_DATA_HOME: "/data" };
+  const only =
+    (...dirs) =>
+    (dir) =>
+      dirs.includes(dir);
+  assert.equal(
+    defaultKeyDir("linux", env, "/home/o", only(legacy)),
+    path.join(legacy, "promotion-keys"),
+  );
+  assert.equal(
+    defaultKeyDir("linux", env, "/home/o", only(legacy, current)),
+    path.join(current, "promotion-keys"),
+  );
+  assert.equal(
+    defaultKeyDir("linux", env, "/home/o", only()),
+    path.join(current, "promotion-keys"),
+  );
+});
+
 test("promotion-key uses a per-user data directory by default", () => {
   assert.equal(
     defaultKeyDir("darwin", {}, "/Users/o"),
@@ -93,23 +115,17 @@ test("promotion-key uses a per-user data directory by default", () => {
       "/Users/o",
       "Library",
       "Application Support",
-      "graph-engineering",
+      "agile-graph",
       "promotion-keys",
     ),
   );
   assert.equal(
     defaultKeyDir("linux", { XDG_DATA_HOME: "/data" }, "/home/o"),
-    path.join("/data", "graph-engineering", "promotion-keys"),
+    path.join("/data", "agile-graph", "promotion-keys"),
   );
   assert.equal(
     defaultKeyDir("linux", { XDG_DATA_HOME: "relative" }, "/home/o"),
-    path.join(
-      "/home/o",
-      ".local",
-      "share",
-      "graph-engineering",
-      "promotion-keys",
-    ),
+    path.join("/home/o", ".local", "share", "agile-graph", "promotion-keys"),
   );
 });
 
@@ -438,7 +454,7 @@ test("promotion-key setup makes three distinct keys under one passphrase and one
   if (posix) assert.equal(statSync(out).mode & 0o777, 0o600);
   assert.equal(
     defaultBackupPath("/home/o"),
-    path.join("/home/o", "graph-engineering-keys.backup.json"),
+    path.join("/home/o", "agile-graph-keys.backup.json"),
   );
 
   // The backup bundles the stored key envelopes unchanged, each with its

@@ -306,6 +306,7 @@ export function buildRunProvenance(input: {
     : verifiedSnapshotHash
       ? [
           {
+            // Stable identifier from before the Agile Graph rename; do not change.
             name: "graph-engineering+workspace-snapshot",
             digest: { sha256: verifiedSnapshotHash },
           },
