@@ -5366,9 +5366,14 @@ export class GraphEngine {
   close(): Promise<void> {
     return (this.closing ??= (async () => {
       for (const { controller } of this.active.values()) controller.abort();
-      await Promise.all([...this.active.values()].map((a) => a.promise));
-      await this.context.close();
-      this.store.close();
+      await Promise.allSettled([...this.active.values()].map((a) => a.promise));
+      // Each handle is released even if an earlier one fails to close, so the
+      // data folder can be moved or removed once close() settles.
+      try {
+        await this.context.close();
+      } finally {
+        this.store.close();
+      }
     })());
   }
 }
