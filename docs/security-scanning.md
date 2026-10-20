@@ -504,6 +504,13 @@ native archive) and `protobufjs`. The allowlist is the set of packages with
 lockfile. When an update adds an install-script package, review it, then add it
 to every workflow's `npm rebuild` line.
 
+The platform job then runs `node scripts/license-allowlist.mjs`, which reads
+`package-lock.json` offline and exits 1 for any production (non-dev) package
+whose licence is missing or not in `scripts/license-allowlist.json` (each
+allowed identifier carries a one-line reason). An `A OR B` expression passes
+when one alternative is allowed; `AND` needs all. A new licence is added to
+the allowlist file in a reviewed change, never by loosening the script.
+
 To accept an npm update the owner has chosen:
 
 1. Apply it on a branch of its own (`npm install <package>@<version>` or the
