@@ -91,8 +91,10 @@ export function parseSpec(relativePath: string, text: string): Spec {
       .find((line) => line.startsWith("# "))
       ?.slice(2)
       .trim() ?? "";
-  const meta: Record<string, string> = {};
-  const sections: Record<string, string[]> = {};
+  // No prototype: a "## __proto__" heading must be a section like any other,
+  // not a write to the object's prototype that silently drops its body.
+  const meta: Record<string, string> = Object.create(null);
+  const sections: Record<string, string[]> = Object.create(null);
   let section: string | undefined;
   const fences = new Fences();
   for (const line of lines) {
