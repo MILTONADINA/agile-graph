@@ -58,14 +58,14 @@
     "prepack": "node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@fastify/static": "10.1.4",
     "@agile-graph/contracts": "0.2.0",
-    "@modelcontextprotocol/sdk": "1.31.0",
+    "@fastify/static": "10.1.6",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "better-sqlite3": "13.0.3",
     "commander": "^14.0.0",
     "env-paths": "^3.0.0",
-    "fastify": "5.12.5",
-    "ignore": "^7.0.5",
+    "fastify": "5.12.7",
+    "ignore": "^7.0.12",
     "picomatch": "^4.0.3",
     "sqlite-vec": "0.1.9",
     "tree-sitter-wasms": "0.1.13",
@@ -87,7 +87,7 @@
   },
   "devDependencies": {
     "@cursor/sdk": "1.0.32",
-    "@huggingface/transformers": "4.3.0",
+    "@huggingface/transformers": "4.3.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/picomatch": "^4.0.2"
   }

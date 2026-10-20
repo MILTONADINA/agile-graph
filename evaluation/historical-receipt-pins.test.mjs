@@ -73,7 +73,7 @@ test("checked-in cloud-graph replay pins match reviewed host source", async () =
   const receipt = JSON.parse(
     await readFile(
       new URL(
-        "isolated-cloud-graph-fixture-validation-2026-10-17.json",
+        "isolated-cloud-graph-fixture-validation-2026-10-19.json",
         import.meta.url,
       ),
       "utf8",
