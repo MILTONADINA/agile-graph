@@ -45,6 +45,10 @@
 
 ### Added
 
+- `npm run graph:local -- --with-jev` can read the Jev key from the macOS
+  login keychain: `jev-key-source.json` accepts
+  `{"format":"keychain","service":...,"account":...}`. It fails closed off
+  macOS or when the lookup fails, and errors name only the service.
 - `backup` and `restore` warn when the run store holds orphan rows
   (`run_events` or `run_outcomes` without a run, `plan_approvals` without a
   plan). Only counts are reported; nothing is deleted and the check still
