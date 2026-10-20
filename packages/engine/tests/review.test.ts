@@ -1,3 +1,4 @@
+import { unwrapUntrusted } from "../src/workers/untrusted.js";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import {
@@ -240,7 +241,9 @@ describe("review worker", () => {
     expect(result.usage).toMatchObject({ inputTokens: 12, outputTokens: 3 });
     expect(sent.messages[0].content).toBe(REVIEW_INSTRUCTIONS);
     expect(sent.response_format.json_schema.name).toBe("code_review");
-    expect(JSON.parse(sent.messages[1].content)).toMatchObject({
+    expect(
+      JSON.parse(unwrapUntrusted(sent.messages[1].content)!),
+    ).toMatchObject({
       diff: "-a - b\n+a + b",
       checks: "test: exit 0",
     });
@@ -387,7 +390,7 @@ describe("review worker", () => {
     expect(sent.messages[0].content).toBe(VERIFY_FIX_INSTRUCTIONS);
     expect(sent.response_format.json_schema.name).toBe("finding_fix_check");
     // Only that finding, the task and the current diff are sent.
-    expect(JSON.parse(sent.messages[1].content)).toEqual({
+    expect(JSON.parse(unwrapUntrusted(sent.messages[1].content)!)).toEqual({
       task: "Fix the sum",
       finding: { path: "sum.ts", line: 1, message: "subtracts" },
       diff: "-a - b\n+a + b",

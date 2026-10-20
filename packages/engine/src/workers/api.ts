@@ -1,3 +1,4 @@
+import { UNTRUSTED_WRAP_BYTES, wrapUntrusted } from "./untrusted.js";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
@@ -136,7 +137,9 @@ export function workerRequestBytes(input: WorkerInput): number {
         WORKER_INSTRUCTIONS +
         JSON.stringify(proposalJsonSchema),
       "utf8",
-    ) + 256
+    ) +
+    UNTRUSTED_WRAP_BYTES +
+    256
   );
 }
 
@@ -522,12 +525,14 @@ export async function invokeApiWorker(
     )
   )
     throw new Error("Worker instructions contain a potential secret");
-  const user = JSON.stringify({
-    task: input.objective,
-    acceptance: input.acceptance,
-    context: packet,
-    feedback: input.feedback ?? null,
-  });
+  const user = wrapUntrusted(
+    JSON.stringify({
+      task: input.objective,
+      acceptance: input.acceptance,
+      context: packet,
+      feedback: input.feedback ?? null,
+    }),
+  );
   // Estimated tokens (tokens.ts) with framing/schema overhead reserved;
   // never silently trim mandatory context.
   if (workerRequestTokens(input) > inputTokenCeiling(policy, provider))

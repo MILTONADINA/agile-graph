@@ -1,3 +1,4 @@
+import { wrapUntrusted } from "./untrusted.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { isApiKind } from "@agile-graph/contracts";
@@ -139,12 +140,14 @@ export async function invokeReviewWorker(
   providerFetch: ProviderFetch = nodeProviderFetch,
 ): Promise<{ review: WorkerReview; model: string; usage: Usage }> {
   const { provider, policy } = input;
-  const user = JSON.stringify({
-    task: input.objective,
-    acceptance: input.acceptance,
-    checks: input.checks,
-    diff: input.diff,
-  });
+  const user = wrapUntrusted(
+    JSON.stringify({
+      task: input.objective,
+      acceptance: input.acceptance,
+      checks: input.checks,
+      diff: input.diff,
+    }),
+  );
   assertReviewerCall(
     provider,
     policy,
@@ -219,15 +222,17 @@ export async function invokeVerifyFix(
   providerFetch: ProviderFetch = nodeProviderFetch,
 ): Promise<{ result: VerifyFixResult; model: string; usage: Usage }> {
   const { provider, policy, finding } = input;
-  const user = JSON.stringify({
-    task: input.objective,
-    finding: {
-      path: finding.path,
-      line: finding.line,
-      message: finding.message,
-    },
-    diff: input.diff,
-  });
+  const user = wrapUntrusted(
+    JSON.stringify({
+      task: input.objective,
+      finding: {
+        path: finding.path,
+        line: finding.line,
+        message: finding.message,
+      },
+      diff: input.diff,
+    }),
+  );
   assertReviewerCall(
     provider,
     policy,
@@ -299,12 +304,14 @@ export async function invokeRepeatDecision(
   providerFetch: ProviderFetch = nodeProviderFetch,
 ): Promise<{ result: RepeatDecision; model: string; usage: Usage }> {
   const { provider, policy } = input;
-  const user = JSON.stringify({
-    task: input.objective,
-    acceptance: input.acceptance,
-    failure: input.failure,
-    diff: input.diff,
-  });
+  const user = wrapUntrusted(
+    JSON.stringify({
+      task: input.objective,
+      acceptance: input.acceptance,
+      failure: input.failure,
+      diff: input.diff,
+    }),
+  );
   assertReviewerCall(
     provider,
     policy,

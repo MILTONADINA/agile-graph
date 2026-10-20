@@ -1,3 +1,7 @@
+import {
+  UNTRUSTED_WRAP_BYTES,
+  unwrapUntrusted,
+} from "../src/workers/untrusted.js";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_POLICY, type ContextPacket } from "@agile-graph/contracts";
 import {
@@ -142,7 +146,9 @@ describe("plan worker", () => {
     expect(sent.body!.response_format.json_schema.name).toBe(
       "plan_decomposition",
     );
-    expect(JSON.parse(sent.body!.messages[1].content)).toEqual({
+    expect(
+      JSON.parse(unwrapUntrusted(sent.body!.messages[1].content)!),
+    ).toEqual({
       task: "Add invoices",
       acceptance: ["GET /invoices lists invoices"],
       constraints: ["Money is stored as integer cents"],
@@ -157,9 +163,9 @@ describe("plan worker", () => {
     const policy = {
       ...DEFAULT_POLICY,
       providers: ["planner"],
-      // Room for about 2500 bytes of request after the output reservation
-      // (see tokens.ts).
-      maxContextTokens: tokensForBytes(2500) + 64,
+      // Room for about 2500 bytes of request plus the untrusted-data
+      // wrapper after the output reservation (see tokens.ts).
+      maxContextTokens: tokensForBytes(2500 + UNTRUSTED_WRAP_BYTES) + 64,
       maxOutputTokens: 64,
     };
     await invokePlanWorker(
@@ -172,7 +178,9 @@ describe("plan worker", () => {
       }),
       respond(sent),
     );
-    const request = JSON.parse(sent.body!.messages[1].content);
+    const request = JSON.parse(
+      unwrapUntrusted(sent.body!.messages[1].content)!,
+    );
     expect(request.repository.map((entry: any) => entry.path)).toEqual([
       "src/high.ts",
     ]);
