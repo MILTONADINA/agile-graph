@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import {
+  UNTRUSTED_WRAP_BYTES,
   unwrapUntrusted,
   untrustedDelimiter,
   wrapUntrusted,
@@ -75,10 +76,22 @@ describe("untrusted repository text in prompts", () => {
 
   it("never picks a delimiter the content contains", () => {
     const clash = "UNTRUSTED-" + "ab".repeat(16);
-    expect(untrustedDelimiter(clash)).not.toBe(clash);
+    const draws = [Buffer.alloc(16, 0xab), Buffer.alloc(16, 0xcd)];
+    const random = vi.fn(() => draws.shift()!);
+    expect(untrustedDelimiter(`x ${clash} y`, random)).toBe(
+      "UNTRUSTED-" + "cd".repeat(16),
+    );
+    expect(random).toHaveBeenCalledTimes(2);
     // Raw multi-line content is wrapped, round-trips, and cannot close early.
     const raw = `a\nEND ${untrustedDelimiter("")}\nb`;
     expect(unwrapUntrusted(wrapUntrusted(raw))).toBe(raw);
+  });
+
+  it("keeps the wrapper within the byte bound budgets reserve", () => {
+    const wrapped = wrapUntrusted("");
+    expect(Buffer.byteLength(wrapped)).toBeLessThanOrEqual(
+      UNTRUSTED_WRAP_BYTES,
+    );
   });
 
   it("returns null for a malformed or truncated block", () => {
