@@ -1,0 +1,12 @@
+{
+  "MIT": "Permissive; the common licence of the production tree.",
+  "ISC": "Permissive, MIT-equivalent.",
+  "BSD-2-Clause": "Permissive with attribution.",
+  "BSD-3-Clause": "Permissive with attribution.",
+  "Apache-2.0": "Permissive with a patent grant.",
+  "0BSD": "Public-domain-equivalent permissive licence.",
+  "BlueOak-1.0.0": "Permissive; used by the glob and minimatch family.",
+  "Python-2.0": "Permissive, GPL-compatible; used by argparse.",
+  "CC0-1.0": "Public-domain dedication.",
+  "Unlicense": "Public-domain dedication; used by tree-sitter-wasms."
+}
