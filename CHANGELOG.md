@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- The release workflow generates a CycloneDX SBOM (`npm sbom`, runtime
+  dependencies only) for each published package and uploads it as a workflow
+  artifact; see `docs/publishing.md`.
+
 ### Changed
 
 - Renamed Graph Engineering to Agile Graph. This ships in 0.3.0. Visible
