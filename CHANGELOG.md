@@ -11,6 +11,9 @@
 
 ### Changed
 
+- CI and release workflows install with `npm ci --ignore-scripts` and rebuild only
+  an allowlist of packages with install scripts; a test keeps the list in sync
+  with `package-lock.json`.
 - Renamed Graph Engineering to Agile Graph. This ships in 0.3.0. Visible
   changes: the MCP server now reports the name `agile-graph` (client
   configurations and `mcp__graph-engineering__` tool permissions need the new

@@ -35,7 +35,8 @@ jobs:
       - name: Install dependencies with one bounded archive retry
         run: |
           # Match the required Linux job's native-archive installation policy.
-          npm ci || { sleep 5; npm ci; }
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - run: npm run build:dependencies
       - name: Build the pinned offline analyzer image
         run: |

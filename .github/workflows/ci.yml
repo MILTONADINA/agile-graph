@@ -33,13 +33,16 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - run: |
+          npm ci --ignore-scripts
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs
         if: runner.os != 'Linux' || runner.arch != 'X64'
       - name: Install Linux x64 dependencies with one bounded retry
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           # onnxruntime-node fetches a native archive in postinstall, outside npm's fetch retry.
-          npm ci || { sleep 5; npm ci; }
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - run: npm run format:check
       - run: npm run lint
       - name: Audit production dependencies
@@ -49,6 +52,8 @@ jobs:
         run: node --test scripts/git-safety.test.mjs
       - name: Cursor private-context exclusions
         run: node --test scripts/cursor-ignore.test.mjs
+      - name: Workflow installs ignore lifecycle scripts
+        run: node --test scripts/workflow-ignore-scripts.test.mjs
       - name: Current synthetic fixture receipt
         run: node --test evaluation/validate-fixtures.test.mjs
       - run: npm run check
@@ -211,7 +216,8 @@ jobs:
       - name: Install dependencies with one bounded retry
         run: |
           # The root postinstall native archive fetch is outside npm's retry.
-          npm ci || { sleep 5; npm ci; }
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - name: Build the pinned security scanner image with one bounded retry
         run: |
           # The build fetches pinned artifacts from several hosts.
@@ -239,7 +245,8 @@ jobs:
       - name: Install historical replay dependencies with one bounded retry
         run: |
           # The root postinstall native archive fetch is outside npm's retry.
-          npm ci || { sleep 5; npm ci; }
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - name: Historical retry-state replay
         run: |
           node evaluation/retry-visibility-runtime/provision.mjs
@@ -265,7 +272,9 @@ jobs:
           node-version: 24
           cache: npm
       - name: Install dependencies with one bounded retry
-        run: npm ci || { sleep 5; npm ci; }
+        run: |
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - run: npm run build:dependencies
       - name: Public-only Docker intake and local model relay
         run: |
@@ -292,7 +301,9 @@ jobs:
           node-version: 24
           cache: npm
       - name: Install dependencies with one bounded retry
-        run: npm ci || { sleep 5; npm ci; }
+        run: |
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - run: npm run build:dependencies
       - name: Offline one-shot private digest oracle
         run: |
