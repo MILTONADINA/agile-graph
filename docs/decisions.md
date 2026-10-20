@@ -123,8 +123,9 @@ It loads `convaiinnovations/laya` at revision
 `7b928d828b7b0e022f929d9bd2e44165aa270148`. The default is the English checkpoint.
 The five assets the sidecar provisions are byte-identical to the earlier pin
 `1c5edc17a7acd8701df6fc341c0d179f1c62c982`; the upgrade changes the SDK, not
-the weights, and the model identity changes so earlier manifests are refused
-until reprovisioned.
+the weights, and the model identity changes so earlier manifests are refused.
+Provision into a fresh directory (provisioning cannot upgrade an existing one)
+and point `serve` at it.
 Multilingual and typed-decisions checkpoints require explicit selection during
 provisioning. Serving has no automatic model router or download fallback.
 
