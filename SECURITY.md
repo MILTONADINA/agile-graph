@@ -5,6 +5,9 @@
 Agile Graph is at 0.x. Only the latest minor release of 0.x gets security
 fixes. Older 0.x releases do not.
 
+For versioning policy, deprecations, and Node.js range, see
+[publishing](docs/publishing.md#versioning-and-support).
+
 | Version    | Supported |
 | ---------- | --------- |
 | Latest 0.x | Yes       |

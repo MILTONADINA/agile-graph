@@ -8,6 +8,9 @@
   published package as its subject and only what that package reaches,
   optional peers included) for each published package and uploads it as a workflow
   artifact; see `docs/publishing.md`.
+### Documentation
+
+- Document the versioning and support policy for 0.x packages.
 
 ### Changed
 

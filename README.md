@@ -96,8 +96,9 @@ GRAPH_ENGINE_DOCKER_TESTS=1 npm test -w @agile-graph/engine
 Use focused feature branches and reviewed PRs into `main`, the only integration
 branch. Never push to it directly; commits use the human Git identity without AI
 co-author trailers. See [contributing](CONTRIBUTING.md). Releases to npm are
-the owner's step, described in [publishing](docs/publishing.md). To report a
-vulnerability, see the [security policy](SECURITY.md).
+the owner's step, described in [publishing](docs/publishing.md); its
+[versioning and support](docs/publishing.md#versioning-and-support) section
+states the 0.x compatibility and end-of-life rules. To report a vulnerability, see the [security policy](SECURITY.md).
 
 ## Current boundaries
 
