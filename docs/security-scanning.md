@@ -486,11 +486,12 @@ budget. Findings are redacted in the event and the printed result.
 
 The platform job on Linux x64 runs `npm audit --omit=dev --audit-level=high`
 after `npm ci`, so a high or critical advisory in a production dependency fails
-CI. Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm
-(minor and patch updates grouped into one; majors open separately) and GitHub
-Actions (grouped). An npm update changes the third-party resolutions of the
-hash-pinned `package-lock.json`, so its CI fails until the pin is renewed;
-an update pull request cannot merge as Dependabot opened it.
+CI. Dependabot (`.github/dependabot.yml`) opens weekly pull requests for
+GitHub Actions (grouped). For npm it opens only security pull requests: an
+npm update changes the third-party resolutions of the hash-pinned
+`package-lock.json`, so its CI fails until the pin is renewed, and version
+updates are turned off (`open-pull-requests-limit: 0`). A maintainer story
+runs the npm version updates monthly, as below.
 
 To accept an npm update the owner has chosen:
 
