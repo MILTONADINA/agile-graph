@@ -494,6 +494,16 @@ npm update changes the third-party resolutions of the hash-pinned
 updates are turned off (`open-pull-requests-limit: 0`). A maintainer story
 runs the npm version updates monthly, as below.
 
+Every workflow installs with `npm ci --ignore-scripts`, so no dependency's
+lifecycle script runs unreviewed, then runs `npm rebuild` for an explicit
+allowlist: `esbuild`, `fsevents` (macOS only), `onnxruntime-node` (fetches its
+native archive) and `protobufjs`. The allowlist is the set of packages with
+`hasInstallScript` in `package-lock.json`.
+`scripts/workflow-ignore-scripts.test.mjs` fails if a workflow runs `npm ci` or
+`npm install` without `--ignore-scripts`, or if a rebuild list differs from the
+lockfile. When an update adds an install-script package, review it, then add it
+to every workflow's `npm rebuild` line.
+
 To accept an npm update the owner has chosen:
 
 1. Apply it on a branch of its own (`npm install <package>@<version>` or the

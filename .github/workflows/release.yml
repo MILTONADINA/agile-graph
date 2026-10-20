@@ -42,7 +42,8 @@ jobs:
       - name: Install dependencies with one bounded retry
         run: |
           # The root postinstall native archive fetch is outside npm's retry.
-          npm ci || { sleep 5; npm ci; }
+          npm ci --ignore-scripts || { sleep 5; npm ci --ignore-scripts; }
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs || { sleep 5; npm rebuild esbuild fsevents onnxruntime-node protobufjs; }
       - run: npm run build
       - name: Tag, package metadata and tarball contents
         run: node --test scripts/npm-packages.test.mjs

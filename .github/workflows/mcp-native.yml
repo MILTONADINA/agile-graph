@@ -30,7 +30,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - run: |
+          npm ci --ignore-scripts
+          npm rebuild esbuild fsevents onnxruntime-node protobufjs
       - run: npm run build:dependencies
       # Focused platform proof before the full protected PR suite. This
       # controls only the image-inspection command, not engine/MCP handling;
