@@ -1,49 +1,76 @@
-// The CycloneDX SBOMs the release workflow attaches: `npm sbom` must produce
-// valid JSON naming each published package and its version.
+// The CycloneDX SBOMs the release workflow attaches: each names its published
+// package as the subject and keeps that package's runtime graph, including
+// the engine's optional peers.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-
-const repository = fileURLToPath(new URL("..", import.meta.url));
+import { subjectSbom, workspaceSbom } from "./sbom.mjs";
 
 for (const workspace of ["packages/contracts", "packages/engine"]) {
-  test(`${workspace} has a CycloneDX SBOM`, async () => {
-    const { name, version } = JSON.parse(
+  test(`${workspace} SBOM names the published package as its subject`, async () => {
+    const {
+      name,
+      version,
+      peerDependencies = {},
+    } = JSON.parse(
       await readFile(
         new URL(`../${workspace}/package.json`, import.meta.url),
         "utf8",
       ),
     );
-    const bom = JSON.parse(
-      execFileSync(
-        "npm",
-        [
-          "sbom",
-          "--workspace",
-          workspace,
-          "--sbom-format",
-          "cyclonedx",
-          "--omit",
-          "dev",
-        ],
-        { cwd: repository, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-      ),
-    );
+    const bom = workspaceSbom(workspace);
     assert.equal(bom.bomFormat, "CycloneDX");
     assert.ok(bom.specVersion);
-    // npm names the root workspace as the SBOM subject and lists the
-    // selected workspace package among the components.
-    assert.ok(
-      bom.components.some(
-        (component) =>
-          component["bom-ref"] === `${name}@${version}` &&
-          component.version === version &&
-          component.purl === `pkg:npm/${name.replace("@", "%40")}@${version}`,
-      ),
-      `${name}@${version} is missing from the SBOM`,
+    assert.equal(bom.metadata.component["bom-ref"], `${name}@${version}`);
+    assert.equal(
+      bom.metadata.component.purl,
+      `pkg:npm/${name.replace("@", "%40")}@${version}`,
     );
-    assert.ok(Array.isArray(bom.components));
+    const names = new Set(bom.components.map((component) => component.name));
+    assert.ok(!names.has(name), "the subject is not also a component");
+    assert.ok(!names.has("eslint") && !names.has("vitest"));
+    for (const peer of Object.keys(peerDependencies))
+      assert.ok(names.has(peer), `optional peer ${peer} is missing`);
+    const refs = new Set([
+      bom.metadata.component["bom-ref"],
+      ...bom.components.map((component) => component["bom-ref"]),
+    ]);
+    for (const entry of bom.dependencies) {
+      assert.ok(refs.has(entry.ref), `dangling dependency ref ${entry.ref}`);
+      for (const ref of entry.dependsOn ?? [])
+        assert.ok(refs.has(ref), `dangling dependsOn ref ${ref}`);
+    }
   });
 }
+
+test("subjectSbom drops the root and what only the root reaches", () => {
+  const bom = subjectSbom(
+    {
+      bomFormat: "CycloneDX",
+      metadata: { component: { "bom-ref": "root@1" } },
+      components: [
+        { "bom-ref": "pkg@2", name: "pkg" },
+        { "bom-ref": "dep@3", name: "dep" },
+        { "bom-ref": "tool@4", name: "tool" },
+      ],
+      dependencies: [
+        { ref: "root@1", dependsOn: ["pkg@2", "tool@4"] },
+        { ref: "pkg@2", dependsOn: ["dep@3"] },
+        { ref: "dep@3", dependsOn: [] },
+        { ref: "tool@4", dependsOn: [] },
+      ],
+    },
+    "pkg",
+    "2",
+  );
+  assert.equal(bom.metadata.component.name, "pkg");
+  assert.deepEqual(
+    bom.components.map((component) => component.name),
+    ["dep"],
+  );
+  assert.deepEqual(
+    bom.dependencies.map((entry) => entry.ref),
+    ["pkg@2", "dep@3"],
+  );
+  assert.throws(() => subjectSbom(bom, "absent", "1"), /missing/);
+});

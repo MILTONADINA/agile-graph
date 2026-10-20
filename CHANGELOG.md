@@ -4,8 +4,9 @@
 
 ### Added
 
-- The release workflow generates a CycloneDX SBOM (`npm sbom`, runtime
-  dependencies only) for each published package and uploads it as a workflow
+- The release workflow generates a CycloneDX SBOM (`npm sbom`, with the
+  published package as its subject and only what that package reaches,
+  optional peers included) for each published package and uploads it as a workflow
   artifact; see `docs/publishing.md`.
 
 ### Changed

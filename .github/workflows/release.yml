@@ -55,7 +55,7 @@ jobs:
           mkdir sbom
           for workspace in packages/contracts packages/engine; do
             name=$(node -p "require('./$workspace/package.json').name")
-            npm sbom --workspace "$workspace" --sbom-format cyclonedx --omit dev > "sbom/${name#@agile-graph/}.cdx.json"
+            node scripts/sbom.mjs "$workspace" > "sbom/${name#@agile-graph/}.cdx.json"
           done
       - name: Upload the SBOMs next to the provenance
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
