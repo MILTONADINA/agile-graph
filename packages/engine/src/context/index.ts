@@ -2412,17 +2412,30 @@ export class ContextEngine {
   }
   static restoreBackup = restoreContextBackup;
   async close(): Promise<void> {
+    // Wait for every piece of outstanding work, even if one fails, before
+    // the embeddings and the database under them are released.
+    const settle = async (work: Promise<unknown>[]) =>
+      (await Promise.allSettled(work)).flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : [],
+      );
+    const failures = await settle([
+      ...[...this.watchers].map((watcher) => watcher.close()),
+    ]);
+    failures.push(
+      ...(await settle([this.ready])),
+      ...(await settle([Promise.resolve(this.indexing)])),
+      ...(await settle([...this.embeddingIndexes.values()])),
+    );
     try {
-      await Promise.all([...this.watchers].map((watcher) => watcher.close()));
-      await this.ready;
-      await this.indexing;
-      await Promise.all(this.embeddingIndexes.values());
-    } finally {
-      try {
-        await this.embeddings.close();
-      } finally {
-        await this.db?.close();
-      }
+      await this.embeddings.close();
+    } catch (error) {
+      failures.push(error);
     }
+    try {
+      await this.db?.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length) throw failures[0];
   }
 }
