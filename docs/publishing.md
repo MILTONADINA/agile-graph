@@ -110,6 +110,26 @@ The release fails, and nothing is published, if the tag and the package
 versions differ, a tarball would contain anything outside its allowlist, or
 the installed CLI does not start.
 
+## Versioning and support
+
+Agile Graph ships under semver **0.x**: a minor release may contain breaking changes. Only the
+latest minor of 0.x receives fixes.
+
+### Semver meaning
+
+- **Patch** (`0.x.z`) fixes only — no behavioural changes.
+- **Minor** (`0.x.0`) may change CLI flags, MCP tool names, and store schema.
+  Store migrations are additive only (old data always works). Every minor
+  that changes a flag, tool name, or schema has an entry in the
+  [CHANGELOG](../CHANGELOG.md).
+- **Deprecations** are announced in the minor release preceding the breaking
+  change where feasible.
+
+### Node.js range
+
+The supported Node.js range is `^22.18.0 || >=24 <27`, matching the
+[CI matrix](../.github/workflows/ci.yml).
+
 ## What the packages contain
 
 Each tarball is limited by its `files` list:
