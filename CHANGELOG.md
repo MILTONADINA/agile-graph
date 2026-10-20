@@ -14,6 +14,8 @@
 - CI and release workflows install with `npm ci --ignore-scripts` and rebuild only
   an allowlist of packages with install scripts; a test keeps the list in sync
   with `package-lock.json`.
+- Dashboard timestamps now show a time zone abbreviation (for example
+  `Oct 19, 4:02 PM CDT`) so run times are unambiguous across machines.
 - Renamed Graph Engineering to Agile Graph. This ships in 0.3.0. Visible
   changes: the MCP server now reports the name `agile-graph` (client
   configurations and `mcp__graph-engineering__` tool permissions need the new

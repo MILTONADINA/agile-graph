@@ -5,7 +5,7 @@ export const number = (value: number) =>
 export const shortId = (value?: string | null) =>
   value ? value.slice(0, 8) : "Uncommitted";
 export const readable = (value: string) => value.replace(/[_-]/g, " ");
-export function date(value?: string) {
+export function date(value?: string, timeZone?: string) {
   if (!value) return "Not yet";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
@@ -15,6 +15,8 @@ export function date(value?: string) {
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
+        timeZoneName: "short",
+        ...(timeZone ? { timeZone } : {}),
       });
 }
 
