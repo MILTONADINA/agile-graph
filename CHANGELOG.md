@@ -79,6 +79,14 @@
   plan). Only counts are reported; nothing is deleted and the check still
   passes.
 
+### Security
+
+- Worker, planner, reviewer and security-audit prompts now wrap all
+  repository-derived text (file excerpts, memory, spec text, diffs, check
+  output) in one block with a random per-prompt delimiter the content cannot
+  contain, preceded by a notice that the text is data, never instructions.
+  Request size estimates include the wrapper.
+
 ### Fixed
 
 - The engine test suite no longer writes project data folders into the

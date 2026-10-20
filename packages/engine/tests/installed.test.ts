@@ -1,3 +1,4 @@
+import { unwrapUntrusted } from "../src/workers/untrusted.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { PassThrough, Writable } from "node:stream";
@@ -631,7 +632,9 @@ describe("reviewed installed executable identity", () => {
     expect(run.argv).toContain("--safe-mode");
     expect(run.options.env.DISABLE_AUTOUPDATER).toBe("1");
     expect(run.options.env.ANTHROPIC_API_KEY).toBe("test-native-api-key");
-    expect(JSON.parse(run.options.input).task).toBe(request.objective);
+    expect(JSON.parse(unwrapUntrusted(run.options.input)!).task).toBe(
+      request.objective,
+    );
     expect(run.options.input).not.toContain("PRIVATE_CONTEXT_CANARY");
     expect(run.options.input).not.toContain(executable);
     expect(run.options.input).not.toContain(

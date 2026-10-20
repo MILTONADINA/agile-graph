@@ -1,3 +1,4 @@
+import { wrapUntrusted } from "../workers/untrusted.js";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -470,7 +471,7 @@ async function auditCall<T>(
   } catch (error) {
     throw new AuditNotSentError((error as Error).message, { cause: error });
   }
-  const user = JSON.stringify(payload);
+  const user = wrapUntrusted(JSON.stringify(payload));
   // Each raw string, not the JSON text: escaping can hide a secret's shape.
   const strings = (value: unknown): string[] =>
     typeof value === "string"

@@ -1,3 +1,4 @@
+import { unwrapUntrusted } from "../src/workers/untrusted.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { access, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -635,7 +636,7 @@ describe("security audit workers", () => {
     expect(hunt.hunt.candidates).toHaveLength(2);
     expect(sent[0]!.messages[0].content).toBe(HUNTER_INSTRUCTIONS);
     expect(sent[0]!.response_format.json_schema.name).toBe("security_hunt");
-    expect(JSON.parse(sent[0]!.messages[1].content)).toEqual({
+    expect(JSON.parse(unwrapUntrusted(sent[0]!.messages[1].content)!)).toEqual({
       diff: "+execSync(a)",
     });
     // A hunter's verdict is not part of its contract.
@@ -655,7 +656,7 @@ describe("security audit workers", () => {
     );
     expect(verified.verification.verdict).toBe("confirmed");
     expect(sent[1]!.messages[0].content).toBe(VERIFIER_INSTRUCTIONS);
-    expect(JSON.parse(sent[1]!.messages[1].content)).toEqual({
+    expect(JSON.parse(unwrapUntrusted(sent[1]!.messages[1].content)!)).toEqual({
       candidate: candidate(),
       diff: "+execSync(a)",
     });
@@ -684,11 +685,13 @@ describe("security audit workers", () => {
       },
       fetch,
     );
-    expect(JSON.parse(sent[0]!.messages[1].content)).toEqual({
+    expect(JSON.parse(unwrapUntrusted(sent[0]!.messages[1].content)!)).toEqual({
       diff: "+execSync(a)",
       threat_model: threatModel,
     });
-    expect(JSON.parse(sent[1]!.messages[1].content)).toMatchObject({
+    expect(
+      JSON.parse(unwrapUntrusted(sent[1]!.messages[1].content)!),
+    ).toMatchObject({
       threat_model: threatModel,
     });
     for (const instructions of [HUNTER_INSTRUCTIONS, VERIFIER_INSTRUCTIONS])
@@ -710,9 +713,9 @@ describe("security audit workers", () => {
 
   it("refuses a change too large for the auditor under the strict one-token-per-byte count with the output reserved", async () => {
     const fetch = vi.fn(async () => reply({ candidates: [] }));
-    // 12 KB of dense diff: within the default input ceiling (16,000 less a
+    // 11 KB of dense diff: within the default input ceiling (16,000 less a
     // reserved 8,000) by the workers' estimate, over it at one token per byte.
-    const diff = "+0x" + "0123456789abcdef".repeat(750);
+    const diff = "+0x" + "0123456789abcdef".repeat(700);
     expect(tokensForBytes(Buffer.byteLength(diff) + 256)).toBeLessThanOrEqual(
       inputTokenCeiling(policy),
     );
