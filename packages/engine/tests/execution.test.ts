@@ -5,6 +5,7 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  rename,
   writeFile,
   readFile,
   rm,
@@ -2606,6 +2607,22 @@ describe("managed execution", () => {
     engines.push(engine);
     await Promise.all([engine.close(), engine.close()]);
     await expect(engine.close()).resolves.toBeUndefined();
+  });
+  // Windows refuses to rename or remove a folder holding an open database
+  // file, so a close() that resolved early shows as EBUSY in teardown.
+  it("releases the database files once close resolves", async () => {
+    const { root, data } = await fixture();
+    const engine = await GraphEngine.open(root);
+    engines.push(engine);
+    await engine.createPlan({
+      objective: "Fix addition",
+      acceptance: ["addition passes"],
+    });
+    await engine.close();
+    const moved = `${data}-moved`;
+    roots.push(moved);
+    await rename(data, moved);
+    await expect(stat(moved)).resolves.toBeTruthy();
   });
   // A person's Ctrl-C closes the engine while `run` or `resume` may still be
   // checking that the run can go ahead. close() then finds no run to cancel,

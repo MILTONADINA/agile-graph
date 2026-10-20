@@ -18,6 +18,7 @@ export class ContextDatabase {
     { resolve: (value: any) => void; reject: (error: Error) => void }
   >();
   private closed = false;
+  private closing?: Promise<void>;
   constructor(path: string, options: { readonly?: boolean } = {}) {
     const require = createRequire(import.meta.url);
     this.worker = new Worker(
@@ -202,11 +203,19 @@ export class ContextDatabase {
   reclaim(): Promise<{ reclaimed: boolean; reason: string | null }> {
     return this.request("reclaim");
   }
-  async close(): Promise<void> {
-    if (this.closed) return;
-    await this.request("close");
-    this.closed = true;
-    await this.worker.terminate();
+  // Resolves only once the worker thread has ended, so the database file and
+  // its -wal and -shm files are released (Windows refuses to remove or rename
+  // them until then). Concurrent calls share one close, and a failed close
+  // still ends the worker.
+  close(): Promise<void> {
+    return (this.closing ??= (async () => {
+      try {
+        if (!this.closed) await this.request("close");
+      } finally {
+        this.closed = true;
+        await this.worker.terminate();
+      }
+    })());
   }
 }
 

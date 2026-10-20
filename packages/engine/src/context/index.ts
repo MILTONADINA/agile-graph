@@ -2417,9 +2417,12 @@ export class ContextEngine {
       await this.ready;
       await this.indexing;
       await Promise.all(this.embeddingIndexes.values());
-      await this.embeddings.close();
     } finally {
-      await this.db?.close();
+      try {
+        await this.embeddings.close();
+      } finally {
+        await this.db?.close();
+      }
     }
   }
 }
