@@ -28,8 +28,18 @@ tag such as `v0.1.0` is pushed. It:
    (`scripts/npm-packages.test.mjs`);
 4. installs both packed tarballs into an empty directory and runs the CLI
    (`scripts/npm-smoke.mjs`);
-5. publishes the contracts package, then the engine, skipping a version that
+5. generates a CycloneDX SBOM for each package with `scripts/sbom.mjs`, which
+   runs `npm sbom --workspace <dir> --sbom-format cyclonedx`, makes the
+   published package the subject (npm names the private root) and keeps only
+   the components that package reaches, its optional peers included
+   (`--omit dev` would drop them, since the lockfile marks them dev), and uploads
+   `contracts.cdx.json` and `engine.cdx.json` as the workflow artifact
+   `sbom-<tag>`, next to the provenance npm records;
+6. publishes the contracts package, then the engine, skipping a version that
    is already on npm.
+
+`scripts/sbom.test.mjs` runs the same script locally and checks the subject,
+the optional peers and that every dependency reference resolves.
 
 Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers):
 GitHub's OpenID Connect token authenticates the job, so no npm token is

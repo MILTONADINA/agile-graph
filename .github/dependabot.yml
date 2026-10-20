@@ -1,13 +1,15 @@
-# Weekly update PRs. npm PRs change package-lock.json, which is hash-pinned by
-# its third-party resolutions (see docs/publishing.md and the pin tests), so a
-# maintainer must update the pin before an npm update PR can merge.
+# npm version-update PRs are off (open-pull-requests-limit: 0): they change the
+# hash-pinned package-lock.json, so their CI fails by design. Dependabot
+# security updates for npm are unaffected. A maintainer story accepts npm
+# updates monthly; see "Dependency audit and updates" in
+# docs/security-scanning.md. GitHub Actions still gets weekly update PRs.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       npm-minor-patch:
         update-types:

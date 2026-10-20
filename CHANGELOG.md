@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- The release workflow generates a CycloneDX SBOM (`npm sbom`, with the
+  published package as its subject and only what that package reaches,
+  optional peers included) for each published package and uploads it as a workflow
+  artifact; see `docs/publishing.md`.
+
 ### Changed
 
 - Renamed Graph Engineering to Agile Graph. This ships in 0.3.0. Visible
@@ -31,6 +38,9 @@
   `laya-english@7b928d8…/sdk0.4.12/prob-v1`, so provision the checkpoint into a
   fresh directory (an existing one is refused), serve from it and update `decisions.json`. The sidecar also refuses any answer
   the SDK reports as computed on a truncated state.
+- Dependabot no longer opens npm version-update pull requests, which failed
+  CI by design against the hash-pinned lockfile; npm security updates are
+  unaffected by this limit, and a maintainer accepts version updates monthly.
 - Run events are read a bounded page at a time. The event stream fetches only
   events after the last one it sent instead of re-reading the whole run every
   second, and `GET /api/runs/:id` returns at most `limit` events (default
@@ -42,6 +52,10 @@
 
 ### Added
 
+- `npm run graph:local -- --with-jev` can read the Jev key from the macOS
+  login keychain: `jev-key-source.json` accepts
+  `{"format":"keychain","service":...,"account":...}`. It fails closed off
+  macOS or when the lookup fails, and errors name only the service.
 - `backup` and `restore` warn when the run store holds orphan rows
   (`run_events` or `run_outcomes` without a run, `plan_approvals` without a
   plan). Only counts are reported; nothing is deleted and the check still

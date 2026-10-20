@@ -50,6 +50,19 @@ jobs:
           GRAPH_ENGINE_RELEASE_TAG: ${{ github.ref_name }}
       - name: Install the packed tarballs and run the CLI
         run: node scripts/npm-smoke.mjs
+      - name: Generate CycloneDX SBOMs
+        run: |
+          mkdir sbom
+          for workspace in packages/contracts packages/engine; do
+            name=$(node -p "require('./$workspace/package.json').name")
+            node scripts/sbom.mjs "$workspace" > "sbom/${name#@agile-graph/}.cdx.json"
+          done
+      - name: Upload the SBOMs next to the provenance
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ github.ref_name }}
+          path: sbom/*.cdx.json
+          if-no-files-found: error
       - name: Publish contracts, then the engine that depends on it
         run: |
           for workspace in packages/contracts packages/engine; do
