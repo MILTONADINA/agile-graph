@@ -19,6 +19,7 @@ async function pointer(t, content) {
 const keychain = { format: "keychain", service: "svc-x", account: "acct-y" };
 const fake = (stdout, calls = []) => ({
   platform: "darwin",
+  home: "/Users/someone",
   exec: async (file, args, options) => {
     calls.push({ file, args, options });
     return { stdout };
@@ -41,6 +42,7 @@ test("keychain success runs security without a shell and trims", async (t) => {
     "-s",
     "svc-x",
     "-w",
+    "/Users/someone/Library/Keychains/login.keychain-db",
   ]);
   assert.equal(calls[0].options.shell, undefined);
 });

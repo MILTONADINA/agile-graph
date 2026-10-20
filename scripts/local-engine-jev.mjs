@@ -1,6 +1,7 @@
 // Loads the Jev key from a private pointer file. Never prints or throws the key.
 import { execFile } from "node:child_process";
 import { lstat, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -10,6 +11,7 @@ const defaults = {
   lstat,
   readFile,
   platform: process.platform,
+  home: homedir(),
 };
 const keychainName = /^[\x21-\x7e]{1,256}$/;
 
@@ -77,6 +79,9 @@ export async function loadJevKey(sourcePath, overrides = {}) {
             "-s",
             source.service,
             "-w",
+            // Name the login keychain: without it, security returns the first
+            // match anywhere in the user's keychain search list.
+            path.join(deps.home, "Library/Keychains/login.keychain-db"),
           ],
           { encoding: "utf8", maxBuffer: 8192, timeout: 30000 },
         )
