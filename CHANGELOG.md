@@ -32,8 +32,8 @@
   fresh directory (an existing one is refused), serve from it and update `decisions.json`. The sidecar also refuses any answer
   the SDK reports as computed on a truncated state.
 - Dependabot no longer opens npm version-update pull requests, which failed
-  CI by design against the hash-pinned lockfile; npm security updates still
-  open, and a maintainer accepts version updates monthly.
+  CI by design against the hash-pinned lockfile; npm security updates are
+  unaffected by this limit, and a maintainer accepts version updates monthly.
 - Run events are read a bounded page at a time. The event stream fetches only
   events after the last one it sent instead of re-reading the whole run every
   second, and `GET /api/runs/:id` returns at most `limit` events (default
