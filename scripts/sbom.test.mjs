@@ -11,6 +11,7 @@ for (const workspace of ["packages/contracts", "packages/engine"]) {
     const {
       name,
       version,
+      devDependencies = {},
       peerDependencies = {},
     } = JSON.parse(
       await readFile(
@@ -29,6 +30,9 @@ for (const workspace of ["packages/contracts", "packages/engine"]) {
     const names = new Set(bom.components.map((component) => component.name));
     assert.ok(!names.has(name), "the subject is not also a component");
     assert.ok(!names.has("eslint") && !names.has("vitest"));
+    for (const dependency of Object.keys(devDependencies))
+      if (!(dependency in peerDependencies))
+        assert.ok(!names.has(dependency), `dev-only ${dependency} is listed`);
     for (const peer of Object.keys(peerDependencies))
       assert.ok(names.has(peer), `optional peer ${peer} is missing`);
     const refs = new Set([
@@ -55,13 +59,15 @@ test("subjectSbom drops the root and what only the root reaches", () => {
       ],
       dependencies: [
         { ref: "root@1", dependsOn: ["pkg@2", "tool@4"] },
-        { ref: "pkg@2", dependsOn: ["dep@3"] },
+        { ref: "pkg@2", dependsOn: ["dep@3", "@types/x@5"] },
         { ref: "dep@3", dependsOn: [] },
         { ref: "tool@4", dependsOn: [] },
+        { ref: "@types/x@5", dependsOn: [] },
       ],
     },
     "pkg",
     "2",
+    ["@types/x"],
   );
   assert.equal(bom.metadata.component.name, "pkg");
   assert.deepEqual(

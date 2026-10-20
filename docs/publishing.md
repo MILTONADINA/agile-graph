@@ -31,7 +31,8 @@ tag such as `v0.1.0` is pushed. It:
 5. generates a CycloneDX SBOM for each package with `scripts/sbom.mjs`, which
    runs `npm sbom --workspace <dir> --sbom-format cyclonedx`, makes the
    published package the subject (npm names the private root) and keeps only
-   the components that package reaches, its optional peers included
+   the components that package reaches, its optional peers included and its
+   own dev-only dependencies left out
    (`--omit dev` would drop them, since the lockfile marks them dev), and uploads
    `contracts.cdx.json` and `engine.cdx.json` as the workflow artifact
    `sbom-<tag>`, next to the provenance npm records;
