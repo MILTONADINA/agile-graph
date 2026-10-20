@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccountingGroup, AccountingSummary } from "./types";
-import { accountingCost } from "./view-model";
+import { accountingCost, date } from "./view-model";
 
 const emptyGroup = (): AccountingGroup => ({
   totals: {
@@ -63,5 +63,17 @@ describe("ledger usage reporting", () => {
     summary.untrackedRunCount = 1;
     summary.totals.costUsd = null;
     expect(accountingCost(summary).value).toBe("Unknown");
+  });
+});
+
+describe("date", () => {
+  const at = "2026-10-19T21:02:00Z";
+  it("labels the time zone", () => {
+    expect(date(at, "UTC")).toMatch(/9:02 PM UTC$/);
+    expect(date(at, "America/Chicago")).toMatch(/4:02 PM CDT$/);
+  });
+  it("keeps the fallbacks", () => {
+    expect(date()).toBe("Not yet");
+    expect(date("garbage")).toBe("garbage");
   });
 });
