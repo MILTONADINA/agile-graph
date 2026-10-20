@@ -17,6 +17,14 @@
   moves a token stored under the old session key. Signature domains, record
   kinds, the trust anchor location and the Dart image labels keep their old
   spelling.
+- Minor and patch dependency updates: eslint 10.12.0, globals 17.13.0, prettier
+  3.9.10, typescript-eslint 8.71.2, react and react-dom 19.3.1,
+  @playwright/test 1.64.1, @fastify/static 10.1.6, @modelcontextprotocol/sdk
+  1.32.1, fastify 5.12.7, ignore 7.0.12 and @huggingface/transformers 4.3.1.
+  Held back: web-tree-sitter stays at 0.25.10 because 0.27.1 cannot load the
+  pinned tree-sitter-wasms 0.1.13 grammars, and @cursor/sdk stays at 1.0.32
+  because the Cursor worker refuses any version that has not passed its
+  control audit.
 - Run events are read a bounded page at a time. The event stream fetches only
   events after the last one it sent instead of re-reading the whole run every
   second, and `GET /api/runs/:id` returns at most `limit` events (default
