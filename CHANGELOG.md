@@ -53,6 +53,12 @@
   no longer scan the table. The indexes are added on open without changing
   any row or the schema version, so an older engine still opens the database.
 
+### Internal
+
+- `npm run lint` now fails on any ESLint warning (`--max-warnings 0`), and the
+  unused `no-control-regex` disable comment in the fatal-error sanitiser is
+  removed.
+
 ### Added
 
 - `npm run graph:local -- --with-jev` can read the Jev key from the macOS
