@@ -107,6 +107,13 @@ class ValidationTests(unittest.TestCase):
         result["answers"]["action"]["choice"] = "untrusted"
         with self.assertRaisesRegex(ValueError, "permitted set"):
             normalize_result(result, payload["questions"], FakePredictor())
+        result = FakePredictor().predict(payload["state"], payload["questions"])
+        result["usage"]["truncated"] = True
+        with self.assertRaisesRegex(ValueError, "truncated the state"):
+            normalize_result(result, payload["questions"], FakePredictor())
+        result = FakePredictor().predict(payload["state"], payload["questions"])
+        result["usage"]["truncated"] = False
+        normalize_result(result, payload["questions"], FakePredictor())
 
     def test_download_hosts_and_cache_integrity(self):
         validate_download_url("https://huggingface.co/model", {"huggingface.co"})

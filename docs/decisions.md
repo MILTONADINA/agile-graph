@@ -117,10 +117,14 @@ CI and merge before this follow-on is adopted.
 ## Laya sidecar
 
 The included sidecar is a Python standard-library HTTP service around the
-official `laya==0.3.5` package. The wheel is pinned by SHA-256 in
+official `laya==0.4.12` package. The wheel is pinned by SHA-256 in
 `sidecars/laya/requirements.txt`; direct inference dependencies are pinned too.
 It loads `convaiinnovations/laya` at revision
-`1c5edc17a7acd8701df6fc341c0d179f1c62c982`. The default is the English checkpoint.
+`7b928d828b7b0e022f929d9bd2e44165aa270148`. The default is the English checkpoint.
+The five assets the sidecar provisions are byte-identical to the earlier pin
+`1c5edc17a7acd8701df6fc341c0d179f1c62c982`; the upgrade changes the SDK, not
+the weights, and the model identity changes so earlier manifests are refused
+until reprovisioned.
 Multilingual and typed-decisions checkpoints require explicit selection during
 provisioning. Serving has no automatic model router or download fallback.
 
@@ -213,7 +217,7 @@ base directory. Keep credentials in environment variables, not this JSON:
   {
     "id": "laya",
     "endpoint": "http://127.0.0.1:7337/v1/decide",
-    "model": "laya-english@1c5edc17a7acd8701df6fc341c0d179f1c62c982/sdk0.3.5/prob-v1",
+    "model": "laya-english@7b928d828b7b0e022f929d9bd2e44165aa270148/sdk0.4.12/prob-v1",
     "apiKeyEnv": "GRAPH_LAYA_TOKEN",
     "maxStateChars": 1200
   }
@@ -266,7 +270,7 @@ The sidecar accepts POST `/v1/decide` (also `/v1/system-one`) with:
 
 ```json
 {
-  "model": "laya-english@1c5edc17a7acd8701df6fc341c0d179f1c62c982/sdk0.3.5/prob-v1",
+  "model": "laya-english@7b928d828b7b0e022f929d9bd2e44165aa270148/sdk0.4.12/prob-v1",
   "state": "Localized rename; one file; no API or schema changes.",
   "questions": {
     "action": {
@@ -397,7 +401,7 @@ provenance can never enable promotion. A row has this shape:
   "taskId": "auth-rotation-001",
   "category": "worker",
   "provider": "laya",
-  "model": "laya-english@1c5edc17a7acd8701df6fc341c0d179f1c62c982/sdk0.3.5/prob-v1",
+  "model": "laya-english@7b928d828b7b0e022f929d9bd2e44165aa270148/sdk0.4.12/prob-v1",
   "selected": "local",
   "expected": "local",
   "confidence": 0.97,

@@ -23,9 +23,9 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-SDK_VERSION = "0.3.5"
+SDK_VERSION = "0.4.12"
 REPOSITORY = "convaiinnovations/laya"
-REVISION = "1c5edc17a7acd8701df6fc341c0d179f1c62c982"
+REVISION = "7b928d828b7b0e022f929d9bd2e44165aa270148"
 CHECKPOINTS = {"english": "", "multilingual": "multilingual/", "typed-decisions": "typed-decisions/"}
 ASSETS = ("rl_agent_config.json", "encoder/config.json", "tokenizer/tokenizer.json", "tokenizer/tokenizer_config.json", "model.safetensors")
 MAX_REQUEST_BYTES = 64 * 1024
@@ -92,8 +92,9 @@ def provision(directory: Path, checkpoint: str, allowed_hosts: set[str]) -> dict
             os.replace(temporary, target)
         finally:
             Path(temporary).unlink(missing_ok=True)
-    # Laya 0.3.5 normalizes this config on first load. Perform that exact
-    # compatibility normalization before hashing, keeping serving read-only.
+    # Laya normalizes this config on first load (unchanged from 0.3.5 to 0.4.12).
+    # Perform that exact compatibility normalization before hashing, keeping
+    # serving read-only.
     config_path = directory / "tokenizer/tokenizer_config.json"
     config = json.loads(config_path.read_text())
     if config.get("tokenizer_class") in (None, "TokenizersBackend"):
@@ -239,6 +240,11 @@ def validate_request(payload: Any, predictor: Predictor) -> tuple[Any, dict]:
 
 def normalize_result(result: dict, questions: dict, predictor: Predictor) -> dict:
     answers = result.get("answers")
+    usage = result.get("usage", {})
+    # Laya 0.4 reports when it clamped the state. validate_request refuses
+    # oversized states first, so this only fires if the budgets ever diverge.
+    if not isinstance(usage, dict) or usage.get("truncated", False) is not False:
+        raise ValueError("Predictor truncated the state; no truncation allowed")
     if not isinstance(answers, dict) or set(answers) != set(questions):
         raise ValueError("Predictor returned an invalid answer set")
     for name, question in questions.items():
@@ -265,7 +271,7 @@ def normalize_result(result: dict, questions: dict, predictor: Predictor) -> dic
             probability = answer.get("noul")
             if not isinstance(probability, (int, float)) or not math.isfinite(probability) or not 0 <= probability <= 1:
                 raise ValueError("Predictor returned an invalid probability")
-    return {"model": predictor.model_id, "answers": answers, "usage": result.get("usage", {}),
+    return {"model": predictor.model_id, "answers": answers, "usage": usage,
             "runtime": {"device": predictor.device, "max_tokens": predictor.max_len,
                         "question_count": len(questions), "model_forward_passes": result.get("forward_passes"),
                         "inference_ms": result.get("inference_ms"),

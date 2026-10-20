@@ -376,7 +376,10 @@ A measured warm Laya request contained two typed questions and recorded **one
 actual model forward pass**, 77 input tokens, 275.38 ms inference time, and
 318.56 ms client elapsed time on MPS. This is one observation, not a latency
 distribution, accuracy evaluation, or calibrated confidence claim. The English
-checkpoint is pinned to `1c5edc17a7acd8701df6fc341c0d179f1c62c982`, SDK 0.3.5.
+checkpoint was pinned to `1c5edc17a7acd8701df6fc341c0d179f1c62c982`, SDK 0.3.5,
+for that measurement. The sidecar now pins revision
+`7b928d828b7b0e022f929d9bd2e44165aa270148`, SDK 0.4.12, with the same model
+asset bytes.
 
 Jina's real FP32 offline smoke test retrieved the expected security source
 after verified-cache provisioning. A real MCP stdio client discovered six
