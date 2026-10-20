@@ -1,3 +1,4 @@
+import { UNTRUSTED_WRAP_BYTES } from "../src/workers/untrusted.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -55,9 +56,11 @@ const input = (
   policy: {
     ...DEFAULT_POLICY,
     // The fixtures below are sized in bytes: keep the default's byte room
-    // under the token estimate, with a small output reservation (tokens.ts).
+    // under the token estimate, with a small output reservation (tokens.ts)
+    // and room for the untrusted-data wrapper.
     maxContextTokens:
       Math.floor(DEFAULT_POLICY.maxContextTokens / BYTES_PER_TOKEN) +
+      Math.ceil(UNTRUSTED_WRAP_BYTES / BYTES_PER_TOKEN) +
       OUTPUT_RESERVATION,
     maxOutputTokens: OUTPUT_RESERVATION,
     providers: [provider.id],

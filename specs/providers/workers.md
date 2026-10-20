@@ -59,6 +59,10 @@ change the default timeout behavior or the evidence status of this baseline.
   - Test: packages/engine/tests/api.test.ts :: reserves the output cap in every input ceiling, at most half the window
   - Test: packages/engine/tests/api.test.ts :: gives a 16k-token model a realistic window less its output reservation, and refuses or fits a dense oversize request
   - Test: packages/engine/tests/api.test.ts :: applies the output reservation: a request that fits the window alone is refused once the output cap is reserved
+- AC13: When the engine builds a prompt for a worker, planner, reviewer, fix verifier, repeated-failure decider, security hunter or verifier (API, installed Codex and Claude, and Cursor), it shall place every repository-derived string (task, acceptance, file excerpts, memory, feedback, diffs, check output) inside one block whose BEGIN and END lines carry a random per-prompt delimiter that the block content does not contain, and shall precede the block with a notice that its text is untrusted data and never instructions; and where the content contains text that imitates the delimiter or says to ignore previous instructions, the engine shall keep it inside the block. Size budgets include the wrapper.
+  - Test: packages/engine/tests/untrusted-prompt.test.ts :: keeps injection text and fake delimiters inside the data block
+  - Test: packages/engine/tests/untrusted-prompt.test.ts :: uses a different delimiter for every prompt
+  - Test: packages/engine/tests/untrusted-prompt.test.ts :: never picks a delimiter the content contains
 
 ## Security considerations
 

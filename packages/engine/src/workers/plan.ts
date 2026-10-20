@@ -1,3 +1,4 @@
+import { wrapUntrusted } from "./untrusted.js";
 import { z } from "zod";
 import { isApiKind } from "@agile-graph/contracts";
 import type {
@@ -121,20 +122,22 @@ export async function invokePlanWorker(
     (text) => !input.acceptance.includes(text),
   );
   const request = () =>
-    JSON.stringify({
-      task: input.objective,
-      acceptance: input.acceptance,
-      constraints,
-      repository: items.map((item) => ({
-        ...(item.source
-          ? {
-              path: item.source.path,
-              lines: `${item.source.startLine}-${item.source.endLine}`,
-            }
-          : {}),
-        text: item.text,
-      })),
-    });
+    wrapUntrusted(
+      JSON.stringify({
+        task: input.objective,
+        acceptance: input.acceptance,
+        constraints,
+        repository: items.map((item) => ({
+          ...(item.source
+            ? {
+                path: item.source.path,
+                lines: `${item.source.startLine}-${item.source.endLine}`,
+              }
+            : {}),
+          text: item.text,
+        })),
+      }),
+    );
   const fixed =
     Buffer.byteLength(
       PLANNER_INSTRUCTIONS + JSON.stringify(decompositionJsonSchema),

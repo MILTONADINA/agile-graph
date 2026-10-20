@@ -1,3 +1,4 @@
+import { wrapUntrusted } from "./untrusted.js";
 import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -811,12 +812,14 @@ async function invokeCodexWorker(
   assertEndpoint("https://api.openai.com", policy);
   assertEndpoint("https://chatgpt.com", policy);
   const packet = contextForProvider(input.context, provider, policy);
-  const prompt = JSON.stringify({
-    task: input.objective,
-    acceptance: input.acceptance,
-    context: packet,
-    feedback: input.feedback ?? null,
-  });
+  const prompt = wrapUntrusted(
+    JSON.stringify({
+      task: input.objective,
+      acceptance: input.acceptance,
+      context: packet,
+      feedback: input.feedback ?? null,
+    }),
+  );
   const budget = inputTokenCeiling(policy, provider);
   if (
     tokensForBytes(
@@ -1105,13 +1108,13 @@ async function invokeCursorWorker(
     );
   const packet = contextForProvider(input.context, provider, policy);
   const budget = inputTokenCeiling(policy, provider);
-  const prompt = `${WORKER_INSTRUCTIONS}\n\nRequired JSON schema:\n${JSON.stringify(proposalJsonSchema)}\n\nTask packet:\n${JSON.stringify(
-    {
+  const prompt = `${WORKER_INSTRUCTIONS}\n\nRequired JSON schema:\n${JSON.stringify(proposalJsonSchema)}\n\nTask packet:\n${wrapUntrusted(
+    JSON.stringify({
       task: input.objective,
       acceptance: input.acceptance,
       context: packet,
       feedback: input.feedback ?? null,
-    },
+    }),
   )}`;
   if (tokensForBytes(Buffer.byteLength(prompt, "utf8") + 256) > budget)
     throw new Error(
@@ -1247,12 +1250,14 @@ export async function invokeInstalledWorker(
       "Claude subscription mode requires a verified claude.ai Pro/Max login and no managed policy",
     );
   const packet = contextForProvider(input.context, provider, policy);
-  const prompt = JSON.stringify({
-    task: input.objective,
-    acceptance: input.acceptance,
-    context: packet,
-    feedback: input.feedback ?? null,
-  });
+  const prompt = wrapUntrusted(
+    JSON.stringify({
+      task: input.objective,
+      acceptance: input.acceptance,
+      context: packet,
+      feedback: input.feedback ?? null,
+    }),
+  );
   const budget = inputTokenCeiling(policy, provider);
   if (
     tokensForBytes(
