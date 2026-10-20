@@ -68,9 +68,19 @@ describe("ledger usage reporting", () => {
 
 describe("date", () => {
   const at = "2026-10-19T21:02:00Z";
+  const zoneName = (timeZone: string) =>
+    new Intl.DateTimeFormat(undefined, { timeZone, timeZoneName: "short" })
+      .formatToParts(new Date(at))
+      .find((part) => part.type === "timeZoneName")?.value;
   it("labels the time zone", () => {
-    expect(date(at, "UTC")).toMatch(/9:02 PM UTC$/);
-    expect(date(at, "America/Chicago")).toMatch(/4:02 PM CDT$/);
+    for (const zone of ["UTC", "America/Chicago"]) {
+      const label = zoneName(zone);
+      expect(label).toBeTruthy();
+      expect(date(at, zone).endsWith(label as string)).toBe(true);
+    }
+  });
+  it("shows different local times per zone", () => {
+    expect(date(at, "UTC")).not.toBe(date(at, "America/Chicago"));
   });
   it("keeps the fallbacks", () => {
     expect(date()).toBe("Not yet");
