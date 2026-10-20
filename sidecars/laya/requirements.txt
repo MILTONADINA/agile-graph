@@ -1,6 +1,6 @@
 laya @ https://files.pythonhosted.org/packages/63/9e/3d6bcd05485b1902ffc7466c1b8529e365fb92b3552893284d7002f42172/laya-0.4.12-py3-none-any.whl#sha256=485625629bf14003e947ce13e5f901cc1ba8d298a152e52917b19017914baf80
 torch==2.8.0
-transformers==4.57.6
+transformers==5.10.1
 safetensors==0.6.2
 huggingface-hub==0.36.2
 numpy==2.2.6
