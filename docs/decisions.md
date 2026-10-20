@@ -255,8 +255,11 @@ and a supported model from your account.
 
 On this Mac, the optional `graph:local` wrapper can load the Jev credential from
 an ignored `.graph/local/jev-key-source.json` file with private permissions. The
-file contains only an absolute path and a `plain` or `rtf` format; it never
-contains the key itself. The referenced key file must also be a private regular
+file contains only an absolute path and a `plain` or `rtf` format, or
+`{"format":"keychain","service":"<name>","account":"<name>"}` to read a
+generic password from the macOS login keychain with `/usr/bin/security`
+(macOS only; it fails closed elsewhere, and errors name only the service); it
+never contains the key itself. The referenced key file must also be a private regular
 file. For RTF, the wrapper converts it in memory with macOS `textutil`, validates
 that the result is one printable token, and passes it to the engine as
 `GRAPH_JEV_API_KEY` only when explicitly launched with
