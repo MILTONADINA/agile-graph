@@ -29,7 +29,7 @@ tag such as `v0.1.0` is pushed. It:
 4. installs both packed tarballs into an empty directory and runs the CLI
    (`scripts/npm-smoke.mjs`);
 5. generates a CycloneDX SBOM for each package with `npm sbom
-   --sbom-format cyclonedx --omit dev` (runtime dependencies only) and uploads
+--sbom-format cyclonedx --omit dev` (runtime dependencies only) and uploads
    `contracts.cdx.json` and `engine.cdx.json` as the workflow artifact
    `sbom-<tag>`, next to the provenance npm records;
 6. publishes the contracts package, then the engine, skipping a version that
