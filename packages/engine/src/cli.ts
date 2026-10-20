@@ -253,7 +253,6 @@ function fatalErrorLine(error: unknown): string {
       "<path>",
     )
     // Terminal escape sequences and any other control character.
-    // eslint-disable-next-line no-control-regex
     .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]|[\u0000-\u001f\u007f-\u009f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
