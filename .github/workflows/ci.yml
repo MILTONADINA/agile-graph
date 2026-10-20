@@ -72,6 +72,8 @@ jobs:
         run: node --test scripts/local-engine-env.test.mjs
       - name: Labelling and paired-run collection (synthetic fixtures only)
         run: node --test scripts/labelling.test.mjs
+      - name: Versioning and support policy docs
+        run: node --test scripts/docs-policy.test.mjs
       - name: npm packages and the installed CLI
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
