@@ -48,6 +48,8 @@ jobs:
       - name: Audit production dependencies
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: npm audit --omit=dev --audit-level=high
+      - name: Production dependency licence allowlist
+        run: node scripts/license-allowlist.mjs
       - name: Git branch and push safety
         run: node --test scripts/git-safety.test.mjs
       - name: Cursor private-context exclusions

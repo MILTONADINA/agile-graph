@@ -91,6 +91,9 @@
   `{"format":"keychain","service":...,"account":...}`. It fails closed off
   macOS or when the lookup fails, and errors name only the service.
 - `docs/coverage.md`: plan for an engine coverage report and ratchet floor. Not wired up yet, because `@vitest/coverage-v8` is not installed.
+- `scripts/license-allowlist.mjs` fails CI when a production dependency in
+  `package-lock.json` has a missing licence or one outside
+  `scripts/license-allowlist.json`. It runs offline after `npm audit`.
 - `backup` and `restore` warn when the run store holds orphan rows
   (`run_events` or `run_outcomes` without a run, `plan_approvals` without a
   plan). Only counts are reported; nothing is deleted and the check still
