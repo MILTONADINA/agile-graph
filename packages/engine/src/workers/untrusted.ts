@@ -9,9 +9,12 @@ const DELIMITER_BYTES = 16;
 /** Upper bound on the bytes wrapUntrusted adds around its payload. */
 export const UNTRUSTED_WRAP_BYTES = 700;
 
-export function untrustedDelimiter(content: string): string {
+export function untrustedDelimiter(
+  content: string,
+  random: (size: number) => Buffer = randomBytes,
+): string {
   for (;;) {
-    const delimiter = `UNTRUSTED-${randomBytes(DELIMITER_BYTES).toString("hex")}`;
+    const delimiter = `UNTRUSTED-${random(DELIMITER_BYTES).toString("hex")}`;
     if (!content.includes(delimiter)) return delimiter;
   }
 }
