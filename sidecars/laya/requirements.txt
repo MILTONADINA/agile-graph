@@ -1,4 +1,4 @@
-laya @ https://files.pythonhosted.org/packages/ec/1c/a9903d5c3c51579f45f9656f733c8a2d985b16a3cb7594edf45369d1f995/laya-0.3.5-py3-none-any.whl#sha256=4c57f64cbaf893bb5c7b4affddc2bf21a819f55df51941689f11868583be2903
+laya @ https://files.pythonhosted.org/packages/63/9e/3d6bcd05485b1902ffc7466c1b8529e365fb92b3552893284d7002f42172/laya-0.4.12-py3-none-any.whl#sha256=485625629bf14003e947ce13e5f901cc1ba8d298a152e52917b19017914baf80
 torch==2.8.0
 transformers==4.57.6
 safetensors==0.6.2

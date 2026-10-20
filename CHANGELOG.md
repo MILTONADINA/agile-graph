@@ -25,6 +25,12 @@
   pinned tree-sitter-wasms 0.1.13 grammars, and @cursor/sdk stays at 1.0.32
   because the Cursor worker refuses any version that has not passed its
   control audit.
+- The Laya sidecar uses `laya` 0.4.12 and checkpoint revision
+  `7b928d828b7b0e022f929d9bd2e44165aa270148`, whose model files are identical
+  to the earlier `1c5edc17` pin. The served model id is now
+  `laya-english@7b928d8…/sdk0.4.12/prob-v1`, so reprovision the checkpoint
+  directory and update `decisions.json`. The sidecar also refuses any answer
+  the SDK reports as computed on a truncated state.
 - Run events are read a bounded page at a time. The event stream fetches only
   events after the last one it sent instead of re-reading the whole run every
   second, and `GET /api/runs/:id` returns at most `limit` events (default
