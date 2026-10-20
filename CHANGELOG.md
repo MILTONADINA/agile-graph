@@ -28,8 +28,8 @@
 - The Laya sidecar uses `laya` 0.4.12 and checkpoint revision
   `7b928d828b7b0e022f929d9bd2e44165aa270148`, whose model files are identical
   to the earlier `1c5edc17` pin. The served model id is now
-  `laya-english@7b928d8…/sdk0.4.12/prob-v1`, so reprovision the checkpoint
-  directory and update `decisions.json`. The sidecar also refuses any answer
+  `laya-english@7b928d8…/sdk0.4.12/prob-v1`, so provision the checkpoint into a
+  fresh directory (an existing one is refused), serve from it and update `decisions.json`. The sidecar also refuses any answer
   the SDK reports as computed on a truncated state.
 - Run events are read a bounded page at a time. The event stream fetches only
   events after the last one it sent instead of re-reading the whole run every
