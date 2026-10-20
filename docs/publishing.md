@@ -127,8 +127,9 @@ latest minor of 0.x receives fixes.
 
 ### Node.js range
 
-The supported Node.js range is `^22.18.0 || >=24 <27`, matching the
-[CI matrix](../.github/workflows/ci.yml).
+The supported Node.js range is `^22.18.0 || >=24 <27`, the `engines.node`
+field of the packages. [CI](../.github/workflows/ci.yml) tests Node 24 and the
+22.18.0 floor.
 
 ## What the packages contain
 
