@@ -29,7 +29,7 @@
     "collect-paired": "node scripts/collect-paired.mjs"
   },
   "devDependencies": {
-    "@connectrpc/connect-node": "1.7.0",
+    "@connectrpc/connect-node": "2.2.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
     "eslint": "^10.12.0",
