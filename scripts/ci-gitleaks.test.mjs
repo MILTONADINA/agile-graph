@@ -76,6 +76,7 @@ test("the update bot runs weekly for npm and GitHub Actions", () => {
     assert.match(block, /groups:\n\s+[\w-]+:\n\s+(update-types|patterns):/);
   }
   const npm = bot.split(/^ {2}- /m).find((b) => b.includes("ecosystem: npm\n"));
-  assert.match(npm, /^ {4}open-pull-requests-limit: 5$/m);
+  // npm version-update PRs are off; security updates are a repository setting.
+  assert.match(npm, /^ {4}open-pull-requests-limit: 0$/m);
   assert.match(bot, /hash-pinned/);
 });
