@@ -160,6 +160,27 @@ describe("new dependency gate", () => {
     expect(
       names("pubspec.yaml", "dependencies: {requestz: ^1.0.0, a: {sdk: x}}\n"),
     ).toEqual(["requestz", "a"]);
+    expect(
+      names("pyproject.toml", '[project]\n"dependencies" = ["requestz>=1"]\n'),
+    ).toEqual(["requestz"]);
+    expect(
+      names(
+        "pyproject.toml",
+        '[dependency-groups]\ntest = ["pytest"]\ndev = [{include-group = "test"}, "ruff"]\n',
+      ),
+    ).toEqual(["pytest", "ruff"]);
+    expect(
+      names(
+        "Cargo.toml",
+        "[dependencies]\n'reqwestt' = '1'\nserde = \"2\" # package = \"x\"\n",
+      ),
+    ).toEqual(["reqwestt", "serde"]);
+    expect(
+      names(
+        "go.mod",
+        "module t\nreplace a.com/x => b.com/y v1.0.0\nreplace (\n\tc.com/z => ../z\n)\n",
+      ),
+    ).toEqual(["b.com/y"]);
     expect(names("src/a.js", "anything")).toEqual([]);
     expect(
       newDependencies("package.json", "{bad", '{"dependencies":{"a":"1"}}'),
