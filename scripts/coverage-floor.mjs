@@ -20,7 +20,9 @@ async function readJson(file, label) {
   try {
     return JSON.parse(await readFile(file, "utf8"));
   } catch (error) {
-    throw new Error(`${label} is unreadable or not JSON: ${error.message}`);
+    throw new Error(`${label} is unreadable or not JSON: ${error.message}`, {
+      cause: error,
+    });
   }
 }
 
