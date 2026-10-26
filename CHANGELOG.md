@@ -15,7 +15,8 @@
 - `npm run test:coverage -w @agile-graph/engine` measures engine line coverage
   with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it
   drops below the floor in `scripts/coverage-floor.json` (85%). This replaces
-  the plan in `docs/coverage.md`.
+  the plan in `docs/coverage.md`. The Ubuntu platform job's time limit rises from 45 to
+  60 minutes to fit the extra coverage run.
 - `npm run preflight` lints changed files with `--max-warnings 0`, as CI does.
 
 ## [0.3.0] - 2026-10-26
