@@ -49,6 +49,8 @@ jobs:
         run: node --test scripts/npm-packages.test.mjs
         env:
           GRAPH_ENGINE_RELEASE_TAG: ${{ github.ref_name }}
+      - name: Two packs of this commit give identical tarballs
+        run: node scripts/pack-twice.mjs
       - name: Install the packed tarballs and run the CLI
         run: node scripts/npm-smoke.mjs
       - name: Generate CycloneDX SBOMs

@@ -122,6 +122,12 @@
   still succeeds and reports why space was not reclaimed. `--no-vacuum` skips
   it, and a dry run never vacuums.
 
+### Internal
+
+- CI and the release workflow run `scripts/pack-twice.mjs`, which packs the
+  contracts and engine packages twice from one build and fails with a
+  file-by-file diff if the two tarballs differ; see `docs/publishing.md`.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

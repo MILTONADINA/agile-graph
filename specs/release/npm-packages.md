@@ -58,6 +58,12 @@ it.
   - Test: scripts/readme-quickstart.test.mjs :: every README graph-engine command and flag exists in the built CLI
   - Test: scripts/readme-quickstart.test.mjs :: a renamed README command is reported
   - Test: scripts/readme-quickstart.test.mjs :: a stale README Node range is reported
+- AC8: When the release workflow or CI packs the contracts and engine
+  packages twice from one build, the system shall fail, naming the files that
+  differ, if the two tarballs of either package have different SHA-256 hashes.
+  - Test: scripts/pack-twice.test.mjs :: two packs of an unchanged package are identical
+  - Test: scripts/pack-twice.test.mjs :: a package whose content changes on every pack fails with a file diff
+  - Test: scripts/pack-twice.test.mjs :: the release and CI workflows run the script
 
 ## Security considerations
 
