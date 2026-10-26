@@ -19,7 +19,7 @@ test("an engine source change runs lint on it, the typecheck and the related eng
   assert.deepEqual(steps[1], {
     name: "lint",
     tool: "eslint",
-    args: ["./packages/engine/src/retro.ts"],
+    args: ["--max-warnings", "0", "./packages/engine/src/retro.ts"],
   });
   assert.deepEqual(steps[3], {
     name: "engine tests",
@@ -102,6 +102,8 @@ test("a package's TypeScript configuration runs the typecheck", () => {
 test("a file named like an option is always passed as a path", () => {
   const steps = planPreflight(["--config=evil.mjs", "packages/engine/--x.ts"]);
   assert.deepEqual(steps.find((step) => step.name === "lint").args, [
+    "--max-warnings",
+    "0",
     "./--config=evil.mjs",
     "./packages/engine/--x.ts",
   ]);
