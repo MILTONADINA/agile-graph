@@ -4,6 +4,10 @@
 
 ### Added
 
+- `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
+  total: graph-owned terminal stops for which no `converge` follow-up plan
+  names the run, read through a new read-only store accessor. Second slice
+  of #163.
 - `graph-engine retro` reports `deferredToPerson`, `deferredByReason`
   (`approval`, `credential`, `spending`, `owner-decision`) and
   `graphOwnedStops` per run and in total, from a closed classification of
