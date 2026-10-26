@@ -8,6 +8,18 @@
   published package as its subject and only what that package reaches,
   optional peers included) for each published package and uploads it as a workflow
   artifact; see `docs/publishing.md`.
+- `npm run graph:local -- --with-jev` can read the Jev key from the macOS
+  login keychain: `jev-key-source.json` accepts
+  `{"format":"keychain","service":...,"account":...}`. It fails closed off
+  macOS or when the lookup fails, and errors name only the service.
+- `docs/coverage.md`: plan for an engine coverage report and ratchet floor. Not wired up yet, because `@vitest/coverage-v8` is not installed.
+- `scripts/license-allowlist.mjs` fails CI when a production dependency in
+  `package-lock.json` has a missing licence or one outside
+  `scripts/license-allowlist.json`. It runs offline after `npm audit`.
+- `backup` and `restore` warn when the run store holds orphan rows
+  (`run_events` or `run_outcomes` without a run, `plan_approvals` without a
+  plan). Only counts are reported; nothing is deleted and the check still
+  passes.
 
 ### Documentation
 
@@ -64,21 +76,6 @@
 - `npm run lint` now fails on any ESLint warning (`--max-warnings 0`), and the
   unused `no-control-regex` disable comment in the fatal-error sanitiser is
   removed.
-
-### Added
-
-- `npm run graph:local -- --with-jev` can read the Jev key from the macOS
-  login keychain: `jev-key-source.json` accepts
-  `{"format":"keychain","service":...,"account":...}`. It fails closed off
-  macOS or when the lookup fails, and errors name only the service.
-- `docs/coverage.md`: plan for an engine coverage report and ratchet floor. Not wired up yet, because `@vitest/coverage-v8` is not installed.
-- `scripts/license-allowlist.mjs` fails CI when a production dependency in
-  `package-lock.json` has a missing licence or one outside
-  `scripts/license-allowlist.json`. It runs offline after `npm audit`.
-- `backup` and `restore` warn when the run store holds orphan rows
-  (`run_events` or `run_outcomes` without a run, `plan_approvals` without a
-  plan). Only counts are reported; nothing is deleted and the check still
-  passes.
 
 ### Security
 
