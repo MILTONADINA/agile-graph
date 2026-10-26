@@ -573,6 +573,19 @@ describe("delivery retro", () => {
         expect(resumed.graphOwnedWithoutFollowUp).toBe(0);
       });
 
+      it("counts 0 for a stopped run that was resumed and is still running", () => {
+        const retro = runRetro(
+          record("running"),
+          [
+            event(0, "run.stopped", { error: checks }),
+            event(1, "run.started"),
+            event(2, "worker.dispatched"),
+          ],
+          { followUps: new Set() },
+        );
+        expect(retro.graphOwnedWithoutFollowUp).toBe(0);
+      });
+
       it("omits the count when the follow-up set is not given", () => {
         const [run, events] = stopped(checks);
         expect(runRetro(run, events).graphOwnedWithoutFollowUp).toBeUndefined();

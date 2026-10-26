@@ -347,7 +347,10 @@ export function runRetro(
     }
   }
   // Only a stop the run ended on is terminal; a resumed run's was not.
-  const endedStopped = inRun.at(-1)?.type === "run.stopped";
+  // A resume after it, even one still running, means the run moved on.
+  const endedStopped =
+    inRun.at(-1)?.type === "run.stopped" &&
+    !ordered.slice(inRun.length).some((e) => e.type === "run.started");
   if (humanWait && inRun.at(-1)?.type === "run.succeeded") route(humanWait);
   const minutes: RetroMinutes = {
     total:
