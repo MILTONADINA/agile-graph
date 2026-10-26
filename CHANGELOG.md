@@ -29,6 +29,11 @@
 
 ### Security
 
+- A worker patch that adds a dependency name to a `package.json`,
+  `requirements*.txt`, `pyproject.toml`, `Cargo.toml`, `go.mod` or
+  `pubspec.yaml` is refused before anything is written, naming the new
+  dependency, so a hallucinated or slopsquatted package needs a person's
+  approval. Version changes and removals are allowed.
 - Patched npm dependencies for the advisories that failed CI's production
   `npm audit` gate: body-parser (GHSA-27r3-jxmh-p828), fast-uri, hono
   (GHSA-5r4p-p66f-jhc7 and others), ip-address (GHSA-rxp7-6hxx-x8q5), sharp

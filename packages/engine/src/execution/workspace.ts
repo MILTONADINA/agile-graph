@@ -14,6 +14,7 @@ import type { ProjectPolicy } from "@agile-graph/contracts";
 import type { WorkerProposal } from "../workers/api.js";
 import { hash } from "../util.js";
 import { checkedGit, managedGit } from "./git.js";
+import { newDependencies } from "./dependencies.js";
 import {
   introducesSecret,
   isAllowedPath,
@@ -229,6 +230,16 @@ export async function prepareProposal(
     if (introducesSecret(baselines.get(change.path)!, content))
       throw new Error(`Patch includes a potential secret in ${change.path}`);
     staged.set(change.path, { absolute, content });
+  }
+  // A dependency the manifests did not declare before the patch may be
+  // hallucinated or slopsquatted, so it needs a person's approval: adding
+  // it to the manifest in the checkout before the run counts as one.
+  for (const [file, { content }] of staged) {
+    const added = newDependencies(file, baselines.get(file) ?? "", content);
+    if (added.length)
+      throw new Error(
+        `New dependency needs approval: ${file} adds ${added.join(", ")}, which it did not declare before this patch. A new dependency needs a person's approval; add it to the manifest yourself before the run to approve it.`,
+      );
   }
   return staged;
 }
