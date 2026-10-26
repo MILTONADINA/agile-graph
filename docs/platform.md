@@ -196,7 +196,7 @@ npm run test:coverage -w @agile-graph/engine
 node scripts/coverage-floor.mjs
 ```
 
-The first command prints a summary and writes `packages/engine/coverage/coverage-summary.json` (ignored by Git). The second fails when total line coverage is below the whole percent in `scripts/coverage-floor.json`, and so does a missing or malformed summary or floor. The Linux x64 platform job runs both. Raise the floor, never lower it, in the change that raises coverage. See [coverage](coverage.md).
+The first command prints a summary and writes `packages/engine/coverage/coverage-summary.json` (ignored by Git). The second fails when total line coverage is below the whole percent in `scripts/coverage-floor.json`, and so does a missing or malformed summary or floor. The Linux x64 platform job does not run the suite a second time: setting `GRAPH_ENGINE_COVERAGE=1` makes the ordinary engine test run write the report, CI sets it on that matrix entry only, and the job then runs the second command. Raise the floor, never lower it, in the change that raises coverage. See [coverage](coverage.md).
 
 Runner labels follow GitHub's [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners); the configured `macos-15` runner is ARM64.
 

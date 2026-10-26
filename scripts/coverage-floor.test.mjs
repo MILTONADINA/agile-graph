@@ -97,3 +97,44 @@ test("the committed floor is a whole percent from 1 to 100", async () => {
     Number.isInteger(floor.lines) && floor.lines >= 1 && floor.lines <= 100,
   );
 });
+
+// The floor reads the report the platform job's own engine test run writes;
+// there is no second engine test pass just for coverage (issue #232).
+const ci = await readFile(
+  new URL("../.github/workflows/ci.yml", import.meta.url),
+  "utf8",
+);
+const vitestConfig = await readFile(
+  new URL("../packages/engine/vitest.config.ts", import.meta.url),
+  "utf8",
+);
+
+test("only the Ubuntu x64 entry collects coverage in the existing test run", () => {
+  const check = /^( *)- run: npm run check\n((?:\1 {2}.*\n)*)/m.exec(ci);
+  assert.ok(check, "the platform job runs npm run check");
+  assert.match(
+    check[2],
+    /GRAPH_ENGINE_COVERAGE: \$\{\{ matrix\.os == 'ubuntu-24\.04' && '1' \|\| '' \}\}/,
+  );
+  assert.equal(ci.match(/GRAPH_ENGINE_COVERAGE/g).length, 1);
+  assert.match(
+    vitestConfig,
+    /enabled: process\.env\.GRAPH_ENGINE_COVERAGE === "1"/,
+  );
+});
+
+test("no second engine test pass runs for coverage", () => {
+  assert.doesNotMatch(ci, /test:coverage|--coverage/);
+  const step = /- name: Engine line coverage floor\n((?: {8}.*\n)+)/.exec(ci);
+  assert.ok(step, "the floor step exists");
+  assert.match(step[1], /runner\.os == 'Linux' && runner\.arch == 'X64'/);
+  assert.match(step[1], /node scripts\/coverage-floor\.mjs/);
+  assert.doesNotMatch(step[1], /vitest|npm (run )?test/);
+});
+
+test("the Ubuntu platform job timeout is back to 45 minutes", () => {
+  assert.match(
+    ci,
+    /timeout-minutes: \$\{\{ matrix\.os == 'ubuntu-24\.04' && 45 \|\| 30 \}\}/,
+  );
+});

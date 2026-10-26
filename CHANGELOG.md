@@ -14,6 +14,13 @@
   of them needs `packages/engine/dist`, so a fresh checkout no longer fails
   `readme-quickstart.test.mjs` (#228).
 
+### Changed
+
+- The Linux x64 platform job collects engine coverage during the engine tests
+  it already runs (`GRAPH_ENGINE_COVERAGE=1`, that matrix entry only) instead of
+  running the suite a second time, and its time limit goes back to 45 minutes
+  (#232).
+
 ### Security
 
 - A worker patch that adds a dependency name to a `package.json`,
@@ -27,8 +34,7 @@
 - `npm run test:coverage -w @agile-graph/engine` measures engine line coverage
   with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it
   drops below the floor in `scripts/coverage-floor.json` (85%). This replaces
-  the plan in `docs/coverage.md`. The Ubuntu platform job's time limit rises from 45 to
-  60 minutes to fit the extra coverage run.
+  the plan in `docs/coverage.md`.
 - `npm run preflight` lints changed files with `--max-warnings 0`, as CI does.
 
 ## [0.3.0] - 2026-10-26
