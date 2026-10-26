@@ -31,6 +31,7 @@ import {
 } from "../src/project.js";
 import { GraphEngine } from "../src/service.js";
 import { classifyError } from "../src/feedback.js";
+import { findingSignature } from "../src/workers/review.js";
 import { similarFilesNote } from "../src/execution/requested-sources.js";
 import { viewing, viewingEdits } from "./worker-view.js";
 import { applyProposal } from "../src/execution/workspace.js";
@@ -3703,7 +3704,7 @@ describe("code review gate", () => {
     );
   });
 
-  it("re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed", async () => {
+  it("re-checks earlier blocking findings before reviewing again, skips the full review while one is unfixed, and stops on that repeat", async () => {
     const blocking = {
       severity: "blocking" as const,
       path: "math.test.cjs",
@@ -3730,52 +3731,91 @@ describe("code review gate", () => {
       ],
       fixChecks: [
         { verdict: "still_present", evidence: "Only one sum is tested" },
-        { verdict: "fixed", evidence: "A second sum is tested" },
       ],
     });
-    expect(result.error ?? "").toBe("");
-    expect(result.status).toBe("succeeded");
+    // The finding is still present on attempt 2: the same rejection twice
+    // in a row ends the run rather than spending attempt 3.
+    expect(result.status).toBe("failed");
+    expect(classifyError(result.error ?? "")).toBe("repeated-review-finding");
     const id = findingId(blocking);
-    // The finding's ID is recorded with it, and every check names it.
     const completed = events.filter(
       (event) => event.type === "review.completed",
     );
+    // The finding's ID is recorded with it, and the check names it.
     expect(completed[0]!.data.findings).toContainEqual(
       expect.objectContaining({ id, severity: "blocking" }),
     );
-    expect(fixChecked.map((check) => check.id)).toEqual([id, id]);
-    // Attempt 2's unfixed finding failed the review with no full review;
-    // attempt 3's fixed one let the full review run.
-    expect(reviewed).toHaveLength(2);
-    const checks = events
-      .filter((event) => event.type === "review.verify_fix")
-      .map(({ data: { snapshotHash, ...data } }) => ({ snapshotHash, data }));
-    expect(checks.map((check) => check.data)).toEqual([
-      {
-        findingId: id,
-        verdict: "still_present",
-        evidence: "Only one sum is tested",
-      },
-      { findingId: id, verdict: "fixed", evidence: "A second sum is tested" },
-    ]);
-    // Each check names the snapshot it judged; the attempts' differ.
-    expect(typeof checks[0]!.snapshotHash).toBe("string");
-    expect(checks[1]!.snapshotHash).not.toBe(checks[0]!.snapshotHash);
+    expect(fixChecked.map((check) => check.id)).toEqual([id]);
+    expect(reviewed).toHaveLength(1);
     expect(completed.map((event) => event.data.stage ?? "review")).toEqual([
       "review",
       "verify-fix",
-      "review",
     ]);
     expect(completed[1]!.data).toMatchObject({
       passed: false,
       findings: [expect.objectContaining({ id })],
     });
+    expect(feedback).toHaveLength(2);
     expect(feedback[1]).toContain(
       "Optional advisory findings (not required to pass review):",
     );
-    expect(feedback[2]).toContain(
-      `- Blocking in math.test.cjs:1: Add a test for another sum (finding ${id}; still present: Only one sum is tested)`,
+  });
+
+  it("carries earlier rejections' signatures into the next repair round, and stops when the same finding comes back", async () => {
+    const finding = {
+      severity: "blocking" as const,
+      path: "math.test.cjs",
+      line: 1,
+      message: "Add a test for another sum",
+    };
+    const { result, feedback, events } = await setup({
+      reviews: [
+        {
+          verdict: "request-changes",
+          summary: "Needs a second test",
+          criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "ok" }],
+          findings: [finding],
+        },
+      ],
+      fixChecks: [{ verdict: "still_present", evidence: "Still one sum" }],
+    });
+    const signature = findingSignature(finding);
+    expect(feedback[1]).toContain("already raised");
+    expect(feedback[1]).toContain(signature);
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("same finding");
+    expect(classifyError(result.error ?? "")).toBe("repeated-review-finding");
+    // Never an accept, and no attempt is spent after the second rejection.
+    expect(feedback).toHaveLength(2);
+    expect(
+      events.filter((event) => event.type === "review.completed"),
+    ).toHaveLength(2);
+    expect(
+      events.find((event) => event.type === "review.repeated_finding")?.data,
+    ).toMatchObject({ signatures: [signature] });
+    const completed = events.filter(
+      (event) => event.type === "review.completed",
     );
+    expect(completed[0]!.data.minutes).toEqual(expect.any(Number));
+    expect(completed[0]!.data.findings).toContainEqual(
+      expect.objectContaining({ signature }),
+    );
+  });
+
+  it("continues when the next rejection raises a different finding", async () => {
+    const { result, feedback } = await setup({
+      reviews: [
+        requestChanges([blockingFinding("Add a test for another sum")]),
+        requestChanges([blockingFinding("Rename the helper")]),
+        approve,
+      ],
+      fixChecks: [{ verdict: "fixed", evidence: "done" }],
+      attempts: 4,
+    });
+    expect(result.error ?? "").toBe("");
+    expect(result.status).toBe("succeeded");
+    expect(feedback[2]).toContain("already raised");
+    expect(feedback[2]).toContain("Add a test for another sum");
   });
 
   const blockingFinding = (message: string) => ({

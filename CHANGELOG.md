@@ -9,6 +9,10 @@
   `graphOwnedStops` per run and in total, from a closed classification of
   every stop kind; plan-approval stops now have their own `plan-approval`
   kind. First slice of #163.
+- A review that rejects the same finding twice in a row now stops the run with
+  the `repeated-review-finding` kind instead of repeating the same repair (#146).
+  Findings get a stable signature, the next repair round is told which
+  findings were already raised, and each review round records its `minutes`.
 - `serve --log-requests` now writes structured JSON lines (`level`, `time`,
   `method`, `route`, `status`, `duration_ms`, `request_id`), with the error
   name and redacted message on a 5xx and no query string, header or stack.

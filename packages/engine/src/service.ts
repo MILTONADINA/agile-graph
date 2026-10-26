@@ -108,6 +108,11 @@ import {
   invokeRepeatDecision,
   invokeVerifyFix,
   priorBlockingFindings,
+  earlierFindingsNotice,
+  findingSignature,
+  rejectionHistory,
+  type RejectedFinding,
+  repeatedSignatures,
   reusableFixVerdicts,
   reviewOutcome,
   VERIFY_FIX_LIMIT,
@@ -3313,6 +3318,36 @@ export class GraphEngine {
         // fresh call each, so the reviewer never confirms its own finding
         // inside a review looking for new ones. Any not shown fixed fails
         // the review without a full review; it runs once all are fixed.
+        const reviewStarted = Date.now();
+        const reviewMinutes = () =>
+          Math.round(((Date.now() - reviewStarted) / 60_000) * 100) / 100;
+        // Earlier rejections, for the next repair round's instructions and
+        // for stopping when the same finding is raised twice in a row.
+        const history = rejectionHistory(this.store.events(run.id));
+        // The notice lists every finding raised so far, this round's too.
+        const withEarlier = (feedback: string, current: RejectedFinding[]) => {
+          const notice = earlierFindingsNotice([...history, current]);
+          return notice ? `${feedback}\n\n${notice}` : feedback;
+        };
+        const stopOnRepeat = (
+          current: readonly { signature: string }[],
+          snapshot: string,
+        ) => {
+          const previous = history.at(-1);
+          const signatures = previous
+            ? repeatedSignatures(previous, current)
+            : [];
+          if (!signatures.length) return;
+          this.store.event(
+            run.id,
+            "review.repeated_finding",
+            { signatures, snapshotHash: snapshot },
+            stepId,
+          );
+          throw new Error(
+            `Code review raised the same finding on two rounds in a row (${signatures.join(", ")}); the run stopped instead of repeating the same repair. Change the approach: narrow the scope, make a structural fix, or mark the run blocked`,
+          );
+        };
         const prior = priorBlockingFindings(
           this.store
             .events(run.id)
@@ -3388,7 +3423,18 @@ export class GraphEngine {
             );
           }
           if (unfixed.length) {
-            const feedback = verifyFixFeedback(unfixed, prior.length);
+            const signed = unfixed.map(({ finding }) => ({
+              finding,
+              signature: findingSignature(finding),
+            }));
+            const feedback = withEarlier(
+              verifyFixFeedback(unfixed, prior.length),
+              signed.map(({ finding, signature }) => ({
+                signature,
+                path: finding.path,
+                text: finding.message,
+              })),
+            );
             // Recorded as a failed review, so the board, a person's approval
             // and the next retry see where the run stopped; the next retry
             // checks only the findings still listed here.
@@ -3403,17 +3449,20 @@ export class GraphEngine {
                 snapshotHash,
                 summary: `${unfixed.length} of ${prior.length} earlier blocking finding(s) are not shown to be fixed`,
                 criteria: [],
-                findings: unfixed.map(({ finding }) => ({
+                minutes: reviewMinutes(),
+                findings: signed.map(({ finding, signature }) => ({
                   severity: "blocking",
                   path: finding.path,
                   line: finding.line,
                   message: redact(finding.message),
                   id: finding.id,
+                  signature,
                 })),
                 note: "A reviewer can hold a change back but not accept it; human acceptance stays pending.",
               },
               stepId,
             );
+            stopOnRepeat(signed, snapshotHash);
             return {
               passed: false,
               feedback,
@@ -3461,18 +3510,40 @@ export class GraphEngine {
               met: criterion.met,
               evidence: redact(criterion.evidence),
             })),
+            minutes: reviewMinutes(),
             findings: result.review.findings.map((finding) => ({
               ...finding,
               message: redact(finding.message),
               id: findingId(finding),
+              signature: findingSignature(finding),
             })),
             note: "A reviewer can hold a change back but not accept it; human acceptance stays pending.",
           },
           stepId,
         );
+        if (!outcome.passed)
+          stopOnRepeat(
+            result.review.findings
+              .filter((finding) => finding.severity === "blocking")
+              .map((finding) => ({ signature: findingSignature(finding) })),
+            snapshotHash,
+          );
+        const feedback = outcome.passed
+          ? outcome.feedback
+          : withEarlier(
+              outcome.feedback,
+              result.review.findings
+                .filter((finding) => finding.severity === "blocking")
+                .map((finding) => ({
+                  signature: findingSignature(finding),
+                  path: finding.path,
+                  text: finding.message,
+                })),
+            );
         return {
           ...outcome,
-          exportable: exportable && !containsSecret(outcome.feedback),
+          feedback,
+          exportable: exportable && !containsSecret(feedback),
         };
       };
       // Scans the verified workspace against the committed baseline. An

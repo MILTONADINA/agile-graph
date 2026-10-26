@@ -91,6 +91,19 @@ it records the verdict again with `reused: true` instead of paying for the
 check. A verdict is never reused at another snapshot, and `still_present` or
 `inconclusive` is always checked again.
 
+### Repeated findings
+
+Each blocking finding gets a signature: a short hash of its file path and its
+text with case, numbers (line numbers included) and whitespace ignored, so the
+same finding keeps its signature when the code moves. A failing review's
+feedback lists the signatures and short texts of every finding raised so far
+and tells the worker not to repeat the same fix. If the next rejection raises
+a finding with the same signature, the run records `review.repeated_finding`
+and stops with the `repeated-review-finding` kind instead of spending another
+attempt on the same repair; change the approach (narrow the scope, make a
+structural fix, or mark it blocked) before resuming. A stop is never an
+acceptance. Each `review.completed` event records the round's `minutes`.
+
 ## Limits
 
 - **A reviewer can only hold a change back.** It cannot accept a change,
