@@ -66,6 +66,12 @@ jobs:
         run: node --test scripts/dist-freshness.test.mjs
       - name: README quick start matches the built CLI
         run: node --test scripts/readme-quickstart.test.mjs
+      - name: Engine line coverage floor
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: |
+          node --test scripts/coverage-floor.test.mjs
+          npm run test:coverage -w @agile-graph/engine
+          node scripts/coverage-floor.mjs
       - name: Branch-protection policy
         run: node --test scripts/branch-protection.test.mjs
       - name: Secret-scan CI job

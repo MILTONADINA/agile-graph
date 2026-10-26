@@ -1,30 +1,23 @@
-# Coverage measurement plan
+# Coverage measurement
 
-Status: planned, not implemented. The engine has no coverage report today.
+Engine line coverage is measured with Vitest's v8 provider
+(`@vitest/coverage-v8`, a root dev dependency kept at the same version as
+`vitest`; the two must match).
 
-## Why nothing is wired up yet
+```sh
+npm run test:coverage -w @agile-graph/engine
+node scripts/coverage-floor.mjs
+```
 
-Vitest's built-in v8 coverage needs the `@vitest/coverage-v8` package. In
-`package-lock.json` it appears only as an optional peer dependency of
-`vitest` (a version range, no resolved package entry), so it is not
-installed. Adding a dependency changes the hash-pinned lockfile and is a
-separate, owner-reviewed change, so this plan adds none.
+The report covers `packages/engine/src` and is written to
+`packages/engine/coverage/` (ignored by Git) as a text summary and
+`coverage-summary.json`. `scripts/coverage-floor.mjs` fails when total line
+coverage is below the whole percent in `scripts/coverage-floor.json`. The
+Linux x64 platform job runs both after the build. The spec is
+[coverage-floor](../specs/quality/coverage-floor.md).
 
-## Plan once the dependency is approved
+## Ratchet
 
-1. Add `@vitest/coverage-v8` as a dev dependency at the same version as
-   `vitest` (they must match), in its own dependency PR.
-2. Add `"coverage": "vitest run --coverage"` to `packages/engine/package.json`
-   with the `v8` provider, a `json-summary` reporter and `src/**` included.
-3. Record the first measured line and branch percentages in a committed JSON
-   file (for example `docs/coverage-floor.json`). This is the ratchet floor.
-4. Add a `scripts/` test that reads the summary and fails when line or branch
-   coverage falls below the floor. The floor only moves up, in the same PR
-   that raises coverage.
-5. Run the report inside an existing CI job. Do not rename jobs: names are
-   pinned by `scripts/branch-protection-policy.mjs`.
-
-## Open choices
-
-- Whether to gate on lines and branches only, or also functions.
-- Whether the floor allows a small tolerance (suggested: none, to avoid drift).
+The floor is the measured value rounded down: 85.38% lines gives 85. It only
+moves up, in the same change that raises coverage, and has no tolerance.
+Branches and functions are reported but not gated.
