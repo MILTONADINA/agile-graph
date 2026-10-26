@@ -1,6 +1,6 @@
 {
   "name": "@agile-graph/engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "An AI agile team for your repository: test-first AI workers in isolated Git worktrees, behind the checks, code review and security scans you approve.",
   "keywords": [
     "agile-graph",
@@ -58,7 +58,7 @@
     "prepack": "node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@agile-graph/contracts": "0.2.0",
+    "@agile-graph/contracts": "0.3.0",
     "@fastify/static": "10.1.6",
     "@modelcontextprotocol/sdk": "1.32.1",
     "better-sqlite3": "13.0.3",
