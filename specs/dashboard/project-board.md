@@ -53,10 +53,11 @@ A team lead wants to open one page and see what the graph is doing, what is done
   - Test: packages/engine/tests/server.test.ts :: streams only events after the last one sent, in bounded pages
   - Test: packages/engine/tests/server.test.ts :: returns a bounded page of run events with a nextAfter cursor
   - Test: packages/engine/tests/store-events-after.test.ts :: reads a run's events after a position, in order, with a bounded limit
-- AC15: By default the dashboard server writes no request or error log. With `serve --log-requests` it writes one line per request to stderr (method, route pattern, status, duration in ms) and one line per 5xx error (error name and redacted message). It never logs the query string, headers, body, token, cookies or file paths: the route is the matched pattern, an unmatched request is logged as `(unmatched)`, a quoted file path is removed even when it holds spaces, and an event stream is logged once when it closes.
+- AC15: By default the dashboard server writes no request or error log. With `serve --log-requests` it writes one JSON line per request to stderr with `level` (`info`, `warn` for 4xx, `error` for 5xx), `time` (UTC ISO 8601), `method`, `route`, `status`, `duration_ms` and a generated `request_id`; a 5xx line also carries `error` (name and redacted message, no stack). It never logs the query string, headers (authorization, cookie and token-like included), body, token or file paths, and ignores a caller-supplied request id: the route is the matched pattern, an unmatched request is logged as `(unmatched)`, a quoted file path is removed even when it holds spaces, and an event stream is logged once when it closes.
   - Test: packages/engine/tests/server-hardening.test.ts :: writes nothing by default
-  - Test: packages/engine/tests/server-hardening.test.ts :: logs the route pattern, status and duration, not the query
-  - Test: packages/engine/tests/server-hardening.test.ts :: logs a 5xx error with a redacted message
+  - Test: packages/engine/tests/server-hardening.test.ts :: logs one JSON line with the route pattern, status and duration, not the query
+  - Test: packages/engine/tests/server-hardening.test.ts :: never logs authorization, cookie or token headers or an inbound request id
+  - Test: packages/engine/tests/server-hardening.test.ts :: logs a 500 at error level with a redacted message and no stack or body
   - Test: packages/engine/tests/server-hardening.test.ts :: redacts a quoted path that contains spaces
   - Test: packages/engine/tests/server-hardening.test.ts :: logs an event stream when it closes
 - AC16: When the dashboard loads with a token in session storage under the pre-rename key `graph-engineering-token` and none under `agile-graph-token`, it shall use that token, store it under `agile-graph-token` and remove the old key; a token in the URL fragment shall be stored under the new key and the old key removed.

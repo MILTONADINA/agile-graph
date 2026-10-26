@@ -1,6 +1,6 @@
 import Fastify, { type FastifyRequest } from "fastify";
 import fastifyStatic from "@fastify/static";
-import { timingSafeEqual, randomBytes } from "node:crypto";
+import { timingSafeEqual, randomBytes, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { OutgoingHttpHeaders } from "node:http";
 import { z } from "zod";
@@ -150,21 +150,38 @@ export function createServer(
     logRequests?: boolean;
   } = {},
 ) {
-  const app = Fastify({ logger: false, bodyLimit: 1_000_000 });
-  // One opt-in line per request. Hijacked event streams skip onResponse, so
-  // they call this themselves when the stream closes.
+  // The id is generated here; a caller-supplied x-request-id is ignored.
+  const app = Fastify({
+    logger: false,
+    bodyLimit: 1_000_000,
+    genReqId: () => randomUUID(),
+  });
+  // Opt-in structured log: one JSON line per request to stderr. Only the
+  // level, time, method, route pattern (never request.url, which holds the
+  // query string), status, duration and a generated request id. Headers and
+  // query values are never read. A 5xx also carries the error name and a
+  // redacted message, never a stack or body. Hijacked event streams skip
+  // onResponse, so they call this themselves when the stream closes.
+  const faults = new WeakMap<object, { name: string; message: string }>();
   const logRequest = options.logRequests
     ? (request: FastifyRequest, status: number, elapsedMs: number): void => {
         const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
+        const error = faults.get(request);
         process.stderr.write(
-          `${request.method} ${route ?? "(unmatched)"} ${status} ${Math.round(elapsedMs)}ms\n`,
+          `${JSON.stringify({
+            level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
+            time: new Date().toISOString(),
+            method: request.method,
+            route: route ?? "(unmatched)",
+            status,
+            duration_ms: Math.round(elapsedMs),
+            request_id: request.id,
+            ...(error ? { error } : {}),
+          })}\n`,
         );
       }
     : undefined;
   if (options.logRequests) {
-    // Opt-in, one line each to stderr. Only the method, the route pattern
-    // (never request.url, which holds the query string), the status and the
-    // duration; an error line carries its name and redacted message.
     const oneLine = (text: string, request: { url: string }) => {
       // Also drop what this request itself carried, in case a fault echoes it.
       const query = request.url.split("?").slice(1).join("?");
@@ -187,10 +204,10 @@ export function createServer(
       // A fault can be thrown as any value, not only an Error.
       const name = error instanceof Error ? error.name : "NonError";
       const message = error instanceof Error ? error.message : String(error);
-      const route = request.is404 ? "(unmatched)" : request.routeOptions.url;
-      process.stderr.write(
-        `ERROR ${request.method} ${route ?? "(unmatched)"} ${oneLine(name, request)}: ${oneLine(message, request)}\n`,
-      );
+      faults.set(request, {
+        name: oneLine(name, request),
+        message: oneLine(message, request),
+      });
     });
   }
   app.addHook("onRequest", async (request, reply) => {

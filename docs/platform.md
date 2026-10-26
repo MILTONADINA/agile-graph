@@ -16,9 +16,24 @@ npm run graph -- -C /path/to/project context 'Where is authentication handled?'
 npm run graph -- -C /path/to/project serve
 ```
 
-Open the printed loopback URL. Its fragment contains a local access token, which the dashboard stores only in the browser session. The server rejects unauthenticated API requests, non-loopback hostnames, and cross-origin requests. It is not a remotely exposed team service. The server logs nothing by default; `serve --log-requests` writes one line per request (method, route pattern, status, duration) and one per 5xx error (error name and redacted message) to stderr, never the query string, headers, body or token.
+Open the printed loopback URL. Its fragment contains a local access token, which the dashboard stores only in the browser session. The server rejects unauthenticated API requests, non-loopback hostnames, and cross-origin requests. It is not a remotely exposed team service. The server logs nothing by default; `serve --log-requests` writes one JSON line per request to stderr (see [Request log](#request-log)).
 
 `.graph/project.json` is shared project configuration. Private data lives in the platform-specific user data directory under `agile-graph/projects/<projectId>` (an existing `graph-engineering` folder is still used when it is the only one; see [Renamed from Graph Engineering](#renamed-from-graph-engineering)); `GRAPH_ENGINE_DATA_DIR` can choose another root. Project IDs are stable across the partners' clones, while worktree and dirty-content identities keep source snapshots distinct.
+
+### Request log
+
+`serve --log-requests` is off by default. When on, it writes one JSON object per line to stderr, once per request (an event stream is logged when it closes):
+
+- `level`: `info`, `warn` (4xx) or `error` (5xx).
+- `time`: UTC, ISO 8601.
+- `method`: the HTTP method.
+- `route`: the matched route pattern such as `/api/runs/:id`, or `(unmatched)`; never the raw URL or query string.
+- `status`: the response status code.
+- `duration_ms`: elapsed time, rounded.
+- `request_id`: a random UUID generated per request; a caller-supplied `x-request-id` is ignored.
+- `error` (5xx only): `name` and a redacted `message`, with no stack trace or body.
+
+Headers (including `authorization`, `cookie` and token-like ones), query values, bodies and the access token are never written.
 
 ## Renamed from Graph Engineering
 
