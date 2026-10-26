@@ -16,7 +16,7 @@ export const ERROR_KINDS = [
     // First: its messages end in words other kinds match ("must be given").
     kind: "plan-approval",
     pattern:
-      /needs a person's (stored|current) approval|requires a person to approve|needs that approval to still hold/,
+      /needs a person's (stored |current )?approval|New dependency needs approval|requires a person to approve|needs that approval to still hold/,
     description: "A plan needed a person's approval",
   },
   {
