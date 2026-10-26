@@ -9,11 +9,16 @@ npm run test:coverage -w @agile-graph/engine
 node scripts/coverage-floor.mjs
 ```
 
+Locally, `GRAPH_ENGINE_COVERAGE=1 npm test -w @agile-graph/engine` writes the
+same report.
+
 The report covers `packages/engine/src` and is written to
 `packages/engine/coverage/` (ignored by Git) as a text summary and
 `coverage-summary.json`. `scripts/coverage-floor.mjs` fails when total line
 coverage is below the whole percent in `scripts/coverage-floor.json`. The
-Linux x64 platform job runs both after the build. The spec is
+Linux x64 platform job does not run the suite again: its `npm run check` step
+sets `GRAPH_ENGINE_COVERAGE=1` for that matrix entry only, so the engine tests
+it already runs write the report, and a later step runs the floor check. The spec is
 [coverage-floor](../specs/quality/coverage-floor.md).
 
 ## Ratchet

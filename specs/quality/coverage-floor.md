@@ -20,6 +20,10 @@ anyone noticing. A measured floor that only moves up makes a drop visible in CI.
   - Test: scripts/coverage-floor.test.mjs :: fails on malformed summaries and floors
 - AC3: The committed floor shall be a whole percent from 1 to 100.
   - Test: scripts/coverage-floor.test.mjs :: the committed floor is a whole percent from 1 to 100
+- AC4: While the platform job runs on Ubuntu x64, the engine tests that job already runs shall collect the coverage report the floor check reads, and no other matrix entry shall collect coverage or run the engine suite a second time for it.
+  - Test: scripts/coverage-floor.test.mjs :: only the Ubuntu x64 entry collects coverage in the existing test run
+  - Test: scripts/coverage-floor.test.mjs :: no second engine test pass runs for coverage
+  - Test: scripts/coverage-floor.test.mjs :: the Ubuntu platform job timeout is back to 45 minutes
 
 ## Security considerations
 

@@ -28,6 +28,9 @@ export default defineConfig({
     testTimeout: process.platform === "win32" ? 60000 : 30000,
     hookTimeout: process.platform === "win32" ? 60000 : 30000,
     coverage: {
+      // Off unless CI asks for it on one matrix entry, so the floor check
+      // reads the report of the test run that job already makes.
+      enabled: process.env.GRAPH_ENGINE_COVERAGE === "1",
       provider: "v8",
       include: ["src/**"],
       reporter: ["text-summary", "json-summary"],
