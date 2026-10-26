@@ -38,6 +38,12 @@
   arrays (GHSA-mrhx-c7xc-m3w5), and gave every array schema in the engine an
   explicit maximum length. `npm audit --omit=dev --audit-level=high` passes.
 
+### Internal
+
+- A test checks the README's Install commands and Node range against the built
+  CLI and `engines.node`, and the npm smoke runs the README's `init` and
+  `index --lexical` arguments, so the README cannot drift unnoticed.
+
 ### Changed
 
 - The engine uses zod 4 (`@agile-graph/contracts` has no zod dependency, so
