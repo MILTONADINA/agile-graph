@@ -126,6 +126,12 @@ An operator wants a worker model to implement a planned change without touching 
   - Test: packages/engine/tests/data-root.test.ts :: keeps a legacy Rekor state folder when only the legacy data folder exists
 - AC32: Where `GRAPH_ENGINE_DATA_DIR` is set, the system shall use it as the data root whichever of the two per-user folders exists.
   - Test: packages/engine/tests/data-root.test.ts :: lets GRAPH_ENGINE_DATA_DIR win over both folders
+- AC33: When a worker proposal adds a dependency name to a `package.json`, `requirements*.txt`, `pyproject.toml`, `Cargo.toml`, `go.mod` or `pubspec.yaml` that the file did not declare before the patch, the system shall refuse the patch before writing anything, with an error that names the file and the new dependency and says a new dependency needs a person's approval; a version change, a removal or a patch to any other file is not refused. A person approves a dependency by adding it to the manifest before the run.
+  - Test: packages/engine/tests/new-dependency-gate.test.ts :: refuses an added npm dependency and names it
+  - Test: packages/engine/tests/new-dependency-gate.test.ts :: refuses an added Python dependency
+  - Test: packages/engine/tests/new-dependency-gate.test.ts :: allows a version bump of an existing name
+  - Test: packages/engine/tests/new-dependency-gate.test.ts :: allows removing a dependency
+  - Test: packages/engine/tests/new-dependency-gate.test.ts :: leaves a patch to an unrelated file alone
 
 ## Security considerations
 
