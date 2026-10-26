@@ -81,7 +81,8 @@ jobs:
       - name: npm packages and the installed CLI
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
-          node --test scripts/npm-packages.test.mjs
+          node --test scripts/npm-packages.test.mjs scripts/pack-twice.test.mjs
+          node scripts/pack-twice.mjs
           node scripts/npm-smoke.mjs
       - name: Evaluation protocol and intake checks
         run: node --test evaluation/candidate-cases.test.mjs evaluation/candidate-mount.test.mjs evaluation/native-mount.test.mjs evaluation/isolated-candidate.test.mjs evaluation/calibration-corpus.test.mjs evaluation/corpus-history.test.mjs evaluation/historical-receipt-pins.test.mjs evaluation/candidate-retry-visibility.test.mjs evaluation/verify-retry-visibility.test.mjs evaluation/candidate-cloud-graph.test.mjs evaluation/candidate-verifier-infrastructure.test.mjs evaluation/candidate-verifier-setup.test.mjs evaluation/verify-verifier-infrastructure.test.mjs

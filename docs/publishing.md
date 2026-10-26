@@ -26,9 +26,13 @@ tag such as `v0.1.0` is pushed. It:
 3. builds everything, then checks that the tag matches both package versions,
    the package metadata and the exact files each tarball contains
    (`scripts/npm-packages.test.mjs`);
-4. installs both packed tarballs into an empty directory and runs the CLI
+4. packs each package twice from the one build and fails with a file-by-file
+   diff if the two tarballs' SHA-256 hashes differ, so a nondeterministic
+   build cannot ship (`scripts/pack-twice.mjs`, also run in CI and tested by
+   `scripts/pack-twice.test.mjs`);
+5. installs both packed tarballs into an empty directory and runs the CLI
    (`scripts/npm-smoke.mjs`);
-5. generates a CycloneDX SBOM for each package with `scripts/sbom.mjs`, which
+6. generates a CycloneDX SBOM for each package with `scripts/sbom.mjs`, which
    runs `npm sbom --workspace <dir> --sbom-format cyclonedx`, makes the
    published package the subject (npm names the private root) and keeps only
    the components that package reaches, its optional peers included and its
@@ -36,7 +40,7 @@ tag such as `v0.1.0` is pushed. It:
    (`--omit dev` would drop them, since the lockfile marks them dev), and uploads
    `contracts.cdx.json` and `engine.cdx.json` as the workflow artifact
    `sbom-<tag>`, next to the provenance npm records;
-6. publishes the contracts package, then the engine, skipping a version that
+7. publishes the contracts package, then the engine, skipping a version that
    is already on npm.
 
 `scripts/sbom.test.mjs` runs the same script locally and checks the subject,
