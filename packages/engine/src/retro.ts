@@ -253,6 +253,7 @@ export function runRetro(
   const stopKinds: ErrorKind[] = [];
   const deferredByReason: Partial<Record<PersonReason, number>> = {};
   let graphOwnedStops = 0;
+  let humanWait: PersonReason | undefined;
   const route = (owner: StopOwner) => {
     if (owner === "graph") graphOwnedStops++;
     else deferredByReason[owner] = (deferredByReason[owner] ?? 0) + 1;
@@ -293,9 +294,11 @@ export function runRetro(
         route(STOP_OWNERS[kind]);
       }
     }
+    // The wait is recorded before the final gates and publication, so it
+    // only counts once the run went on to succeed (below), and once.
     const waitReason =
       HUMAN_WAIT_REASONS[event.type as keyof typeof HUMAN_WAIT_REASONS];
-    if (waitReason) route(waitReason);
+    if (waitReason) humanWait = waitReason;
     if (event.type === "attempt.started") attempts++;
     // A multi-step plan's first worker attempts start as steps.
     if (
@@ -329,6 +332,7 @@ export function runRetro(
       lastSignature.set(step, signature);
     }
   }
+  if (humanWait && inRun.at(-1)?.type === "run.succeeded") route(humanWait);
   const minutes: RetroMinutes = {
     total:
       inRun.length > 1 ? minutesBetween(inRun[0]!.at, inRun.at(-1)!.at) : 0,

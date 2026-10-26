@@ -42,6 +42,7 @@ the measuring step: it changes no gate, prompt or run.
   - Test: packages/engine/tests/retro.test.ts :: classifies every stop kind as a person reason or the graph's own
   - Test: packages/engine/tests/retro.test.ts :: counts a plan-approval stop as deferred with reason approval
   - Test: packages/engine/tests/retro.test.ts :: counts a spending-cap stop and a human-acceptance wait as deferred
+  - Test: packages/engine/tests/retro.test.ts :: counts a new-dependency refusal as approval, and an acceptance wait only in a run that succeeded
   - Test: packages/engine/tests/retro.test.ts :: counts a checks-failed stop as graph-owned, not deferred
   - Test: packages/engine/tests/retro.test.ts :: aggregates across runs and still reads an old record without the fields
 

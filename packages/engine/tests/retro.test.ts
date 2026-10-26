@@ -470,6 +470,30 @@ describe("delivery retro", () => {
       });
     });
 
+    it("counts a new-dependency refusal as approval, and an acceptance wait only in a run that succeeded", () => {
+      expect(
+        classifyError(
+          "New dependency needs approval: left-pad. A new dependency needs a person's approval",
+        ),
+      ).toBe("plan-approval");
+      const failedAfterWait = runRetro(record("failed"), [
+        event(0, "acceptance.pending_review", {}),
+        event(1, "run.stopped", { error: "Security scan found a finding" }),
+        event(2, "run.started"),
+        event(3, "acceptance.pending_review", {}),
+        event(4, "run.stopped", { error: "Security scan found a finding" }),
+      ]);
+      expect(failedAfterWait.deferredToPerson).toBe(0);
+      const resumed = runRetro(record("succeeded"), [
+        event(0, "acceptance.pending_review", {}),
+        event(1, "run.stopped", { error: "Required checks failed" }),
+        event(2, "run.started"),
+        event(3, "acceptance.pending_review", {}),
+        event(4, "run.succeeded"),
+      ]);
+      expect(resumed.deferredByReason).toEqual({ "owner-decision": 1 });
+    });
+
     it("counts a checks-failed stop as graph-owned, not deferred", () => {
       const retro = runRetro(record("failed"), [
         event(0, "run.stopped", { error: "Required checks failed" }),
