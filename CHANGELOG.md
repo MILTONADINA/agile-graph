@@ -4,6 +4,11 @@
 
 ### Added
 
+- `graph-engine retro` reports `deferredToPerson`, `deferredByReason`
+  (`approval`, `credential`, `spending`, `owner-decision`) and
+  `graphOwnedStops` per run and in total, from a closed classification of
+  every stop kind; plan-approval stops now have their own `plan-approval`
+  kind. First slice of #163.
 - `serve --log-requests` now writes structured JSON lines (`level`, `time`,
   `method`, `route`, `status`, `duration_ms`, `request_id`), with the error
   name and redacted message on a 5xx and no query string, header or stack.

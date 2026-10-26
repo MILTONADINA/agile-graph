@@ -76,7 +76,14 @@ after. For each run and in total it reports:
 - lessons proposed after a repeated failure, and accepted lessons shown to a
   worker;
 - stop reasons as fixed error kinds, such as `scope`, `missing-file`,
-  `context-budget` or `worker-no-progress`.
+  `context-budget` or `worker-no-progress`;
+- how many stops and waits were handed to the person (`deferredToPerson`,
+  and `deferredByReason` for `approval`, `credential`, `spending` and
+  `owner-decision`) against `graphOwnedStops`, defects the graph could fix
+  and schedule itself. Every stop kind is classified in `retro.ts`, so a new
+  kind cannot be added without saying whose it is. Records from before these
+  fields count as zero. This is the first slice of #163; it measures, and
+  does not yet schedule the graph-owned work.
 
 It is read-only and local, like `outcomes`: run IDs, counts, minutes and
 kinds only, never check output, messages, paths or memory text, and no MCP
