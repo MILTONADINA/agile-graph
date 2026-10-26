@@ -20,6 +20,47 @@ export interface RetroMinutes {
   waiting: number;
 }
 
+/** Why a stop or wait needs the person; a closed set. */
+export type PersonReason =
+  "approval" | "credential" | "spending" | "owner-decision";
+
+/**
+ * Who a stop belongs to: a person reason, or `graph` for a defect the graph
+ * can fix itself and should schedule as its own follow-up. A new stop kind
+ * fails to compile until it is classified here.
+ */
+export type StopOwner = PersonReason | "graph";
+
+export const STOP_OWNERS = {
+  "plan-approval": "approval",
+  "policy-changed": "approval",
+  "worker-unavailable": "credential",
+  "cost-cap": "spending",
+  "live-scan": "owner-decision",
+  "workspace-reconciliation": "owner-decision",
+  configuration: "owner-decision",
+  "worker-no-progress": "graph",
+  "repeated-failure": "graph",
+  "checks-failed": "graph",
+  "verification-infrastructure": "graph",
+  "security-gate": "graph",
+  "review-gate": "graph",
+  scope: "graph",
+  "missing-file": "graph",
+  "patch-secret": "graph",
+  aborted: "graph",
+  "context-budget": "graph",
+  "patch-rejected": "graph",
+  "index-limit": "graph",
+  "provider-call": "graph",
+  unknown: "graph",
+} as const satisfies Record<ErrorKind, StopOwner>;
+
+/** Events where a run waits for a person, with the reason. */
+export const HUMAN_WAIT_REASONS = {
+  "acceptance.pending_review": "owner-decision",
+} as const satisfies Record<string, PersonReason>;
+
 /** One run's delivery record: counts, minutes, kinds and its ID only. */
 export interface RunRetro {
   runId: string;
@@ -45,6 +86,14 @@ export interface RunRetro {
   /** Times an accepted lesson was shown to this run's worker. */
   lessonsApplied: number;
   stopKinds: ErrorKind[];
+  /**
+   * Stops and human-acceptance waits routed to the person, and their count
+   * per reason. Absent in records made before these fields existed.
+   */
+  deferredToPerson?: number;
+  deferredByReason?: Partial<Record<PersonReason, number>>;
+  /** Stops the graph could have scheduled as its own follow-up work. */
+  graphOwnedStops?: number;
 }
 
 export interface RetroSummary {
@@ -59,6 +108,9 @@ export interface RetroSummary {
   lessonsApplied: number;
   firstPassVerification: { passed: number; reached: number };
   stopKinds: Record<string, number>;
+  deferredToPerson: number;
+  deferredByReason: Partial<Record<PersonReason, number>>;
+  graphOwnedStops: number;
   perRun: RunRetro[];
 }
 
@@ -199,6 +251,12 @@ export function runRetro(
   let firstVerificationPassed: boolean | null = null;
   let firstVerificationOpen = false;
   const stopKinds: ErrorKind[] = [];
+  const deferredByReason: Partial<Record<PersonReason, number>> = {};
+  let graphOwnedStops = 0;
+  const route = (owner: StopOwner) => {
+    if (owner === "graph") graphOwnedStops++;
+    else deferredByReason[owner] = (deferredByReason[owner] ?? 0) + 1;
+  };
   for (const event of inRun) {
     const at = Date.parse(event.at);
     const step = event.stepId ?? "";
@@ -229,9 +287,15 @@ export function runRetro(
       // A first verification the stop interrupted stays reached and failed.
       firstVerificationOpen = false;
       stoppedAt = at;
-      if (typeof event.data.error === "string")
-        stopKinds.push(classifyError(event.data.error));
+      if (typeof event.data.error === "string") {
+        const kind = classifyError(event.data.error);
+        stopKinds.push(kind);
+        route(STOP_OWNERS[kind]);
+      }
     }
+    const waitReason =
+      HUMAN_WAIT_REASONS[event.type as keyof typeof HUMAN_WAIT_REASONS];
+    if (waitReason) route(waitReason);
     if (event.type === "attempt.started") attempts++;
     // A multi-step plan's first worker attempts start as steps.
     if (
@@ -293,6 +357,12 @@ export function runRetro(
     lessonsProposed,
     lessonsApplied,
     stopKinds,
+    deferredToPerson: Object.values(deferredByReason).reduce(
+      (total, n) => total + n,
+      0,
+    ),
+    deferredByReason,
+    graphOwnedStops,
   };
 }
 
@@ -375,6 +445,18 @@ export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
         .length,
     },
     stopKinds: count(perRun.flatMap((retro) => retro.stopKinds)),
+    deferredToPerson: sum((retro) => retro.deferredToPerson ?? 0),
+    deferredByReason: perRun.reduce<Partial<Record<PersonReason, number>>>(
+      (counts, retro) => {
+        for (const [reason, n] of Object.entries(
+          retro.deferredByReason ?? {},
+        ) as [PersonReason, number][])
+          counts[reason] = (counts[reason] ?? 0) + n;
+        return counts;
+      },
+      {},
+    ),
+    graphOwnedStops: sum((retro) => retro.graphOwnedStops ?? 0),
     perRun,
   };
 }

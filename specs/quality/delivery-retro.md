@@ -38,6 +38,12 @@ the measuring step: it changes no gate, prompt or run.
   - Test: packages/engine/tests/retro.test.ts :: prints no timestamps
 - AC5: `--since <date>` limits the retro to runs created on or after an ISO 8601 date or date-time, and refuses any other text or an impossible calendar date.
   - Test: packages/engine/tests/retro.test.ts :: limits the retro to runs created on or after --since
+- AC6: Each stop kind, and a human-acceptance wait, is classified in `retro.ts` as a person reason (`approval`, `credential`, `spending` or `owner-decision`) or `graph`, a defect the graph can fix itself; an unclassified stop kind does not compile. Each run and the totals report `deferredToPerson` (stops and waits routed to the person), `deferredByReason` (the same per reason) and `graphOwnedStops`, and records made before these fields existed still summarise as zero.
+  - Test: packages/engine/tests/retro.test.ts :: classifies every stop kind as a person reason or the graph's own
+  - Test: packages/engine/tests/retro.test.ts :: counts a plan-approval stop as deferred with reason approval
+  - Test: packages/engine/tests/retro.test.ts :: counts a spending-cap stop and a human-acceptance wait as deferred
+  - Test: packages/engine/tests/retro.test.ts :: counts a checks-failed stop as graph-owned, not deferred
+  - Test: packages/engine/tests/retro.test.ts :: aggregates across runs and still reads an old record without the fields
 
 ## Security considerations
 

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { RunEvent, RunRecord } from "@agile-graph/contracts";
 import { SCHEMA_VERSION } from "@agile-graph/contracts";
-import { classifyError } from "../src/feedback.js";
+import { classifyError, ERROR_KINDS } from "../src/feedback.js";
 import {
+  HUMAN_WAIT_REASONS,
+  STOP_OWNERS,
   outputTail,
   runRetro,
   runsCreatedSince,
@@ -423,5 +425,89 @@ describe("delivery retro", () => {
       event(8, "run.succeeded"),
     ]);
     expect(retro.firstVerificationPassed).toBe(false);
+  });
+
+  describe("deferral to the person", () => {
+    const owners = Object.entries(STOP_OWNERS);
+    const PERSON = ["approval", "credential", "spending", "owner-decision"];
+
+    it("classifies every stop kind as a person reason or the graph's own", () => {
+      const kinds = [...ERROR_KINDS.map(({ kind }) => kind), "unknown"].sort();
+      expect(Object.keys(STOP_OWNERS).sort()).toEqual(kinds);
+      for (const [, owner] of owners)
+        expect([...PERSON, "graph"]).toContain(owner);
+      expect(
+        Object.values(HUMAN_WAIT_REASONS).every((r) => PERSON.includes(r)),
+      ).toBe(true);
+    });
+
+    it("counts a plan-approval stop as deferred with reason approval", () => {
+      const message =
+        "Publication needs a person's current approval of the plan this run holds, and plan p is not approved";
+      expect(classifyError(message)).toBe("plan-approval");
+      const retro = runRetro(record("failed"), [
+        event(0, "run.started"),
+        event(1, "run.stopped", { error: message }),
+      ]);
+      expect(retro).toMatchObject({
+        deferredToPerson: 1,
+        deferredByReason: { approval: 1 },
+        graphOwnedStops: 0,
+      });
+    });
+
+    it("counts a spending-cap stop and a human-acceptance wait as deferred", () => {
+      const retro = runRetro(record("succeeded"), [
+        event(0, "run.stopped", { error: "Estimated cost budget exceeded" }),
+        event(1, "run.started"),
+        event(2, "acceptance.pending_review", {}),
+        event(3, "run.succeeded"),
+      ]);
+      expect(retro.deferredToPerson).toBe(2);
+      expect(retro.deferredByReason).toEqual({
+        spending: 1,
+        "owner-decision": 1,
+      });
+    });
+
+    it("counts a checks-failed stop as graph-owned, not deferred", () => {
+      const retro = runRetro(record("failed"), [
+        event(0, "run.stopped", { error: "Required checks failed" }),
+      ]);
+      expect(retro).toMatchObject({
+        deferredToPerson: 0,
+        deferredByReason: {},
+        graphOwnedStops: 1,
+      });
+    });
+
+    it("aggregates across runs and still reads an old record without the fields", () => {
+      const approval = runRetro(record("failed", "a"), [
+        event(0, "run.stopped", {
+          error:
+            "This project requires a person to approve every plan before a run of it starts",
+        }),
+      ]);
+      const checks = runRetro(record("failed", "b"), [
+        event(0, "run.stopped", { error: "Required checks failed" }),
+      ]);
+      const {
+        deferredToPerson: _d,
+        deferredByReason: _r,
+        graphOwnedStops: _g,
+        ...old
+      } = checks;
+      const summary = summarizeRetro([approval, checks, old]);
+      expect(summary).toMatchObject({
+        deferredToPerson: 1,
+        deferredByReason: { approval: 1 },
+        graphOwnedStops: 1,
+      });
+      expect(summarizeRetro([old])).toMatchObject({
+        deferredToPerson: 0,
+        deferredByReason: {},
+        graphOwnedStops: 0,
+      });
+    });
   });
 });
