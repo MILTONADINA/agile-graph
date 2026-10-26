@@ -113,3 +113,43 @@ test("a file named like an option is always passed as a path", () => {
     "./--x.ts",
   ]);
 });
+
+test("the engine build runs before script tests that need the built engine", () => {
+  for (const test of [
+    "scripts/readme-quickstart.test.mjs",
+    "scripts/dist-freshness.test.mjs",
+    "scripts/labelling.test.mjs",
+    "evaluation/sealed/tests/aggregate-vault.test.mjs",
+  ]) {
+    const list = names(planPreflight([test]));
+    assert.ok(list.includes("build engine"), test);
+    assert.ok(
+      list.indexOf("build engine") < list.indexOf("script tests"),
+      test,
+    );
+    assert.equal(list.filter((name) => name === "build engine").length, 1);
+  }
+  // A changed script whose test needs the build is covered too.
+  const steps = names(planPreflight(["scripts/labelling.mjs"]));
+  assert.ok(steps.indexOf("build engine") < steps.indexOf("script tests"));
+});
+
+test("no engine build is added for script tests that do not need it", () => {
+  assert.ok(
+    !names(planPreflight(["scripts/preflight.test.mjs"])).includes(
+      "build engine",
+    ),
+  );
+});
+
+test("a spec change with a dist-dependent script test builds once, before the script tests and spec-check", () => {
+  assert.deepEqual(
+    names(
+      planPreflight([
+        "specs/release/npm-packages.md",
+        "scripts/readme-quickstart.test.mjs",
+      ]),
+    ),
+    ["format", "lint", "build engine", "script tests", "spec-check"],
+  );
+});

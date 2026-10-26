@@ -8,6 +8,12 @@
   `method`, `route`, `status`, `duration_ms`, `request_id`), with the error
   name and redacted message on a 5xx and no query string, header or stack.
 
+### Fixed
+
+- `npm run preflight` now builds the engine before the script tests when one
+  of them needs `packages/engine/dist`, so a fresh checkout no longer fails
+  `readme-quickstart.test.mjs` (#228).
+
 ### Security
 
 - A worker patch that adds a dependency name to a `package.json`,
