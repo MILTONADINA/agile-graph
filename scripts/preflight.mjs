@@ -33,7 +33,11 @@ export function planPreflight(changed, deleted = []) {
   if (touched.includes("eslint.config.mjs"))
     steps.push({ name: "lint", command: "npm", args: ["run", "lint"] });
   else if (lintable.length)
-    steps.push({ name: "lint", tool: "eslint", args: lintable.map(asPath) });
+    steps.push({
+      name: "lint",
+      tool: "eslint",
+      args: ["--max-warnings", "0", ...lintable.map(asPath)],
+    });
   const typed = touched.some(
     (file) => /\.tsx?$/.test(file) || /(^|\/)tsconfig[^/]*\.json$/.test(file),
   );
