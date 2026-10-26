@@ -8,6 +8,7 @@ import {
   type PromotionScope,
   type PromotionDispatchBinding,
 } from "./promotion-authority.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 export {
   decideBatch,
   decisionAction,
@@ -230,6 +231,7 @@ export async function decisionProviders(
   try {
     const providers = z
       .array(decisionProviderSchema)
+      .max(MAX_ARRAY_ITEMS)
       .parse(await readJson(path.join(dataDir, "decisions.json")));
     registerDecisionCredentialEnvNames(
       providers.map((provider) => provider.apiKeyEnv),
@@ -317,8 +319,12 @@ export const evaluationRowSchema = z
     risk: labelSchema.optional(),
     observedAt: z.string().datetime().optional(),
     labeler: labelSchema.optional(),
-    labelEvidence: z.array(labelSchema).min(1).optional(),
-    outcomeEvidence: z.array(labelSchema).min(1).optional(),
+    labelEvidence: z.array(labelSchema).max(MAX_ARRAY_ITEMS).min(1).optional(),
+    outcomeEvidence: z
+      .array(labelSchema)
+      .max(MAX_ARRAY_ITEMS)
+      .min(1)
+      .optional(),
   })
   .strict()
   .refine(
@@ -333,11 +339,14 @@ export const evaluationProvenanceSchema = z
     origin: z.enum(["recorded", "synthetic"]),
     datasetId: labelSchema,
     population: z.string().min(20).max(4000),
-    repositoryIds: z.array(labelSchema).min(1),
-    riskStrata: z.array(labelSchema).min(1),
+    repositoryIds: z.array(labelSchema).max(MAX_ARRAY_ITEMS).min(1),
+    riskStrata: z.array(labelSchema).max(MAX_ARRAY_ITEMS).min(1),
     reviewedBy: labelSchema,
     reviewedAt: z.string().datetime(),
-    limitations: z.array(z.string().min(1).max(2000)).min(1),
+    limitations: z
+      .array(z.string().min(1).max(2000))
+      .max(MAX_ARRAY_ITEMS)
+      .min(1),
   })
   .strict();
 export const evaluationDatasetSchema = z

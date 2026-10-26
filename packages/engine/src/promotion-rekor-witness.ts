@@ -54,6 +54,7 @@ import {
   hashJson,
   parseBoundedJson,
 } from "./sealed-collection-schema.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -1305,6 +1306,7 @@ class RekorWitness implements RekorWitnessController {
     );
     const uuids = z
       .array(z.string().regex(/^([a-f0-9]{16})?[a-f0-9]{64}$/))
+      .max(MAX_ARRAY_ITEMS)
       .safeParse(found);
     if (!uuids.success)
       return fail("rekor-response-invalid", "search result is malformed");

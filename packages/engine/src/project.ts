@@ -19,6 +19,7 @@ import {
   pickDataDir,
 } from "./promotion-local-paths.js";
 import { id, readJson, writeJson } from "./util.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 export const PROJECT_FILE = ".graph/project.json";
 export async function loadProject(root: string): Promise<ProjectConfig> {
@@ -137,7 +138,7 @@ const providerSchema = z
       .string()
       .regex(/^[A-Z][A-Z0-9_]*$/)
       .optional(),
-    efforts: z.array(z.string()).optional(),
+    efforts: z.array(z.string()).max(MAX_ARRAY_ITEMS).optional(),
     defaultEffort: z.string().optional(),
     inputCostPerMillion: z.number().nonnegative().optional(),
     outputCostPerMillion: z.number().nonnegative().optional(),
@@ -190,6 +191,7 @@ export async function loadProviders(
   try {
     const providers = z
       .array(providerSchema)
+      .max(MAX_ARRAY_ITEMS)
       .parse(await readJson(path.join(dataDir, "providers.json")));
     if (new Set(providers.map((p) => p.id)).size !== providers.length)
       throw new Error("Duplicate provider IDs");

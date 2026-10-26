@@ -23,6 +23,7 @@ import { projectOverview } from "./overview.js";
 import { summarizeOutcomes } from "./insights.js";
 import { discoverInstalledWorkers } from "./workers/installed.js";
 import { dashboardRoot, sourceCheckoutRoot } from "./package-layout.js";
+import { MAX_STEP_DEPENDENCIES } from "./schema-bounds.js";
 
 // Routes that serve the dashboard's static files carry this marker in their
 // route config. Every other matched route requires the local access token,
@@ -424,7 +425,7 @@ export function createServer(
                   id: z.string(),
                   kind: z.enum(["worker", "generator"]),
                   objective: z.string(),
-                  dependsOn: z.array(z.string()),
+                  dependsOn: z.array(z.string()).max(MAX_STEP_DEPENDENCIES),
                   providerId: z.string().optional(),
                   effort: z.string().optional(),
                   generatorId: z.string().optional(),

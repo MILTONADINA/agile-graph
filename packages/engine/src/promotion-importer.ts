@@ -65,6 +65,7 @@ import { inspectSealedEvidenceReadiness } from "./sealed-evidence-readiness.js";
 import { withPrivateSealedIdentityFileReader } from "./sealed-identity-file-reader.js";
 import { inspectSignedPromotionApproval } from "./signed-promotion-approval.js";
 import { checked, hash } from "./util.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 const refuse = (code: PromotionImportRefusal, detail?: string): never => {
   throw new PromotionImportRefusalError(code, detail);
@@ -376,9 +377,11 @@ export function checkCalibrationDisjoint(
 ): void {
   const rows = z
     .object({
-      rows: z.array(
-        z.object({ taskId: z.string(), caseId: z.string() }).passthrough(),
-      ),
+      rows: z
+        .array(
+          z.object({ taskId: z.string(), caseId: z.string() }).passthrough(),
+        )
+        .max(MAX_ARRAY_ITEMS),
     })
     .passthrough()
     .parse(decodeJson(calibration)).rows;
@@ -386,14 +389,16 @@ export function checkCalibrationDisjoint(
     .object({
       plan: z
         .object({
-          tasks: z.array(
-            z
-              .object({
-                taskId: z.string(),
-                stableTaskId: z.string().optional(),
-              })
-              .passthrough(),
-          ),
+          tasks: z
+            .array(
+              z
+                .object({
+                  taskId: z.string(),
+                  stableTaskId: z.string().optional(),
+                })
+                .passthrough(),
+            )
+            .max(MAX_ARRAY_ITEMS),
         })
         .passthrough(),
     })
@@ -426,18 +431,20 @@ export function routeCalibrationAccuracy(
 ): number {
   const rows = z
     .object({
-      rows: z.array(
-        z
-          .object({
-            category: z.string(),
-            provider: z.string(),
-            model: z.string(),
-            selected: z.string().nullable(),
-            expected: z.string(),
-            confidence: z.number(),
-          })
-          .passthrough(),
-      ),
+      rows: z
+        .array(
+          z
+            .object({
+              category: z.string(),
+              provider: z.string(),
+              model: z.string(),
+              selected: z.string().nullable(),
+              expected: z.string(),
+              confidence: z.number(),
+            })
+            .passthrough(),
+        )
+        .max(MAX_ARRAY_ITEMS),
     })
     .passthrough()
     .parse(decodeJson(calibration)).rows;
@@ -554,17 +561,19 @@ export function publicKeyFingerprint(publicKeyPem: string): string {
 
 const registryKeysSchema = z
   .object({
-    keys: z.array(
-      z
-        .object({
-          keyId: z.string(),
-          actorId: z.string(),
-          roles: z.array(z.string()),
-          publicKeyPem: z.string(),
-        })
-        .passthrough(),
-    ),
-    revokedKeyIds: z.array(z.string()),
+    keys: z
+      .array(
+        z
+          .object({
+            keyId: z.string(),
+            actorId: z.string(),
+            roles: z.array(z.string()).max(MAX_ARRAY_ITEMS),
+            publicKeyPem: z.string(),
+          })
+          .passthrough(),
+      )
+      .max(MAX_ARRAY_ITEMS),
+    revokedKeyIds: z.array(z.string()).max(MAX_ARRAY_ITEMS),
   })
   .passthrough();
 const pinSchema = z
@@ -574,7 +583,9 @@ const pinSchema = z
     publicKeySha256: digestSchema,
   })
   .passthrough();
-const pinRowsSchema = z.array(z.object({ pin: pinSchema }).passthrough());
+const pinRowsSchema = z
+  .array(z.object({ pin: pinSchema }).passthrough())
+  .max(MAX_ARRAY_ITEMS);
 const actorOf = (pin: Record<string, unknown>, field: string) =>
   typeof pin[field] === "string"
     ? (pin[field] as string)
@@ -1300,9 +1311,11 @@ async function runReadinessAudit(
     refuse("readiness-input-missing", "identity directory");
   const identityManifest = z
     .object({
-      entries: z.array(
-        z.object({ role: z.string(), sha256: digestSchema }).passthrough(),
-      ),
+      entries: z
+        .array(
+          z.object({ role: z.string(), sha256: digestSchema }).passthrough(),
+        )
+        .max(MAX_ARRAY_ITEMS),
     })
     .passthrough()
     .parse(doc(bundle, identity.manifest));

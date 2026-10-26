@@ -7,6 +7,7 @@ import {
   labelSchema,
   type EvaluationDataset,
 } from "./decisions.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 // The rule the imported evaluation rows use, so a draft or label that would
 // fail the import (a provider-reported model name with a control character,
@@ -23,7 +24,7 @@ const observationSchema = z
     model: label,
     selected: label.nullable(),
     confidence: z.number().min(0).max(1).nullable(),
-    candidates: z.array(label).min(1),
+    candidates: z.array(label).max(MAX_ARRAY_ITEMS).min(1),
     observedAt: z.string().datetime(),
     stateHash: label,
   })
@@ -32,7 +33,7 @@ export const evaluationDraftSchema = z
   .object({
     version: z.literal("1.0.0"),
     datasetId: label,
-    observations: z.array(observationSchema).min(1),
+    observations: z.array(observationSchema).max(MAX_ARRAY_ITEMS).min(1),
   })
   .strict();
 export type EvaluationDraft = z.infer<typeof evaluationDraftSchema>;
@@ -82,8 +83,8 @@ export const evaluationLabelSchema = z
     repositoryId: label,
     risk: label,
     labeler: label,
-    labelEvidence: z.array(label).min(1),
-    outcomeEvidence: z.array(label).min(1),
+    labelEvidence: z.array(label).max(MAX_ARRAY_ITEMS).min(1),
+    outcomeEvidence: z.array(label).max(MAX_ARRAY_ITEMS).min(1),
     baselineSuccess: z.boolean(),
     candidateSuccess: z.boolean(),
     policyViolation: z.boolean(),
@@ -103,7 +104,11 @@ export function importEvaluationLabels(input: {
     provenance = evaluationProvenanceSchema.parse(input.provenance);
   if (draft.datasetId !== provenance.datasetId)
     throw new Error("Evaluation dataset identities do not match");
-  const labels = z.array(evaluationLabelSchema).min(1).parse(input.labels);
+  const labels = z
+    .array(evaluationLabelSchema)
+    .max(MAX_ARRAY_ITEMS)
+    .min(1)
+    .parse(input.labels);
   if (new Set(labels.map((item) => item.recordId)).size !== labels.length)
     throw new Error("A decision observation has duplicate labels");
   if (

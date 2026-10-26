@@ -48,6 +48,7 @@ import {
   validateSealedOracleExecutionRegistryRows,
   validateSealedOracleKeyFingerprintRegistry,
 } from "./sealed-oracle-execution.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 type OriginalReader = Parameters<
   typeof inspectPrivateSealedAggregateFromManifest
@@ -170,16 +171,18 @@ function distinctRegistryActors(
   ]);
   const generic = z
     .object({
-      keys: z.array(
-        z
-          .object({
-            keyId: z.string(),
-            actorId: z.string(),
-            publicKeyPem: z.string(),
-          })
-          .passthrough(),
-      ),
-      revokedKeyIds: z.array(z.string()),
+      keys: z
+        .array(
+          z
+            .object({
+              keyId: z.string(),
+              actorId: z.string(),
+              publicKeyPem: z.string(),
+            })
+            .passthrough(),
+        )
+        .max(MAX_ARRAY_ITEMS),
+      revokedKeyIds: z.array(z.string()).max(MAX_ARRAY_ITEMS),
     })
     .passthrough();
   const registries = [
