@@ -37,12 +37,23 @@
 - Upgraded zod to ^4.6.7, which fixes memory exhaustion while validating large
   arrays (GHSA-mrhx-c7xc-m3w5), and gave every array schema in the engine an
   explicit maximum length. `npm audit --omit=dev --audit-level=high` passes.
+- Worker, planner, reviewer and security-audit prompts now wrap all
+  repository-derived text (file excerpts, memory, spec text, diffs, check
+  output) in one block with a random per-prompt delimiter the content cannot
+  contain, preceded by a notice that the text is data, never instructions.
+  Request size estimates include the wrapper.
 
 ### Internal
 
 - A test checks the README's Install commands and Node range against the built
   CLI and `engines.node`, and the npm smoke runs the README's `init` and
   `index --lexical` arguments, so the README cannot drift unnoticed.
+- `npm run lint` now fails on any ESLint warning (`--max-warnings 0`), and the
+  unused `no-control-regex` disable comment in the fatal-error sanitiser is
+  removed.
+- CI and the release workflow run `scripts/pack-twice.mjs`, which packs the
+  contracts and engine packages twice from one build and fails with a
+  file-by-file diff if the two tarballs differ; see `docs/publishing.md`.
 
 ### Changed
 
@@ -97,20 +108,6 @@
   no longer scan the table. The indexes are added on open without changing
   any row or the schema version, so an older engine still opens the database.
 
-### Internal
-
-- `npm run lint` now fails on any ESLint warning (`--max-warnings 0`), and the
-  unused `no-control-regex` disable comment in the fatal-error sanitiser is
-  removed.
-
-### Security
-
-- Worker, planner, reviewer and security-audit prompts now wrap all
-  repository-derived text (file excerpts, memory, spec text, diffs, check
-  output) in one block with a random per-prompt delimiter the content cannot
-  contain, preceded by a notice that the text is data, never instructions.
-  Request size estimates include the wrapper.
-
 ### Fixed
 
 - The engine test suite no longer writes project data folders into the
@@ -121,12 +118,6 @@
   `vacuum.reclaimedBytes`; if another process holds the database the prune
   still succeeds and reports why space was not reclaimed. `--no-vacuum` skips
   it, and a dry run never vacuums.
-
-### Internal
-
-- CI and the release workflow run `scripts/pack-twice.mjs`, which packs the
-  contracts and engine packages twice from one build and fails with a
-  file-by-file diff if the two tarballs differ; see `docs/publishing.md`.
 
 ## [0.2.0] - 2026-10-18
 
