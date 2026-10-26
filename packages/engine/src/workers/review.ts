@@ -426,7 +426,8 @@ export function rejectionHistory(
         },
       ];
     });
-    return found.length ? [found] : [];
+    // Kept even when empty, so a criteria-only rejection still counts as a round.
+    return [found];
   });
 }
 
@@ -562,6 +563,8 @@ export interface PriorFinding {
   path: string | null;
   line: number | null;
   message: string;
+  /** The signature recorded with the finding, kept when its message was redacted. */
+  signature?: string;
 }
 
 /** At most this many earlier findings get a fix check per review. */
@@ -594,6 +597,9 @@ export function priorBlockingFindings(
         path,
         line,
         message,
+        ...(typeof finding.signature === "string"
+          ? { signature: finding.signature }
+          : {}),
       },
     ];
   });
