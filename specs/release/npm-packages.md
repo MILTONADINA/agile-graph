@@ -50,6 +50,14 @@ it.
   than a stored token, and only when the tag names the packages' version.
   - Test: scripts/npm-packages.test.mjs :: the release workflow publishes only reviewed commits from main, without a stored token
   - Test: scripts/npm-packages.test.mjs :: a release tag names the packages' version
+- AC7: While the README's Install quick start names a `graph-engine`
+  subcommand, a flag the built CLI lacks or a Node range that differs from
+  `engines.node`, the test fails; and the npm smoke runs the README's `init`
+  and `index --lexical` with exactly its arguments, only the project path
+  replaced.
+  - Test: scripts/readme-quickstart.test.mjs :: every README graph-engine command and flag exists in the built CLI
+  - Test: scripts/readme-quickstart.test.mjs :: a renamed README command is reported
+  - Test: scripts/readme-quickstart.test.mjs :: a stale README Node range is reported
 
 ## Security considerations
 

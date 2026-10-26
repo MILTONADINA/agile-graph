@@ -2,7 +2,8 @@
 // Installs the packed contracts and engine tarballs into an empty project, as
 // a user would from npm, then runs the installed CLI: --version, --help, init
 // and a lexical index of a throwaway repository, an MCP initialize handshake,
-// the README's cloud MCP path (init --cloud-mcp, context_get) and its refusal
+// the README's Install commands (init, index --lexical, run with exactly its
+// arguments), the README's cloud MCP path (init --cloud-mcp, context_get) and its refusal
 // on an offline project,
 // and the dashboard that serve hosts. Optional peer dependencies are not
 // installed, so this also shows the engine starts without them.
@@ -16,6 +17,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { quickstart } from "./readme-quickstart.mjs";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
 const work = await mkdtemp(path.join(os.tmpdir(), "graph-npm-smoke-"));
@@ -176,8 +178,13 @@ try {
     "export function add(a, b) {\n  return a + b;\n}\n",
   );
   run("git", ["init", "--quiet"], project);
-  run(cli, ["-C", project, "init"], app);
-  run(cli, ["-C", project, "index", "--lexical"], app);
+  // The README's own Install commands, with only the project path replaced.
+  const readme = quickstart(
+    await readFile(path.join(repository, "README.md"), "utf8"),
+  );
+  for (const { args } of readme.commands)
+    if (args[0] === "init" || args[0] === "index")
+      run(cli, ["-C", project, ...args], app);
 
   const mcp = await started(
     ["-C", project, "mcp", "--client", "local"],
