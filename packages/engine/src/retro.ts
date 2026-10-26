@@ -52,6 +52,7 @@ export const STOP_OWNERS = {
   "context-budget": "graph",
   "patch-rejected": "graph",
   "index-limit": "graph",
+  "repeated-review-finding": "graph",
   "provider-call": "graph",
   unknown: "graph",
 } as const satisfies Record<ErrorKind, StopOwner>;
