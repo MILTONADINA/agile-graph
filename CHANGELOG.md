@@ -9,6 +9,16 @@
   optional peers included) for each published package and uploads it as a workflow
   artifact; see `docs/publishing.md`.
 
+### Security
+
+- Patched npm dependencies for the advisories that failed CI's production
+  `npm audit` gate: body-parser (GHSA-27r3-jxmh-p828), fast-uri, hono
+  (GHSA-5r4p-p66f-jhc7 and others), ip-address (GHSA-rxp7-6hxx-x8q5), sharp
+  (GHSA-wq5f-xc86-pv6w), source-map-js (GHSA-68fv-2mgg-jv7q), undici
+  (GHSA-4qv8-2p9j-2685, GHSA-xjj6-f33q-929c) and vite (including
+  GHSA-9jrq-w75r-8gcw). The zod advisory (GHSA-mrhx-c7xc-m3w5) has no
+  patched 3.x release and remains open.
+
 ### Changed
 
 - CI and release workflows install with `npm ci --ignore-scripts` and rebuild only
