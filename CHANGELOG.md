@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-26
+
 ### Added
 
 - The release workflow generates a CycloneDX SBOM (`npm sbom`, with the
