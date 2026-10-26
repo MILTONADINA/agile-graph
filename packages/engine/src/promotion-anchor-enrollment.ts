@@ -54,6 +54,7 @@ import {
   type RekorPromotionTrustAnchor,
 } from "./promotion-trust-anchor.js";
 import { canonicalJson, digestSchema } from "./sealed-collection-schema.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 const refuse = (code: PromotionAnchorRefusal, detail: string): never => {
   throw new PromotionAnchorRefusalError(code, detail);
@@ -600,6 +601,7 @@ const enrollmentSchema = z
           })
           .strict(),
       )
+      .max(MAX_ARRAY_ITEMS)
       .min(1),
   })
   .strict();

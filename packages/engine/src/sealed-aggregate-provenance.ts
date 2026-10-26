@@ -28,6 +28,7 @@ import {
   hashJson,
 } from "./sealed-collection-schema.js";
 import { sourceCheckoutRoot } from "./package-layout.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);
 const artifactRole = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,400}$/);
@@ -3283,6 +3284,7 @@ async function inspectAggregateWithOriginalEvidence(
         })
         .passthrough(),
     )
+    .max(MAX_ARRAY_ITEMS)
     .parse(value.rowReviewBundles);
   const rowKeys = new Map(rowTrust.keys.map((key) => [key.keyId, key.actorId]));
   const rowActors = new Set(
@@ -3498,9 +3500,9 @@ export async function inspectPrivateSealedAggregateProvenance(
     .object({
       plan: z
         .object({
-          tasks: z.array(
-            z.object({ stateFormatVersion: z.string() }).passthrough(),
-          ),
+          tasks: z
+            .array(z.object({ stateFormatVersion: z.string() }).passthrough())
+            .max(MAX_ARRAY_ITEMS),
         })
         .passthrough(),
     })

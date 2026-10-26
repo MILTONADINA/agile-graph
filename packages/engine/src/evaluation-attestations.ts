@@ -135,7 +135,7 @@ export function verifyOriginalReviewSignatures(
     throw new Error("Invalid review verification time");
   const bundle = z
     .object({
-      payload: z.record(z.unknown()),
+      payload: z.record(z.string(), z.unknown()),
       attestations: z.array(attestationSchema).length(2),
     })
     .strict()

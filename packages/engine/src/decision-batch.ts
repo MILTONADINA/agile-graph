@@ -22,6 +22,7 @@ import {
   checkPromotionRoute,
   type PromotionRouteVerdict,
 } from "./promotion-route.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 export interface DecisionQuestion {
   id: string;
@@ -275,6 +276,7 @@ export async function decideBatch(
     throw new Error("Decision question IDs must be unique");
   const evidence = z
     .array(promotionEvidenceSchema)
+    .max(MAX_ARRAY_ITEMS)
     .parse(options.evidence ?? []);
   const selections = Object.fromEntries(
     questions.map((question) => [question.id, question.baseline]),
@@ -282,7 +284,10 @@ export async function decideBatch(
   const resolved = new Set<string>(),
     records: DecisionRecord[] = [],
     usages: DecisionCallUsage[] = [];
-  const providers = z.array(decisionProviderSchema).parse(options.providers);
+  const providers = z
+    .array(decisionProviderSchema)
+    .max(MAX_ARRAY_ITEMS)
+    .parse(options.providers);
   // Shadow short-circuit: only a promoted category under decisionMode
   // "promoted" reaches the per-route check; nothing else does trust, grant
   // or witness work.

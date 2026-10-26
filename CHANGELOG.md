@@ -16,11 +16,21 @@
   (GHSA-5r4p-p66f-jhc7 and others), ip-address (GHSA-rxp7-6hxx-x8q5), sharp
   (GHSA-wq5f-xc86-pv6w), source-map-js (GHSA-68fv-2mgg-jv7q), undici
   (GHSA-4qv8-2p9j-2685, GHSA-xjj6-f33q-929c) and vite (including
-  GHSA-9jrq-w75r-8gcw). The zod advisory (GHSA-mrhx-c7xc-m3w5) has no
-  patched 3.x release and remains open.
+  GHSA-9jrq-w75r-8gcw). The zod advisory (GHSA-mrhx-c7xc-m3w5) is fixed by the
+  zod 4 upgrade below.
+- Upgraded zod to ^4.6.7, which fixes memory exhaustion while validating large
+  arrays (GHSA-mrhx-c7xc-m3w5), and gave every array schema in the engine an
+  explicit maximum length. `npm audit --omit=dev --audit-level=high` passes.
 
 ### Changed
 
+- The engine uses zod 4 (`@agile-graph/contracts` has no zod dependency, so
+  contracts consumers see no zod types). Accepted and rejected inputs are
+  unchanged, but zod's own error wording differs. The JSON input schemas the
+  MCP server publishes now come from zod 4, so MCP tool definition hashes
+  change: pins in `mcp.toolHashes` or `--tool-hashes` files must be taken
+  again with `graph-engine mcp-tools --hashes --all-configurations`. A plan
+  step's `dependsOn` accepts at most 100 entries.
 - CI and release workflows install with `npm ci --ignore-scripts` and rebuild only
   an allowlist of packages with install scripts; a test keeps the list in sync
   with `package-lock.json`.

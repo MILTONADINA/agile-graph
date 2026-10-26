@@ -6,6 +6,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   normalizeObjectSchema,
   objectFromShape,
+  type ShapeOutput,
+  type ZodRawShapeCompat,
 } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import { z } from "zod";
@@ -37,6 +39,7 @@ import {
   localErrorMessage,
   RefusalError,
 } from "./util.js";
+import { MAX_STEP_DEPENDENCIES } from "./schema-bounds.js";
 
 /**
  * Tools that change project state or pay for a model call. A call to one is
@@ -123,7 +126,7 @@ export interface McpToolHashPins {
 export function mcpToolDefinitionSha256(
   name: string,
   description: string,
-  inputSchema: z.ZodRawShape,
+  inputSchema: ZodRawShapeCompat,
 ): string {
   // As the library stores a raw shape and its tools/list handler converts it.
   const object = normalizeObjectSchema(objectFromShape(inputSchema));
@@ -317,14 +320,12 @@ export function createMcpServer(
    * concerned. A state-changing tool is refused when the entry cannot be
    * written; a read-only one still answers.
    */
-  const register = <Shape extends z.ZodRawShape>(
+  const register = <Shape extends ZodRawShapeCompat>(
     tool: string,
     config: { description: string; inputSchema: Shape },
-    handler: (
-      args: z.objectOutputType<Shape, z.ZodTypeAny>,
-    ) => Promise<unknown>,
+    handler: (args: ShapeOutput<Shape>) => Promise<unknown>,
     ids?: (
-      args: z.objectOutputType<Shape, z.ZodTypeAny>,
+      args: ShapeOutput<Shape>,
       value: unknown,
     ) => { planId?: unknown; runId?: unknown },
   ) => {
@@ -335,7 +336,7 @@ export function createMcpServer(
     );
     toolHashes[tool] = definitionSha256;
     return server.registerTool(tool, config, (async (
-      args: z.objectOutputType<Shape, z.ZodTypeAny>,
+      args: ShapeOutput<Shape>,
     ) => {
       let callId: string | undefined;
       try {
@@ -801,7 +802,7 @@ export function createMcpServer(
                   id: z.string(),
                   kind: z.enum(["worker", "generator"]),
                   objective: z.string(),
-                  dependsOn: z.array(z.string()),
+                  dependsOn: z.array(z.string()).max(MAX_STEP_DEPENDENCIES),
                   providerId: z.string().optional(),
                   effort: z.string().optional(),
                   generatorId: z.string().optional(),

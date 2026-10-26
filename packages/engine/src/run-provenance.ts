@@ -12,6 +12,7 @@ import { managedGit } from "./execution/git.js";
 import { runEvidence } from "./overview.js";
 import { planSha256 } from "./store.js";
 import { hash, subprocessEnvironment, writeJson } from "./util.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 /**
  * An unsigned in-toto Statement v1 for an accepted run: what the run produced
@@ -74,6 +75,7 @@ export const runProvenanceSchema = z
           })
           .strict(),
       )
+      .max(MAX_ARRAY_ITEMS)
       .min(1),
     predicateType: z.literal(RUN_PROVENANCE_PREDICATE_TYPE),
     predicate: z
@@ -86,7 +88,7 @@ export const runProvenanceSchema = z
         baseCommit: gitObject.nullable(),
         resultCommit: gitObject.nullable(),
         verifiedSnapshotHash: sha256.nullable(),
-        removedFiles: z.array(z.string()),
+        removedFiles: z.array(z.string()).max(MAX_ARRAY_ITEMS),
         filesTruncated: z.boolean(),
         approval: z
           .object({
@@ -97,8 +99,8 @@ export const runProvenanceSchema = z
           })
           .strict()
           .nullable(),
-        workers: z.array(worker),
-        gates: z.array(gate),
+        workers: z.array(worker).max(MAX_ARRAY_ITEMS),
+        gates: z.array(gate).max(MAX_ARRAY_ITEMS),
         timestamps: z
           .object({
             planCreatedAt: timestamp,

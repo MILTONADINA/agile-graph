@@ -25,6 +25,7 @@ import {
 import { containsSecret } from "./policy.js";
 import { loadProviders } from "./project.js";
 import { RUN_SCHEMA_VERSION, type RunStore } from "./store.js";
+import { MAX_ARRAY_ITEMS } from "./schema-bounds.js";
 
 const JSON_FILES = [
   "providers.json",
@@ -62,7 +63,7 @@ const manifestSchema = z
       )
       .min(3)
       .max(FILES.length),
-    excluded: z.array(z.string()),
+    excluded: z.array(z.string()).max(MAX_ARRAY_ITEMS),
     resumePolicy: z.literal("manual-reconciliation-required"),
   })
   .strict();
@@ -125,9 +126,10 @@ async function validateJsonFiles(
     const value: unknown = JSON.parse(text);
     inspectSecrets(value);
     if (file === "providers.json") await loadProviders(directory);
-    if (file === "decisions.json") z.array(decisionProviderSchema).parse(value);
+    if (file === "decisions.json")
+      z.array(decisionProviderSchema).max(MAX_ARRAY_ITEMS).parse(value);
     if (file === "promotions.json")
-      z.array(promotionEvidenceSchema).parse(value);
+      z.array(promotionEvidenceSchema).max(MAX_ARRAY_ITEMS).parse(value);
     if (file === "project-config.reference.json") {
       assertProjectConfig(value);
       if (value.projectId !== projectId)

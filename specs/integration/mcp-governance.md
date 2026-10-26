@@ -52,6 +52,9 @@ three places.
   - Test: packages/engine/tests/mcp-governance.test.ts :: refuses to start when a pinned tool definition hash drifts or an exposed tool is unpinned, and ignores pins for tools not enabled
   - Test: packages/engine/tests/cli.test.ts :: lists tool definition hashes with mcp-tools --hashes and refuses to start mcp when a pinned hash in --tool-hashes or mcp.toolHashes drifts
   - Test: packages/engine/tests/mcp-governance.test.ts :: starts a local and a cloud server against one project pin set taken from the all-configurations union, while cloud-only pins refuse a local start
+- AC11: While the engine validates external input with zod 4.6.6 or later, every array schema in the engine's source states a maximum length or an exact length (`MAX_ARRAY_ITEMS` in `schema-bounds.ts` by default, and `MAX_STEP_DEPENDENCIES`, 100, for a plan step's `dependsOn` in MCP `plan_create` and the dashboard API), so an oversized array is refused by its bound instead of validated element by element (GHSA-mrhx-c7xc-m3w5). A tool's definition hash is that of the JSON schema zod 4 produces, so operator pins taken before the upgrade must be taken again with `mcp-tools --hashes`.
+  - Test: packages/engine/tests/zod-bounds.test.ts :: bounds every array schema with an explicit maximum or exact length
+  - Test: packages/engine/tests/zod-bounds.test.ts :: installs zod 4.6.6 or later, which closes GHSA-mrhx-c7xc-m3w5
 
 ## Security considerations
 
