@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Security
+
+- A worker patch that adds a dependency name to a `package.json`,
+  `requirements*.txt`, `pyproject.toml`, `Cargo.toml`, `go.mod` or
+  `pubspec.yaml` is refused before anything is written, naming the new
+  dependency, so a hallucinated or slopsquatted package needs a person's
+  approval. Version changes and removals are allowed.
+
+### Internal
+
+- `npm run test:coverage -w @agile-graph/engine` measures engine line coverage
+  with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it
+  drops below the floor in `scripts/coverage-floor.json` (85%). This replaces
+  the plan in `docs/coverage.md`.
+- `npm run preflight` lints changed files with `--max-warnings 0`, as CI does.
+
 ## [0.3.0] - 2026-10-26
 
 ### Added
@@ -14,6 +30,7 @@
   login keychain: `jev-key-source.json` accepts
   `{"format":"keychain","service":...,"account":...}`. It fails closed off
   macOS or when the lookup fails, and errors name only the service.
+- `docs/coverage.md`: plan for an engine coverage report and ratchet floor. Not wired up yet, because `@vitest/coverage-v8` is not installed.
 - `scripts/license-allowlist.mjs` fails CI when a production dependency in
   `package-lock.json` has a missing licence or one outside
   `scripts/license-allowlist.json`. It runs offline after `npm audit`.
@@ -28,11 +45,6 @@
 
 ### Security
 
-- A worker patch that adds a dependency name to a `package.json`,
-  `requirements*.txt`, `pyproject.toml`, `Cargo.toml`, `go.mod` or
-  `pubspec.yaml` is refused before anything is written, naming the new
-  dependency, so a hallucinated or slopsquatted package needs a person's
-  approval. Version changes and removals are allowed.
 - Patched npm dependencies for the advisories that failed CI's production
   `npm audit` gate: body-parser (GHSA-27r3-jxmh-p828), fast-uri, hono
   (GHSA-5r4p-p66f-jhc7 and others), ip-address (GHSA-rxp7-6hxx-x8q5), sharp
@@ -51,7 +63,6 @@
 
 ### Internal
 
-- `npm run test:coverage -w @agile-graph/engine` measures engine line coverage with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it drops below the floor in `scripts/coverage-floor.json` (85%).
 - A test checks the README's Install commands and Node range against the built
   CLI and `engines.node`, and the npm smoke runs the README's `init` and
   `index --lexical` arguments, so the README cannot drift unnoticed.
