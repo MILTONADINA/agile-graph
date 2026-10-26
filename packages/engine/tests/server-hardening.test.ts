@@ -256,7 +256,13 @@ describe("dashboard server hardening", () => {
       expect(lines).toEqual([]);
     });
 
-    it("logs the route pattern, status and duration, not the query", async () => {
+    const parse = (lines: string[]) =>
+      lines.map((line) => {
+        expect(line.endsWith("\n")).toBe(true);
+        return JSON.parse(line) as Record<string, unknown>;
+      });
+
+    it("logs one JSON line with the route pattern, status and duration, not the query", async () => {
       const lines = capture();
       const { app } = createServer(engine, TOKEN, { logRequests: true });
       await app.inject({
@@ -266,14 +272,62 @@ describe("dashboard server hardening", () => {
       await app.inject({ url: "/api/nope?token=secret", headers: auth });
       await app.close();
       expect(lines).toHaveLength(2);
-      expect(lines[0]).toMatch(/^GET \/api\/health 200 \d+ms\n$/);
-      expect(lines[1]).toMatch(/^GET \(unmatched\) 40\d \d+ms\n$/);
+      const [ok, missing] = parse(lines);
+      expect(Object.keys(ok!).sort()).toEqual(
+        [
+          "duration_ms",
+          "level",
+          "method",
+          "request_id",
+          "route",
+          "status",
+          "time",
+        ].sort(),
+      );
+      expect(ok).toMatchObject({
+        level: "info",
+        method: "GET",
+        route: "/api/health",
+        status: 200,
+      });
+      expect(typeof ok!.duration_ms).toBe("number");
+      expect(new Date(ok!.time as string).toISOString()).toBe(ok!.time);
+      expect(typeof ok!.request_id).toBe("string");
+      expect(ok!.request_id).not.toBe(missing!.request_id);
+      expect(missing).toMatchObject({ level: "warn", route: "(unmatched)" });
       const all = lines.join("");
       for (const leak of ["secret", TOKEN, "cookie-value", "?"])
         expect(all).not.toContain(leak);
     });
 
-    it("logs a 5xx error with a redacted message", async () => {
+    it("never logs authorization, cookie or token headers or an inbound request id", async () => {
+      const lines = capture();
+      const { app } = createServer(engine, TOKEN, { logRequests: true });
+      await app.inject({
+        url: "/api/health?access_token=abc123&api_key=xyz789",
+        headers: {
+          ...auth,
+          cookie: "sid=cookie-value",
+          "x-api-token": "header-token-value",
+          "x-request-id": "caller-chosen-id",
+        },
+      });
+      await app.close();
+      const all = lines.join("");
+      for (const leak of [
+        TOKEN,
+        "Bearer",
+        "authorization",
+        "cookie-value",
+        "header-token-value",
+        "abc123",
+        "xyz789",
+        "caller-chosen-id",
+      ])
+        expect(all).not.toContain(leak);
+    });
+
+    it("logs a 500 at error level with a redacted message and no stack or body", async () => {
       const lines = capture();
       const { app } = createServer(engine, TOKEN, { logRequests: true });
       const response = await app.inject({
@@ -282,16 +336,28 @@ describe("dashboard server hardening", () => {
       });
       await app.close();
       expect(response.statusCode).toBe(500);
+      expect(lines).toHaveLength(1);
+      const [entry] = parse(lines);
+      expect(entry).toMatchObject({
+        level: "error",
+        method: "GET",
+        route: "/api/memories",
+        status: 500,
+      });
+      expect(entry!.error).toMatchObject({ name: "TypeError" });
+      expect(Object.keys(entry!.error as object).sort()).toEqual([
+        "message",
+        "name",
+      ]);
       const all = lines.join("");
-      expect(lines.filter((l) => l.startsWith("ERROR "))).toHaveLength(1);
-      expect(all).toContain("ERROR GET /api/memories TypeError: boom at");
-      expect(all).toMatch(/GET \/api\/memories 500 \d+ms/);
+      expect(all).not.toContain("Internal server error");
       for (const leak of [
         "hunter2",
         "/Users/someone",
         "secret",
         TOKEN,
         "reflected-query",
+        "\\n    at ",
       ])
         expect(all).not.toContain(leak);
     });
@@ -305,8 +371,10 @@ describe("dashboard server hardening", () => {
       });
       await app.close();
       expect(response.statusCode).toBe(500);
+      const [entry] = parse(lines);
+      expect(entry).toMatchObject({ level: "error", route: "/api/snapshots" });
       const all = lines.join("");
-      expect(all).toContain("ERROR GET /api/snapshots Error: ENOENT");
+      expect(all).toContain("ENOENT");
       for (const leak of ["Jane", "Doe", "private", "project.json"])
         expect(all).not.toContain(leak);
     });
@@ -321,7 +389,7 @@ describe("dashboard server hardening", () => {
       await stream.body!.cancel();
       await vi.waitFor(() =>
         expect(lines.join("")).toMatch(
-          /GET \/api\/runs\/:id\/events 200 \d+ms\n/,
+          /"route":"\/api\/runs\/:id\/events","status":200/,
         ),
       );
       expect(lines.join("")).not.toContain("secret");

@@ -2299,10 +2299,7 @@ promotion
 cli
   .command("serve")
   .option("--port <number>", "Loopback port", "4317")
-  .option(
-    "--log-requests",
-    "Write one line per request and per 5xx error to stderr",
-  )
+  .option("--log-requests", "Write one JSON line per request to stderr")
   .action(async (options) => {
     const port = z.coerce
       .number()

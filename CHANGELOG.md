@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- `serve --log-requests` now writes structured JSON lines (`level`, `time`,
+  `method`, `route`, `status`, `duration_ms`, `request_id`), with the error
+  name and redacted message on a 5xx and no query string, header or stack.
+
 ### Security
 
 - A worker patch that adds a dependency name to a `package.json`,
