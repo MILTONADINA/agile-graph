@@ -144,6 +144,22 @@ describe("new dependency gate", () => {
         "name: t\ndependencies:\n  flutter:\n    sdk: flutter\n  http: ^1.0.0\ndev_dependencies:\n  test: ^1.0.0\n",
       ),
     ).toEqual(["flutter", "http", "test"]);
+    // Extras brackets, aliases and flow mappings do not hide a name.
+    expect(
+      names(
+        "pyproject.toml",
+        '[project]\ndependencies = ["requestz[socks]>=1", "other-new"]\n',
+      ),
+    ).toEqual(["requestz", "other-new"]);
+    expect(
+      names("package.json", '{"dependencies":{"http":"npm:axois@1"}}'),
+    ).toEqual(["http", "axois"]);
+    expect(
+      names("Cargo.toml", '[dependencies]\nhttp = { package = "reqwestt" }\n'),
+    ).toEqual(["http", "reqwestt"]);
+    expect(
+      names("pubspec.yaml", "dependencies: {requestz: ^1.0.0, a: {sdk: x}}\n"),
+    ).toEqual(["requestz", "a"]);
     expect(names("src/a.js", "anything")).toEqual([]);
     expect(
       newDependencies("package.json", "{bad", '{"dependencies":{"a":"1"}}'),

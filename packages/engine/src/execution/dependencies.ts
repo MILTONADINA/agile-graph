@@ -45,7 +45,13 @@ function npmNames(text: string): string[] {
   for (const section of npmSections) {
     const value = (parsed as Record<string, unknown>)[section];
     if (value && typeof value === "object" && !Array.isArray(value))
-      names.push(...Object.keys(value));
+      for (const [name, spec] of Object.entries(value)) {
+        names.push(name);
+        // "alias": "npm:real-package@1" installs real-package.
+        const real =
+          typeof spec === "string" && /^npm:(@?[^@]+)/.exec(spec)?.[1];
+        if (real) names.push(real);
+      }
   }
   return names;
 }
@@ -68,6 +74,21 @@ function quoted(text: string): string[] {
 }
 function tomlSection(line: string): string | undefined {
   return /^\[\[?\s*([^\]]+?)\s*\]\]?\s*(?:#.*)?$/.exec(line)?.[1];
+}
+// Index of the `]` that closes an array, ignoring any inside a string
+// (extras such as "pkg[socks]"), or -1.
+function arrayEnd(text: string): number {
+  let quote = "";
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]!;
+    if (quote) {
+      if (char === "\\" && quote === '"') i++;
+      else if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "#") return -1;
+    else if (char === "]") return i;
+  }
+  return -1;
 }
 function pyprojectNames(text: string): string[] {
   const names: string[] = [];
@@ -109,7 +130,7 @@ function pyprojectNames(text: string): string[] {
       body = start[2]!;
       inArray = true;
     }
-    const end = body.indexOf("]");
+    const end = arrayEnd(body);
     const content = end >= 0 ? body.slice(0, end) : body;
     for (const item of quoted(content.replace(/\s#.*$/, ""))) {
       const name = pythonName(item);
@@ -139,9 +160,16 @@ function cargoNames(text: string): string[] {
           : undefined;
       continue;
     }
+    if (kind === "one") {
+      const real = /^package\s*=\s*"([^"]+)"/.exec(line)?.[1];
+      if (real) names.push(real);
+      continue;
+    }
     if (kind !== "list") continue;
     const key = /^("[^"]+"|[A-Za-z0-9_-]+)\s*[=.]/.exec(line)?.[1];
     if (key) names.push(key.replace(/"/g, ""));
+    const real = /\bpackage\s*=\s*"([^"]+)"/.exec(line)?.[1];
+    if (real) names.push(real);
   }
   return names;
 }
@@ -163,6 +191,31 @@ function goNames(text: string): string[] {
   }
   return names;
 }
+// Keys at the top level of a one-line YAML flow mapping: {a: 1, "b": {c: 2}}.
+function flowKeys(text: string): string[] {
+  const keys: string[] = [];
+  let depth = 0;
+  let quote = "";
+  let token = "";
+  for (const char of text) {
+    if (quote) {
+      if (char === quote) quote = "";
+      else token += char;
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "{" || char === "[") {
+      depth++;
+      token = "";
+    } else if (char === "}" || char === "]") {
+      depth--;
+      token = "";
+    } else if (char === ",") token = "";
+    else if (char === ":" && depth === 1 && token.trim()) {
+      keys.push(token.trim());
+      token = "";
+    } else token += char;
+  }
+  return keys;
+}
 function pubspecNames(text: string): string[] {
   const names: string[] = [];
   let active = false;
@@ -172,11 +225,14 @@ function pubspecNames(text: string): string[] {
     if (!line.trim()) continue;
     const depth = line.length - line.trimStart().length;
     if (depth === 0) {
-      active =
-        /^(?:dependencies|dev_dependencies|dependency_overrides)\s*:/.test(
+      const head =
+        /^["']?(?:dependencies|dev_dependencies|dependency_overrides)["']?\s*:(.*)$/.exec(
           line,
         );
+      active = head !== null;
       indent = -1;
+      if (head?.[1]?.trim().startsWith("{"))
+        names.push(...flowKeys(head[1].trim()));
       continue;
     }
     if (!active) continue;
