@@ -487,6 +487,27 @@ describe("finding signature", () => {
       ]),
     ).toHaveLength(1);
     expect(repeatedSignatures(history[0]!, history.at(-1)!)).toHaveLength(0);
+    // A rejection with no blocking finding is still a round.
+    const gap = rejectionHistory([
+      rejected("Same"),
+      { type: "review.completed", data: { passed: false, findings: [] } },
+      rejected("Same"),
+    ]);
+    expect(repeatedSignatures(gap[1]!, gap[2]!)).toHaveLength(0);
+    // The recorded signature survives a redacted stored message.
+    const [kept] = priorBlockingFindings({
+      passed: false,
+      findings: [
+        {
+          severity: "blocking",
+          path: "a.ts",
+          line: 1,
+          message: "Remove [REDACTED]",
+          signature: "Sabc",
+        },
+      ],
+    });
+    expect(kept!.signature).toBe("Sabc");
     // A stop on a repeat breaks the run: a resume compares afresh.
     const resumed = rejectionHistory([
       rejected("Same"),

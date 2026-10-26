@@ -3425,7 +3425,7 @@ export class GraphEngine {
           if (unfixed.length) {
             const signed = unfixed.map(({ finding }) => ({
               finding,
-              signature: findingSignature(finding),
+              signature: finding.signature ?? findingSignature(finding),
             }));
             const feedback = withEarlier(
               verifyFixFeedback(unfixed, prior.length),
