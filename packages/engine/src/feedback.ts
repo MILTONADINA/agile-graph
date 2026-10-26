@@ -38,6 +38,13 @@ export const ERROR_KINDS = [
     description: "A worker stopped making progress",
   },
   {
+    // Before review-gate, whose words its message starts with.
+    kind: "repeated-review-finding",
+    pattern: /same finding on two rounds in a row/,
+    description:
+      "The reviewer raised the same finding twice in a row, so the run stopped",
+  },
+  {
     // Before checks-failed, whose words its message starts with.
     kind: "repeated-failure",
     pattern: /failed the same way on (two|three) attempts/,

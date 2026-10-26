@@ -362,6 +362,107 @@ export function findingId(finding: {
     .slice(0, 10)}`;
 }
 
+/**
+ * A stable signature for a rejection finding, so the same finding is
+ * recognised across rounds even when the code moved: the file path (slashes
+ * and a leading "./" normalised) and the message with case, digits (line
+ * numbers included) and whitespace normalised. The review schema has no
+ * rule or category, so none is hashed.
+ */
+export function findingSignature(finding: {
+  path: string | null;
+  message: string;
+}): string {
+  const file = (finding.path ?? "").replace(/\\/g, "/").replace(/^(\.\/)+/, "");
+  const text = finding.message
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\d+/g, "#")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `S${createHash("sha256").update(`${file}\0${text}`).digest("hex").slice(0, 12)}`;
+}
+
+/** One finding of an earlier rejection, kept short for the next round. */
+export interface RejectedFinding {
+  signature: string;
+  path: string | null;
+  text: string;
+}
+const EARLIER_TEXT_LIMIT = 160;
+const EARLIER_LIMIT = 10;
+
+/**
+ * Each AI rejection's blocking findings, oldest first, from run events,
+ * with an empty round after a `review.repeated_finding` stop.
+ */
+export function rejectionHistory(
+  events: readonly { type: string; data: Record<string, unknown> }[],
+): RejectedFinding[][] {
+  return events.flatMap((event) => {
+    const data = event.data;
+    // A stop on a repeat is a break: a resume starts a fresh comparison.
+    if (event.type === "review.repeated_finding") return [[]];
+    if (event.type !== "review.completed" || data.by === "person") return [];
+    if (data.passed !== false || !Array.isArray(data.findings)) return [];
+    const found = data.findings.flatMap((item: unknown) => {
+      const finding = item as Record<string, unknown>;
+      if (
+        finding?.severity !== "blocking" ||
+        typeof finding.message !== "string"
+      )
+        return [];
+      const path = typeof finding.path === "string" ? finding.path : null;
+      return [
+        {
+          signature:
+            typeof finding.signature === "string"
+              ? finding.signature
+              : findingSignature({ path, message: finding.message }),
+          path,
+          text: finding.message
+            .replace(/\s+/g, " ")
+            .slice(0, EARLIER_TEXT_LIMIT),
+        },
+      ];
+    });
+    return found.length ? [found] : [];
+  });
+}
+
+/** Signatures present in both of two consecutive rejections. */
+export function repeatedSignatures(
+  previous: readonly { signature: string }[],
+  current: readonly { signature: string }[],
+): string[] {
+  const before = new Set(previous.map((finding) => finding.signature));
+  return [
+    ...new Set(
+      current
+        .map((finding) => finding.signature)
+        .filter((signature) => before.has(signature)),
+    ),
+  ];
+}
+
+/** Tells the next repair round which findings were already raised. */
+export function earlierFindingsNotice(
+  history: readonly (readonly RejectedFinding[])[],
+): string {
+  const seen = new Map<string, RejectedFinding>();
+  for (const round of history)
+    for (const finding of round) seen.set(finding.signature, finding);
+  const listed = [...seen.values()].slice(-EARLIER_LIMIT);
+  if (!listed.length) return "";
+  return [
+    "These findings were already raised in earlier review rounds; do not repeat the same fix. If one comes back, the run stops:",
+    ...listed.map(
+      (finding) =>
+        `- ${finding.signature}${finding.path ? ` ${finding.path}` : ""}: ${finding.text.replace(/\s+/g, " ").slice(0, EARLIER_TEXT_LIMIT)}`,
+    ),
+  ].join("\n");
+}
+
 const location = (finding: { path: string | null; line: number | null }) =>
   finding.path
     ? ` in ${finding.path}${finding.line ? `:${finding.line}` : ""}`

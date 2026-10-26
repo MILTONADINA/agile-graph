@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_POLICY } from "@agile-graph/contracts";
 import {
   findingId,
+  findingSignature,
+  rejectionHistory,
+  repeatedSignatures,
   invokeReviewWorker,
   invokeVerifyFix,
   priorBlockingFindings,
@@ -425,5 +428,70 @@ describe("review worker", () => {
       ),
     ).rejects.toThrow("installed agents cannot review yet");
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("finding signature", () => {
+  const base = {
+    path: "src/a.ts",
+    line: 10,
+    message: "Missing null check at line 10 in parse()",
+  };
+
+  it("ignores line numbers, numbers in the text and whitespace", () => {
+    const moved = {
+      path: "./src/a.ts",
+      line: 42,
+      message: "  Missing   null check\nat line 42 in parse()  ",
+    };
+    expect(findingSignature(moved)).toBe(findingSignature(base));
+    expect(findingSignature(base)).toMatch(/^S[0-9a-f]{12}$/);
+  });
+
+  it("differs for another file or another message", () => {
+    expect(findingSignature({ ...base, path: "src/b.ts" })).not.toBe(
+      findingSignature(base),
+    );
+    expect(
+      findingSignature({ ...base, message: "Unused import in parse()" }),
+    ).not.toBe(findingSignature(base));
+    expect(findingSignature({ ...base, path: null })).not.toBe(
+      findingSignature(base),
+    );
+  });
+
+  it("reads rejections from events and finds the repeats", () => {
+    const rejected = (message: string) => ({
+      type: "review.completed",
+      data: {
+        passed: false,
+        findings: [{ severity: "blocking", path: "a.ts", line: 3, message }],
+      },
+    });
+    const history = rejectionHistory([
+      rejected("Fix 1"),
+      { type: "review.completed", data: { by: "person", passed: true } },
+      rejected("Other"),
+    ]);
+    expect(history).toHaveLength(2);
+    expect(history[0]![0]!.text).toBe("Fix 1");
+    expect(
+      repeatedSignatures(history.at(-1)!, [
+        {
+          signature: findingSignature({
+            path: "a.ts",
+            line: 9,
+            message: "Other",
+          }),
+        },
+      ]),
+    ).toHaveLength(1);
+    expect(repeatedSignatures(history[0]!, history.at(-1)!)).toHaveLength(0);
+    // A stop on a repeat breaks the run: a resume compares afresh.
+    const resumed = rejectionHistory([
+      rejected("Same"),
+      { type: "review.repeated_finding", data: {} },
+    ]);
+    expect(repeatedSignatures(resumed.at(-1)!, history[0]!)).toHaveLength(0);
   });
 });

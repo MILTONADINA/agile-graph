@@ -42,9 +42,9 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/cli.test.ts :: warns when the reviewer is set to an installed agent, which cannot review, instead of only when a run starts
 - AC9: Each reviewer finding gets an engine-assigned ID, `R` and the first 10 hex characters of the SHA-256 of its path, line and whitespace-normalized message, recorded with the finding in `review.completed` and named in the feedback.
   - Test: packages/engine/tests/review.test.ts :: gives each finding a stable ID that ignores whitespace
-  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed
+  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again, skips the full review while one is unfixed, and stops on that repeat
 - AC10: When the latest AI review in the run asked for changes with blocking findings, the next review first checks each of them (at most 20; any beyond count as inconclusive) in a fresh, separate call to the reviewer carrying only that finding, the task and the current diff, with the same provider, secret and context-budget refusals as a review and the same worker slot and cost reservation. Each check is recorded as a `review.verify_fix` event naming the snapshot it judged. A check that errors stops the run as "Code review did not complete" without passing the review. If any is not shown fixed, the review fails without a full review, records a failed `review.completed` listing the unfixed findings, and the feedback names each by its ID with the evidence; the full review runs only once all are fixed. A person's approval of the snapshot still stands in for all of this.
-  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed
+  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again, skips the full review while one is unfixed, and stops on that repeat
   - Test: packages/engine/tests/review.test.ts :: re-checks only the blocking findings of the latest AI review that asked for changes
   - Test: packages/engine/tests/review.test.ts :: checks one earlier finding in a fresh structured call
   - Test: packages/engine/tests/review.test.ts :: refuses the same inputs for a fix check as for a review
@@ -61,8 +61,14 @@ A team does not call work done because its author says so or because tests pass;
 - AC13: A review resumed at the same snapshot reuses that snapshot's earlier `fixed` fix-check verdicts instead of calling the reviewer again, recording each as a `review.verify_fix` event with `reused: true`; a verdict from another snapshot, and any `still_present` or `inconclusive` verdict, is never reused. Fix checks count against the run's shared `policy.maxTurns`, and the plan-time turn warning reserves three per repair attempt with a reviewer (never more than the 20 a review may check).
   - Test: packages/engine/tests/review.test.ts :: reuses only fixed verdicts recorded for the same snapshot
   - Test: packages/engine/tests/execution.test.ts :: stops the run without passing review when a fix check fails, and reuses that snapshot's fixed verdicts on resume
-  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again and skips the full review while one is unfixed
+  - Test: packages/engine/tests/execution.test.ts :: re-checks earlier blocking findings before reviewing again, skips the full review while one is unfixed, and stops on that repeat
   - Test: packages/engine/tests/planning.test.ts :: reserves expected fix checks of earlier review findings per repair attempt
+- AC14: Each blocking finding of a rejection gets a deterministic signature (a truncated hash of its file path and its text with case, digits and whitespace normalised, so a moved line gives the same one), recorded on the `review.completed` event with the round's duration in `minutes`. The next repair round's instructions list the signatures and short texts of the findings raised so far and say not to repeat the same fix. When a rejection shares a signature with the one before it, the run records `review.repeated_finding` and stops with the `repeated-review-finding` stop kind, asking for a changed approach (narrow the scope, a structural fix, or blocked); it never counts as an accept. A rejection with different signatures continues.
+  - Test: packages/engine/tests/review.test.ts :: ignores line numbers, numbers in the text and whitespace
+  - Test: packages/engine/tests/review.test.ts :: differs for another file or another message
+  - Test: packages/engine/tests/review.test.ts :: reads rejections from events and finds the repeats
+  - Test: packages/engine/tests/execution.test.ts :: carries earlier rejections' signatures into the next repair round, and stops when the same finding comes back
+  - Test: packages/engine/tests/execution.test.ts :: continues when the next rejection raises a different finding
 
 ## Security considerations
 
