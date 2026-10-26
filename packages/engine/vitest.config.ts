@@ -27,5 +27,11 @@ export default defineConfig({
     // test's own explicit limit still applies.
     testTimeout: process.platform === "win32" ? 60000 : 30000,
     hookTimeout: process.platform === "win32" ? 60000 : 30000,
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      reporter: ["text-summary", "json-summary"],
+      reportsDirectory: "coverage",
+    },
   },
 });

@@ -54,6 +54,7 @@
     "build": "tsc -p tsconfig.json && node scripts/write-build-source.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "start": "node dist/cli.js",
     "prepack": "node scripts/prepack.mjs"
   },

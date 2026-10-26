@@ -14,7 +14,6 @@
   login keychain: `jev-key-source.json` accepts
   `{"format":"keychain","service":...,"account":...}`. It fails closed off
   macOS or when the lookup fails, and errors name only the service.
-- `docs/coverage.md`: plan for an engine coverage report and ratchet floor. Not wired up yet, because `@vitest/coverage-v8` is not installed.
 - `scripts/license-allowlist.mjs` fails CI when a production dependency in
   `package-lock.json` has a missing licence or one outside
   `scripts/license-allowlist.json`. It runs offline after `npm audit`.
@@ -52,6 +51,7 @@
 
 ### Internal
 
+- `npm run test:coverage -w @agile-graph/engine` measures engine line coverage with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it drops below the floor in `scripts/coverage-floor.json` (85%).
 - A test checks the README's Install commands and Node range against the built
   CLI and `engines.node`, and the npm smoke runs the README's `init` and
   `index --lexical` arguments, so the README cannot drift unnoticed.
