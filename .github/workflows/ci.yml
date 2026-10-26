@@ -64,6 +64,8 @@ jobs:
       - name: Built engine refuses a stale dist for cloud MCP
         # After npm run check, which builds the engine only after its tests.
         run: node --test scripts/dist-freshness.test.mjs
+      - name: README quick start matches the built CLI
+        run: node --test scripts/readme-quickstart.test.mjs
       - name: Branch-protection policy
         run: node --test scripts/branch-protection.test.mjs
       - name: Secret-scan CI job
