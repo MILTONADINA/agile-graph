@@ -15,6 +15,18 @@ const asPath = (file) => (file.startsWith("./") ? file : `./${file}`);
 const TOOL_BINS = { eslint: "eslint", vitest: "vitest" };
 const CONTRACTS = "packages/contracts/";
 const DASHBOARD = "packages/dashboard/";
+const BUILD_ENGINE = {
+  name: "build engine",
+  command: "npm",
+  args: ["run", "build", "-w", "@agile-graph/engine"],
+};
+/** Script tests that load or run packages/engine/dist, so need it built. */
+const NEEDS_BUILT_ENGINE = new Set([
+  "scripts/readme-quickstart.test.mjs",
+  "scripts/dist-freshness.test.mjs",
+  "scripts/labelling.test.mjs",
+  "evaluation/sealed/tests/aggregate-vault.test.mjs",
+]);
 
 /**
  * The steps to run for the repository paths a change added or modified
@@ -74,6 +86,8 @@ export function planPreflight(changed, deleted = []) {
         ),
     ),
   ].filter((file) => files.includes(file) || exists(file));
+  if (scriptTests.some((file) => NEEDS_BUILT_ENGINE.has(file)))
+    steps.push(BUILD_ENGINE);
   if (scriptTests.length)
     steps.push({
       name: "script tests",
@@ -86,19 +100,14 @@ export function planPreflight(changed, deleted = []) {
         file.startsWith("specs/") ||
         (file.startsWith(ENGINE) && file.includes("/tests/")),
     )
-  )
-    steps.push(
-      {
-        name: "build engine",
-        command: "npm",
-        args: ["run", "build", "-w", "@agile-graph/engine"],
-      },
-      {
-        name: "spec-check",
-        command: "node",
-        args: ["packages/engine/dist/cli.js", "spec-check"],
-      },
-    );
+  ) {
+    if (!steps.includes(BUILD_ENGINE)) steps.push(BUILD_ENGINE);
+    steps.push({
+      name: "spec-check",
+      command: "node",
+      args: ["packages/engine/dist/cli.js", "spec-check"],
+    });
+  }
   return steps;
 }
 

@@ -37,6 +37,10 @@ runs it, and plans can be created straight from a ready spec.
   - Test: packages/engine/tests/specs.test.ts :: fails a criterion proven only by a switched-off test that no CI step runs
 - AC7: `plan --spec` takes the objective and criteria from a ready spec and records the spec's path and hash on the plan.
   - Test: packages/engine/tests/outcomes.test.ts :: takes the objective and criteria from a ready spec and records it on the plan
+- AC8: When `npm run preflight` plans a script test that loads or runs the built engine (`packages/engine/dist`), the system shall run the engine build step before the script tests, once, and shall add no build step when no planned script test needs it.
+  - Test: scripts/preflight.test.mjs :: the engine build runs before script tests that need the built engine
+  - Test: scripts/preflight.test.mjs :: no engine build is added for script tests that do not need it
+  - Test: scripts/preflight.test.mjs :: a spec change with a dist-dependent script test builds once, before the script tests and spec-check
 
 ## Security considerations
 
