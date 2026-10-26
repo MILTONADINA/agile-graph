@@ -107,14 +107,14 @@ function pyprojectNames(text: string): string[] {
     const poetry =
       /^tool\.poetry\.(?:group\.[^.]+\.)?(?:dev-)?dependencies$/.test(section);
     if (!inArray && poetry) {
-      const key = /^("[^"]+"|[A-Za-z0-9._-]+)\s*[=.]/.exec(line)?.[1];
-      const name = key && pythonName(key.replace(/"/g, ""));
+      const key = /^("[^"]+"|'[^']+'|[A-Za-z0-9._-]+)\s*[=.]/.exec(line)?.[1];
+      const name = key && pythonName(key.replace(/["']/g, ""));
       if (name && name !== "python") names.push(name);
       continue;
     }
     let body = line;
     if (!inArray) {
-      const start = /^([A-Za-z0-9_-]+)\s*=\s*\[(.*)$/.exec(line);
+      const start = /^["']?([A-Za-z0-9_-]+)["']?\s*=\s*\[(.*)$/.exec(line);
       const listed =
         section === "project.optional-dependencies" ||
         section === "dependency-groups";
@@ -132,7 +132,9 @@ function pyprojectNames(text: string): string[] {
     }
     const end = arrayEnd(body);
     const content = end >= 0 ? body.slice(0, end) : body;
-    for (const item of quoted(content.replace(/\s#.*$/, ""))) {
+    for (const item of quoted(
+      content.replace(/\{[^}]*\}/g, "").replace(/\s#.*$/, ""),
+    )) {
       const name = pythonName(item);
       if (name) names.push(name);
     }
@@ -140,11 +142,24 @@ function pyprojectNames(text: string): string[] {
   }
   return names;
 }
+// Drops a trailing # comment, ignoring a # inside a string.
+function withoutComment(line: string): string {
+  let quote = "";
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]!;
+    if (quote) {
+      if (char === "\\" && quote === '"') i++;
+      else if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === "#") return line.slice(0, i);
+  }
+  return line;
+}
 function cargoNames(text: string): string[] {
   const names: string[] = [];
   let kind: "list" | "one" | undefined;
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
+    const line = withoutComment(raw).trim();
     const header = tomlSection(line);
     if (header !== undefined) {
       const table =
@@ -166,8 +181,8 @@ function cargoNames(text: string): string[] {
       continue;
     }
     if (kind !== "list") continue;
-    const key = /^("[^"]+"|[A-Za-z0-9_-]+)\s*[=.]/.exec(line)?.[1];
-    if (key) names.push(key.replace(/"/g, ""));
+    const key = /^("[^"]+"|'[^']+'|[A-Za-z0-9_-]+)\s*[=.]/.exec(line)?.[1];
+    if (key) names.push(key.replace(/["']/g, ""));
     const real = /\bpackage\s*=\s*"([^"]+)"/.exec(line)?.[1];
     if (real) names.push(real);
   }
@@ -175,18 +190,29 @@ function cargoNames(text: string): string[] {
 }
 function goNames(text: string): string[] {
   const names: string[] = [];
-  let block = false;
+  let block: "require" | "replace" | undefined;
+  const take = (kind: string, rest: string) => {
+    if (kind === "require") names.push(rest.split(/\s+/)[0]!);
+    else {
+      // `old [v] => new [v]`: a replacement fetches the new module unless
+      // it is a local path.
+      const target = rest.split("=>")[1]?.trim().split(/\s+/)[0];
+      if (target && !/^(?:\.{0,2}\/|[A-Za-z]:)/.test(target))
+        names.push(target);
+    }
+  };
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/\/\/.*$/, "").trim();
     if (block) {
-      if (line === ")") block = false;
-      else if (line) names.push(line.split(/\s+/)[0]!);
+      if (line === ")") block = undefined;
+      else if (line) take(block, line);
       continue;
     }
-    if (/^require\s*\($/.test(line)) block = true;
+    const open = /^(require|replace)\s*\($/.exec(line)?.[1];
+    if (open) block = open as "require" | "replace";
     else {
-      const single = /^require\s+(\S+)/.exec(line)?.[1];
-      if (single) names.push(single);
+      const single = /^(require|replace)\s+(\S.*)$/.exec(line);
+      if (single) take(single[1]!, single[2]!);
     }
   }
   return names;
