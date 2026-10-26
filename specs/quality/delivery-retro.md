@@ -45,6 +45,12 @@ the measuring step: it changes no gate, prompt or run.
   - Test: packages/engine/tests/retro.test.ts :: counts a new-dependency refusal as approval, and an acceptance wait only in a run that succeeded
   - Test: packages/engine/tests/retro.test.ts :: counts a checks-failed stop as graph-owned, not deferred
   - Test: packages/engine/tests/retro.test.ts :: aggregates across runs and still reads an old record without the fields
+- AC7: When the follow-up plans' source runs are given, each run and the totals report `graphOwnedWithoutFollowUp`: 1 for a run whose terminal stop (the run's last event is a stop, not resumed) is graph-owned and that no follow-up plan names, else 0; the store lists the named runs read-only from the single "Follow-up of run <runId>:" objective prefix, ignoring other plans, and records made before the field existed summarise as zero.
+  - Test: packages/engine/tests/retro.test.ts :: counts a graph-owned terminal stop with no follow-up plan as 1
+  - Test: packages/engine/tests/retro.test.ts :: counts 0 when a follow-up plan names the run
+  - Test: packages/engine/tests/retro.test.ts :: counts 0 for a person-owned stop and for a stop that was resumed
+  - Test: packages/engine/tests/retro.test.ts :: sums across runs and reads old records as zero
+  - Test: packages/engine/tests/store-follow-ups.test.ts :: lists only the runs follow-up plans name, in this project
 
 ## Security considerations
 

@@ -83,7 +83,10 @@ after. For each run and in total it reports:
   and schedule itself. Every stop kind is classified in `retro.ts`, so a new
   kind cannot be added without saying whose it is. Records from before these
   fields count as zero. This is the first slice of #163; it measures, and
-  does not yet schedule the graph-owned work.
+  does not yet schedule the graph-owned work. The second slice adds
+  `graphOwnedWithoutFollowUp`: runs whose terminal stop is graph-owned and
+  that no `converge` follow-up plan (objective prefix `Follow-up of run
+<id>:`) names.
 
 It is read-only and local, like `outcomes`: run IDs, counts, minutes and
 kinds only, never check output, messages, paths or memory text, and no MCP

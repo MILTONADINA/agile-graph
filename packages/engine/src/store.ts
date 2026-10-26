@@ -11,6 +11,7 @@ import type {
   Usage,
 } from "@agile-graph/contracts";
 import { hash, id, now } from "./util.js";
+import { followedUpRunId } from "./planning.js";
 
 /** The SHA-256 of a plan's stored content, which an approval binds. */
 export const planSha256 = (plan: ExecutionPlan): string => hash(plan);
@@ -1286,6 +1287,28 @@ export class RunStore {
   /** The MCP call log, newest first. */
   mcpCalls(options: { limit: number; tool?: string }): McpCallRecord[] {
     return selectMcpCalls(this.db, this.projectId, options);
+  }
+  /**
+   * The IDs of runs that follow-up plans of this project name (see
+   * followUpObjective); read-only, and no plan content leaves the store.
+   */
+  followUpSourceRunIds(): string[] {
+    const rows = this.db
+      .prepare(
+        "SELECT json_extract(json,'$.objective') AS objective FROM plans WHERE project_id=? AND json_extract(json,'$.objective') LIKE 'Follow-up of run %'",
+      )
+      .all(this.projectId) as { objective: unknown }[];
+    return [
+      ...new Set(
+        rows.flatMap((row) => {
+          const runId =
+            typeof row.objective === "string"
+              ? followedUpRunId(row.objective)
+              : undefined;
+          return runId ? [runId] : [];
+        }),
+      ),
+    ];
   }
   /** Whether a plan with this id exists in this project. */
   hasPlan(planId: string): boolean {

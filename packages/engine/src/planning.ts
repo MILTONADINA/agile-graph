@@ -241,6 +241,13 @@ export const MAX_PLAN_OBJECTIVE = 16000;
 
 const FOLLOW_UP_PREFIX = /^(?:Follow-up of run \S+: )+/;
 
+const FOLLOW_UP_SOURCE = /^Follow-up of run (\S+): /;
+
+/** The run a follow-up plan's objective names; undefined for any other. */
+export function followedUpRunId(objective: string): string | undefined {
+  return FOLLOW_UP_SOURCE.exec(objective)?.[1];
+}
+
 /**
  * A follow-up plan's objective: one "Follow-up of run <runId>:" prefix naming
  * the latest run, with any earlier prefixes stripped so repeated converging

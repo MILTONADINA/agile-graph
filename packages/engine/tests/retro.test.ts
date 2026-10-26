@@ -533,5 +533,63 @@ describe("delivery retro", () => {
         graphOwnedStops: 0,
       });
     });
+
+    describe("graph-owned stops without a follow-up", () => {
+      const stopped = (error: string, id = "run-1") =>
+        [record("failed", id), [event(0, "run.stopped", { error })]] as const;
+      const checks = "Required checks failed";
+      const approval =
+        "This project requires a person to approve every plan before a run of it starts";
+
+      it("counts a graph-owned terminal stop with no follow-up plan as 1", () => {
+        const [run, events] = stopped(checks);
+        const retro = runRetro(run, events, { followUps: new Set() });
+        expect(retro.graphOwnedWithoutFollowUp).toBe(1);
+      });
+
+      it("counts 0 when a follow-up plan names the run", () => {
+        const [run, events] = stopped(checks);
+        const retro = runRetro(run, events, {
+          followUps: new Set(["run-1", "other"]),
+        });
+        expect(retro.graphOwnedWithoutFollowUp).toBe(0);
+      });
+
+      it("counts 0 for a person-owned stop and for a stop that was resumed", () => {
+        const [run, events] = stopped(approval);
+        expect(
+          runRetro(run, events, { followUps: new Set() })
+            .graphOwnedWithoutFollowUp,
+        ).toBe(0);
+        const resumed = runRetro(
+          record("succeeded"),
+          [
+            event(0, "run.stopped", { error: checks }),
+            event(1, "run.started"),
+            event(2, "run.succeeded"),
+          ],
+          { followUps: new Set() },
+        );
+        expect(resumed.graphOwnedWithoutFollowUp).toBe(0);
+      });
+
+      it("omits the count when the follow-up set is not given", () => {
+        const [run, events] = stopped(checks);
+        expect(runRetro(run, events).graphOwnedWithoutFollowUp).toBeUndefined();
+      });
+
+      it("sums across runs and reads old records as zero", () => {
+        const [a, ae] = stopped(checks, "a");
+        const [b, be] = stopped(checks, "b");
+        const followUps = new Set(["b"]);
+        const one = runRetro(a, ae, { followUps });
+        const two = runRetro(b, be, { followUps });
+        const { graphOwnedWithoutFollowUp: _g, ...old } = one;
+        expect(summarizeRetro([one, two, old])).toMatchObject({
+          graphOwnedWithoutFollowUp: 1,
+        });
+        expect(summarizeRetro([old]).graphOwnedWithoutFollowUp).toBe(0);
+      });
+    });
   });
 });

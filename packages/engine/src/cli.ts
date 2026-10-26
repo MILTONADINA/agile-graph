@@ -1801,13 +1801,14 @@ cli
   )
   .option("--since <date>", "Only runs created on or after this ISO 8601 date")
   .action((options) =>
-    withEngine(async (engine) =>
-      summarizeRetro(
+    withEngine(async (engine) => {
+      const followUps = new Set(engine.store.followUpSourceRunIds());
+      return summarizeRetro(
         runsCreatedSince(engine.store.runs(), options.since).map((run) =>
-          runRetro(run, engine.store.events(run.id)),
+          runRetro(run, engine.store.events(run.id), { followUps }),
         ),
-      ),
-    ),
+      );
+    }),
   );
 cli
   .command("insights-context")

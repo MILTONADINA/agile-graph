@@ -95,6 +95,12 @@ export interface RunRetro {
   deferredByReason?: Partial<Record<PersonReason, number>>;
   /** Stops the graph could have scheduled as its own follow-up work. */
   graphOwnedStops?: number;
+  /**
+   * 1 when the run's terminal stop is graph-owned and no follow-up plan
+   * names the run, else 0. Absent in records made before this field existed
+   * and when no follow-up set was given.
+   */
+  graphOwnedWithoutFollowUp?: number;
 }
 
 export interface RetroSummary {
@@ -112,6 +118,7 @@ export interface RetroSummary {
   deferredToPerson: number;
   deferredByReason: Partial<Record<PersonReason, number>>;
   graphOwnedStops: number;
+  graphOwnedWithoutFollowUp: number;
   perRun: RunRetro[];
 }
 
@@ -219,6 +226,10 @@ export function failureSignature(checks: unknown): string | null {
 export function runRetro(
   run: RunRecord,
   events: readonly RunEvent[],
+  options: {
+    /** IDs of runs that follow-up plans name; keeps this function pure. */
+    followUps?: ReadonlySet<string>;
+  } = {},
 ): RunRetro {
   const ordered = [...events].sort(
     (a, b) => Date.parse(a.at) - Date.parse(b.at),
@@ -254,6 +265,7 @@ export function runRetro(
   const stopKinds: ErrorKind[] = [];
   const deferredByReason: Partial<Record<PersonReason, number>> = {};
   let graphOwnedStops = 0;
+  let terminalOwner: StopOwner | undefined;
   let humanWait: PersonReason | undefined;
   const route = (owner: StopOwner) => {
     if (owner === "graph") graphOwnedStops++;
@@ -293,6 +305,7 @@ export function runRetro(
         const kind = classifyError(event.data.error);
         stopKinds.push(kind);
         route(STOP_OWNERS[kind]);
+        terminalOwner = STOP_OWNERS[kind];
       }
     }
     // The wait is recorded before the final gates and publication, so it
@@ -333,6 +346,8 @@ export function runRetro(
       lastSignature.set(step, signature);
     }
   }
+  // Only a stop the run ended on is terminal; a resumed run's was not.
+  const endedStopped = inRun.at(-1)?.type === "run.stopped";
   if (humanWait && inRun.at(-1)?.type === "run.succeeded") route(humanWait);
   const minutes: RetroMinutes = {
     total:
@@ -368,6 +383,14 @@ export function runRetro(
     ),
     deferredByReason,
     graphOwnedStops,
+    ...(options.followUps && {
+      graphOwnedWithoutFollowUp:
+        endedStopped &&
+        terminalOwner === "graph" &&
+        !options.followUps.has(run.id)
+          ? 1
+          : 0,
+    }),
   };
 }
 
@@ -462,6 +485,9 @@ export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
       {},
     ),
     graphOwnedStops: sum((retro) => retro.graphOwnedStops ?? 0),
+    graphOwnedWithoutFollowUp: sum(
+      (retro) => retro.graphOwnedWithoutFollowUp ?? 0,
+    ),
     perRun,
   };
 }
