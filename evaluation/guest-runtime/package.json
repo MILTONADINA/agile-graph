@@ -9,6 +9,6 @@
     "picomatch": "4.0.7",
     "quickjs-emscripten-core": "0.32.0",
     "typescript": "5.9.3",
-    "zod": "3.25.76"
+    "zod": "4.6.6"
   }
 }
