@@ -3788,6 +3788,51 @@ describe("code review gate", () => {
       expect(result.error).toContain("not given");
     });
 
+    it("gives a cloud reviewer a finding in a path it may not receive by ID, tool and rule alone, and the gate still runs", async () => {
+      vi.stubEnv("GRAPH_TEST_REVIEW_KEY", "fixture-only-not-a-real-key");
+      const given: (Given[number] & {
+        path: string;
+        line: number;
+        message?: string;
+      })[] = [];
+      const { result, events } = await setup({
+        reviewer: { kind: "openai" },
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        configure: async (config) => {
+          config.policy.exportPaths = ["math.cjs", "math.test.cjs"];
+        },
+        securityScan: async () => ({
+          tools: ["semgrep"],
+          findings: [
+            {
+              tool: "semgrep",
+              rule: "r",
+              path: "private/notes.txt",
+              line: 7,
+              message: "do not send this",
+              fingerprint: "fresh",
+            },
+          ],
+          errors: [],
+          unscanned: [],
+        }),
+        reviewFrom: (seen: Given) => {
+          given.push(...(seen as typeof given));
+          return ruled(seen, "dropped");
+        },
+      });
+      expect(given).toHaveLength(1);
+      expect(given[0]).toMatchObject({ path: "(withheld)", line: 0 });
+      expect(given[0]).not.toHaveProperty("message");
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Security scan found");
+      expect(
+        events.some((event) => event.type === "security.gate_passed"),
+      ).toBe(false);
+    });
+
     it("never lets a dropped ruling clear the security gate", async () => {
       const { result, events } = await setup({
         reviews: [approve],
