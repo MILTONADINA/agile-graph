@@ -146,7 +146,13 @@ run that adds a hook, widens a permission, declares an MCP server or plants
 an injection phrase produces a new finding that blocks the run until it is
 fixed or a person accepts it into the baseline.
 
-The repository's own `AGENTS.md` is one of these instruction files. `scripts/agents-md-rules.test.mjs` (run in CI) keeps its safety rules in place: no pushing to `main`, publishing, memory export, key use, cost-cap changes or model downloads. It also fails if `AGENTS.md` again tells every agent to read the handover before working.
+The repository's own `AGENTS.md` is one of these instruction files.
+`scripts/agents-md-rules.test.mjs` (run in CI) keeps its safety rules in
+place: no pushing to `main`, publishing, memory export, key use, cost-cap
+changes or model downloads. It also fails if `AGENTS.md` again tells every
+agent to read the handover before working. The lock is phrase-exact, so a
+rewording of a locked sentence must update the test's phrase list in the
+same change.
 
 ## The baseline
 
