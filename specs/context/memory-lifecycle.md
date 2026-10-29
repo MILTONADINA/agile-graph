@@ -22,6 +22,7 @@ A team wants durable project knowledge (requirements, constraints, observations)
 - AC5: Supersession is explicit and chronological: a later successor is allowed without silently changing either record, and an acceptance with backwards chronology is refused leaving both records unchanged.
   - Test: packages/engine/tests/memory-assertions.test.ts :: allows an explicit later successor without silently changing either record
   - Test: packages/engine/tests/memory-assertions-integration.test.ts :: rejects explicit acceptance with backwards chronology and leaves both required records unchanged
+  - Test: packages/engine/tests/memory-valid-from.test.ts :: refuses a successor whose validFrom precedes its predecessor's and leaves both records unchanged
 - AC6: Cloud context and cloud worker packets refuse mandatory memory unless its exact current text has been authorized for export; private mandatory memory can never be authorized. A revoked authorization refuses the next cloud worker turn of a run already in progress.
   - Test: packages/engine/tests/mcp.test.ts :: cloud context_get refuses shared mandatory memory unless its exact text is currently authorized
   - Test: packages/engine/tests/mcp.test.ts :: cloud context_get refuses private mandatory memory and it cannot be authorized
@@ -69,6 +70,12 @@ A team wants durable project knowledge (requirements, constraints, observations)
   - Test: packages/engine/tests/memory-expiry.test.ts :: memory-add and memory-accept take --valid-until, and memory-review --within-days lists expiring memory
 - AC16: Expiry only removes memory from a cloud packet. An expired mandatory memory is absent from a cloud `context_get` packet, with no text, hash or ID of it, and the rest of the packet is unchanged; an expired memory that was never authorized stops refusing the packet, and export authorization of every other memory is still checked against its exact text.
   - Test: packages/engine/tests/mcp.test.ts :: cloud context_get leaves out expired mandatory memory and changes nothing else
+- AC17: A memory may carry `validFrom`, an ISO 8601 date-time with a time zone stored in UTC, set with `memory-add --valid-from <iso>` or `memory-accept <id> --valid-from <iso>`. Before that instant the memory is absent from local and cloud context packets (mandatory set, export checks and retrieved items) and a cloud packet adds no text, hash or ID of it; the local packet's warnings name it by ID. A `validFrom` that is malformed, not a real calendar date, or at or after the memory's `validUntil` is refused, as is changing it after acceptance. Only the memory's own `validFrom` hides it, never a reviewed claim's `validFrom`. A successor's `validFrom` shall not precede its predecessor's: accepting such a successor is refused, leaving both records unchanged.
+  - Test: packages/engine/tests/memory-valid-from.test.ts :: leaves a memory out of the packet before its validFrom and includes it from that instant
+  - Test: packages/engine/tests/memory-valid-from.test.ts :: refuses a malformed validFrom, one at or after validUntil, and a change after acceptance
+  - Test: packages/engine/tests/memory-valid-from.test.ts :: refuses a successor whose validFrom precedes its predecessor's and leaves both records unchanged
+  - Test: packages/engine/tests/memory-valid-from.test.ts :: hides a memory only by its own validFrom, never by a reviewed claim's window
+  - Test: packages/engine/tests/mcp.test.ts :: cloud context_get leaves out mandatory memory before its validFrom and changes nothing else
 
 ## Security considerations
 

@@ -485,4 +485,19 @@ it("memory-add and memory-accept take --valid-until, and memory-review --within-
     ?.flags.find((entry) => entry.kind === "expiring");
   expect(flag).toMatchObject({ validUntil: expiry });
   expect(flag?.reason).not.toContain("Toy CLI constraint");
+
+  // --valid-from on both commands; a malformed one is refused.
+  const start = inDays(2);
+  const later = await json<MemoryRecord>(
+    graph("memory-add", "--valid-from", start, "Toy CLI later observation"),
+  );
+  expect(later.validFrom).toBe(start);
+  const replacement = inDays(1);
+  const restarted = await json<MemoryRecord>(
+    graph("memory-accept", later.id, "--valid-from", replacement),
+  );
+  expect(restarted.validFrom).toBe(replacement);
+  const badStart = await graph("memory-add", "--valid-from", "tomorrow", "Toy");
+  expect(badStart.code).not.toBe(0);
+  expect(badStart.stderr).toContain("validFrom must be an ISO 8601");
 }, 120_000);
