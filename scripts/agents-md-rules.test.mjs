@@ -10,6 +10,10 @@ const agents = flat("../AGENTS.md");
 const claude = flat("../CLAUDE.md");
 
 const requiredRules = [
+  [
+    "autonomy sentence keeps its prohibition",
+    "Nothing here permits authorizing memory export, enabling cloud run status, choosing or changing a Jev session cap, creating or reading keys or asking for passphrases, downloading models, pushing to `main`, pushing tags, publishing to npm, or changing the `decisionMode`, `promotedCategories` or `maxCostUsd` settings in `.graph/project.json`.",
+  ],
   ["never push to main", "never push to `main` directly"],
   ["no pushing to main in autonomy", "pushing to `main`, pushing tags"],
   ["no publishing to npm", "publishing to npm"],
@@ -53,6 +57,9 @@ test("AGENTS.md does not instruct reading the handover before every task", () =>
     agents,
     /read[^.]{0,80}handover[^.]{0,40}before (working|every|any|you)/i,
   );
+  const preamble = agents.split("## Where to look")[0];
+  assert.doesNotMatch(preamble, /handover/i);
+  assert.doesNotMatch(preamble, /\bread\b[^.]*\b(first|before)\b/i);
 });
 
 test("AGENTS.md points to the handover by situation", () => {

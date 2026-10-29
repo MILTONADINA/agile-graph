@@ -4,11 +4,6 @@
 
 ### Added
 
-- `AGENTS.md` no longer tells every agent to read the handover before
-  working; it points to the handover by situation. A new
-  `scripts/agents-md-rules.test.mjs`, run in CI, fails if a rule against
-  pushing to `main`, publishing, memory export, key use, cost-cap changes or
-  model downloads is dropped, or if a read-first instruction returns.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice
@@ -34,6 +29,11 @@
 
 ### Changed
 
+- `AGENTS.md` no longer tells every agent to read the handover before
+  working; it points to the handover by situation. A new
+  `scripts/agents-md-rules.test.mjs`, run in CI, fails if a rule against
+  pushing to `main`, publishing, memory export, key use, cost-cap changes or
+  model downloads is dropped, or if a read-first instruction returns.
 - The Linux x64 platform job collects engine coverage during the engine tests
   it already runs (`GRAPH_ENGINE_COVERAGE=1`, that matrix entry only) instead of
   running the suite a second time, and its time limit goes back to 45 minutes
