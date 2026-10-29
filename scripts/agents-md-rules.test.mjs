@@ -9,6 +9,9 @@ const flat = (url) =>
 const agents = flat("../AGENTS.md");
 const claude = flat("../CLAUDE.md");
 
+// Positive rules are exact phrases on purpose: rewording a safety rule must
+// be a visible, reviewed change. Negative rules are patterns, because they
+// have to catch many wordings of a read-first instruction.
 const requiredRules = [
   [
     "autonomy sentence keeps its prohibition",
@@ -47,16 +50,28 @@ test("AGENTS.md keeps every safety rule", () => {
   }
 });
 
+// A gap of up to n characters that a sentence end stops, but a dot inside a
+// file name or number (not followed by a space) does not.
+const gap = (n) => `(?:[^.]|\\.(?!\\s)){0,${n}}`;
+const readFirstPatterns = [
+  new RegExp(`read${gap(80)}start here${gap(120)}(before|first)`, "i"),
+  new RegExp(
+    `read${gap(80)}handover${gap(40)}before (working|every|any|you)`,
+    "i",
+  ),
+];
+
+test("read-first patterns see through dots in file names", () => {
+  const text = "Read docs/claude-code-handover.md Start here before any task.";
+  assert.ok(readFirstPatterns.some((re) => re.test(text)));
+  assert.ok(
+    !readFirstPatterns.some((re) => re.test("Read it. Start here before.")),
+  );
+});
+
 test("AGENTS.md does not instruct reading the handover before every task", () => {
   assert.doesNotMatch(agents, /before working,? read/i);
-  assert.doesNotMatch(
-    agents,
-    /read[^.]{0,80}start here[^.]{0,120}(before|first)/i,
-  );
-  assert.doesNotMatch(
-    agents,
-    /read[^.]{0,80}handover[^.]{0,40}before (working|every|any|you)/i,
-  );
+  for (const re of readFirstPatterns) assert.doesNotMatch(agents, re);
   const preamble = agents.split("## Where to look")[0];
   assert.doesNotMatch(preamble, /handover/i);
   assert.doesNotMatch(preamble, /\bread\b[^.]*\b(first|before)\b/i);
