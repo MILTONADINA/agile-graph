@@ -433,6 +433,27 @@ describe("explicit supersession link and temporal review", () => {
       ]).some((flag) => flag.reason.includes("chronology")),
     ).toBe(true);
   });
+  it("flags a successor whose validFrom precedes its predecessor's, and only when both have one", () => {
+    const previous = memory("previous", undefined, {
+      validFrom: "2026-07-01T00:00:00Z",
+    });
+    const next = (validFrom?: string) =>
+      memory("next", undefined, {
+        supersedes: previous.id,
+        createdAt: "2026-02-01T00:00:00Z",
+        ...(validFrom ? { validFrom } : {}),
+      });
+    const reasons = (candidate: MemoryRecord) =>
+      reviewSupersession(candidate, [previous, candidate]).map(
+        (flag) => flag.reason,
+      );
+    expect(reasons(next("2026-06-01T00:00:00Z"))).toEqual([
+      expect.stringContaining("validFrom cannot precede"),
+    ]);
+    expect(reasons(next("2026-07-01T00:00:00Z"))).toEqual([]);
+    expect(reasons(next("2026-08-01T00:00:00Z"))).toEqual([]);
+    expect(reasons(next())).toEqual([]);
+  });
   it("flags a replacement whose asserted validity ends before its predecessor starts", () => {
     const previous = memory(
       "previous",
