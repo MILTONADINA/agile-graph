@@ -7,7 +7,7 @@ import path from "node:path";
  * approval. Reading is shallow and offline, like the dependency gate.
  */
 const RUNNER_CONFIG =
-  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^(pytest\.ini|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
+  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
 const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
@@ -37,7 +37,10 @@ function pytestSections(text: string): string {
   for (const raw of text.split(/\r?\n/)) {
     const header = /^\s*\[+\s*([^\]]+?)\s*\]+\s*(?:#.*)?$/.exec(raw)?.[1];
     if (header !== undefined) inside = /^(tool[.:])?pytest(\.|$)/.test(header);
-    if (inside) kept.push(raw.trim());
+    // A dotted key (tool.pytest.ini_options.addopts = ...) sets the same
+    // option outside a pytest section.
+    if (inside || /^\s*["']?[\w."'-]*pytest[\w."'-]*\s*=/.test(raw))
+      kept.push(raw.trim());
   }
   return kept.join("\n");
 }
@@ -49,7 +52,7 @@ export function changedVerificationConfig(
   after: string,
 ): boolean {
   if (before === after) return false;
-  const base = path.posix.basename(file);
+  const base = path.posix.basename(file).toLowerCase();
   if (RUNNER_CONFIG.test(base)) return true;
   if (base === "package.json") {
     const was = npmEntries(before);

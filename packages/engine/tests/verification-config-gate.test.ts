@@ -103,6 +103,23 @@ describe("verification configuration gate", () => {
       changedVerificationConfig(file, before, after);
     expect(changed("tox.ini", "a", "b")).toBe(true);
     expect(changed("tox.ini", "a", "a")).toBe(false);
+    expect(changed(".pytest.ini", "", "[pytest]")).toBe(true);
+    expect(changed("pytest.toml", "", "x")).toBe(true);
+    expect(changed("Vitest.Config.TS", "a", "b")).toBe(true);
+    expect(
+      changed(
+        "pyproject.toml",
+        "[project]\nname='a'\n",
+        "tool.pytest.ini_options.addopts = '-x'\n[project]\nname='a'\n",
+      ),
+    ).toBe(true);
+    expect(
+      changed(
+        "pyproject.toml",
+        'dependencies = ["pytest>=7"]\n',
+        'dependencies = ["pytest>=8"]\n',
+      ),
+    ).toBe(false);
     expect(changed("sub/conftest.py", "", "x")).toBe(true);
     expect(
       changed(
