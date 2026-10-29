@@ -2008,6 +2008,10 @@ cli
     "--valid-until <iso>",
     "When the memory stops applying, as an ISO 8601 date-time with a time zone (for example 2026-12-31T23:59:59Z); once it passes, context leaves the memory out",
   )
+  .option(
+    "--valid-from <iso>",
+    "When the memory starts to apply, as an ISO 8601 date-time with a time zone; before it, context leaves the memory out. A successor cannot start before the memory it replaces",
+  )
   .action((text, options) =>
     withEngine(async (engine) => {
       const kind = z
@@ -2029,6 +2033,9 @@ cli
           : {}),
         ...(options.validUntil !== undefined
           ? { validUntil: options.validUntil as string }
+          : {}),
+        ...(options.validFrom !== undefined
+          ? { validFrom: options.validFrom as string }
           : {}),
       });
       // Mandatory memory blocks cloud consumers until it can be exported.
@@ -2065,14 +2072,20 @@ cli
     "--valid-until <iso>",
     "Set or replace the proposal's expiry, as an ISO 8601 date-time with a time zone; once it passes, context leaves the memory out",
   )
+  .option(
+    "--valid-from <iso>",
+    "Set or replace the proposal's start, as an ISO 8601 date-time with a time zone; before it, context leaves the memory out",
+  )
   .action((id, options) =>
     withEngine((engine) =>
-      engine.context.acceptMemory(
-        id,
-        options.validUntil !== undefined
+      engine.context.acceptMemory(id, {
+        ...(options.validUntil !== undefined
           ? { validUntil: options.validUntil as string }
-          : {},
-      ),
+          : {}),
+        ...(options.validFrom !== undefined
+          ? { validFrom: options.validFrom as string }
+          : {}),
+      }),
     ),
   );
 cli

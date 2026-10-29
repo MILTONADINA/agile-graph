@@ -481,6 +481,12 @@ export interface MemoryRecord {
    * leaves the memory out. The record and its status are kept.
    */
   validUntil?: string;
+  /**
+   * When the memory starts to apply (ISO 8601 date-time, stored in UTC).
+   * Before that instant context retrieval leaves the memory out; a successor
+   * cannot start before its predecessor.
+   */
+  validFrom?: string;
   /** Why a person rejected this proposal (status "rejected" only). */
   rejectionReason?: string;
 }

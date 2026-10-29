@@ -99,7 +99,9 @@ import { DART_VERSION, dartRuntime, resolveDartBindings } from "./dart.js";
 import {
   attachReviewedAssertions,
   memoryExpired,
+  memoryNotYetValid,
   parseMemoryExpiry,
+  parseMemoryValidFrom,
   parseReviewedAssertions,
   reviewSupersession,
 } from "./memory-assertions.js";
@@ -1096,6 +1098,7 @@ export class ContextEngine {
     const retainExpired = new Set(input.retainExpired ?? []);
     const expiredMemoryIds: string[] = [];
     const retainedMemoryIds: string[] = [];
+    const pendingMemoryIds: string[] = [];
     const memories = (await this.listMemories()).filter((memory) => {
       if (!(
         memory.status === "accepted" ||
@@ -1103,6 +1106,12 @@ export class ContextEngine {
           ["constraint", "requirement"].includes(memory.kind))
       ))
         return false;
+      // A memory that has not started yet is absent, like an expired one;
+      // it is never retained for a run, which could not have started with it.
+      if (memoryNotYetValid(memory, now)) {
+        pendingMemoryIds.push(memory.id);
+        return false;
+      }
       if (!memoryExpired(memory, now)) return true;
       if (
         retainExpired.has(memory.id) &&
@@ -1208,6 +1217,10 @@ export class ContextEngine {
       if (expiredMemoryIds.length)
         warnings.push(
           `Expired memory left out of context: ${expiredMemoryIds.join(", ")}. Review it with graph-engine memory-review, then propose a successor with memory-add --supersedes <id> if it still applies.`,
+        );
+      if (pendingMemoryIds.length)
+        warnings.push(
+          `Memory not yet valid left out of context: ${pendingMemoryIds.join(", ")}.`,
         );
       if (retainedMemoryIds.length)
         warnings.push(
@@ -1507,6 +1520,14 @@ export class ContextEngine {
       if (Date.parse(record.validUntil) <= Date.parse(record.createdAt))
         throw new Error("A memory cannot expire before it was created");
     }
+    if (record.validFrom !== undefined) {
+      record.validFrom = parseMemoryValidFrom(record.validFrom);
+      if (
+        record.validUntil !== undefined &&
+        Date.parse(record.validUntil) <= Date.parse(record.validFrom)
+      )
+        throw new Error("A memory cannot expire before it starts");
+    }
   }
   /** A new expiry a person gives must still lie ahead. */
   private futureExpiry(input: string): string {
@@ -1528,9 +1549,11 @@ export class ContextEngine {
     sources?: SourceLocation[];
     supersedes?: string;
     validUntil?: string;
+    validFrom?: string;
   }): Promise<MemoryRecord> {
     await this.ready;
     if (input.validUntil !== undefined) this.futureExpiry(input.validUntil);
+    if (input.validFrom !== undefined) parseMemoryValidFrom(input.validFrom);
     if (input.supersedes !== undefined) {
       const previous = await this.memory(input.supersedes);
       if (previous.status !== "accepted")
@@ -1548,6 +1571,7 @@ export class ContextEngine {
       ...(input.validUntil !== undefined
         ? { validUntil: input.validUntil }
         : {}),
+      ...(input.validFrom !== undefined ? { validFrom: input.validFrom } : {}),
     });
   }
   /**
@@ -1617,8 +1641,13 @@ export class ContextEngine {
     sources?: SourceReference[];
     supersedes?: string;
     validUntil?: string;
+    validFrom?: string;
   }): Promise<MemoryRecord> {
     await this.ready;
+    const validFrom =
+      input.validFrom !== undefined
+        ? parseMemoryValidFrom(input.validFrom)
+        : undefined;
     const validUntil =
       input.validUntil !== undefined
         ? this.futureExpiry(input.validUntil)
@@ -1635,6 +1664,7 @@ export class ContextEngine {
       sources: input.sources ?? [],
       ...(input.supersedes ? { supersedes: input.supersedes } : {}),
       ...(validUntil ? { validUntil } : {}),
+      ...(validFrom ? { validFrom } : {}),
     };
     this.validateMemory(record);
     if (record.supersedes) await this.memory(record.supersedes);
@@ -1868,7 +1898,7 @@ export class ContextEngine {
    */
   async acceptMemory(
     id: string,
-    options: { validUntil?: string } = {},
+    options: { validUntil?: string; validFrom?: string } = {},
   ): Promise<MemoryRecord> {
     await this.ready;
     const original = await this.memoryPayload(id);
@@ -1890,8 +1920,17 @@ export class ContextEngine {
         throw new Error(
           `Memory ${record.id} is already accepted, so its expiry cannot change; propose a successor with memory-add --supersedes ${record.id} --valid-until <iso>`,
         );
+      if (
+        options.validFrom !== undefined &&
+        parseMemoryValidFrom(options.validFrom) !== record.validFrom
+      )
+        throw new Error(
+          `Memory ${record.id} is already accepted, so its validFrom cannot change; propose a successor with memory-add --supersedes ${record.id} --valid-from <iso>`,
+        );
       return record;
     }
+    if (options.validFrom !== undefined)
+      record.validFrom = parseMemoryValidFrom(options.validFrom);
     if (options.validUntil !== undefined)
       record.validUntil = this.futureExpiry(options.validUntil);
     else if (
@@ -1901,6 +1940,7 @@ export class ContextEngine {
       throw new Error(
         `The proposed expiry ${record.validUntil} has already passed; accept with a later --valid-until`,
       );
+    this.validateMemory(record);
     record.status = "accepted";
     const statements: Statement[] = [];
     if (record.supersedes) {
@@ -2028,7 +2068,8 @@ export class ContextEngine {
           canonicalJson(previous.assertions ?? null) !==
             canonicalJson(record.assertions ?? null) ||
           previous.supersedes !== record.supersedes ||
-          previous.validUntil !== record.validUntil
+          previous.validUntil !== record.validUntil ||
+          previous.validFrom !== record.validFrom
         ) {
           previous.status = "conflicted";
           await this.db.batch([
