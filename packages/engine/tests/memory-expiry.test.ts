@@ -497,6 +497,11 @@ it("memory-add and memory-accept take --valid-until, and memory-review --within-
     graph("memory-accept", later.id, "--valid-from", replacement),
   );
   expect(restarted.validFrom).toBe(replacement);
+  const pastStart = await json<MemoryRecord>(
+    graph("memory-add", "--valid-from", iso(Date.now() - DAY), "Toy CLI past"),
+  );
+  expect(pastStart.validFrom).toBeDefined();
+  expect(Date.parse(pastStart.validFrom ?? "")).toBeLessThan(Date.now());
   const badStart = await graph("memory-add", "--valid-from", "tomorrow", "Toy");
   expect(badStart.code).not.toBe(0);
   expect(badStart.stderr).toContain("validFrom must be an ISO 8601");
