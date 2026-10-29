@@ -649,6 +649,71 @@ it("cloud context_get refuses private mandatory memory and it cannot be authoriz
   }
 }, 20000);
 
+it("cloud context_get leaves out mandatory memory before its validFrom and changes nothing else", async () => {
+  const hour = 3_600_000;
+  const clock = { now: Date.parse("2030-01-01T00:00:00.000Z") };
+  const { engine, cleanup } = await exportFixture(
+    "graph-mcp-memory-valid-from-",
+    { now: () => clock.now },
+  );
+  const lastingText = "LASTING_MANDATORY_CANARY keep the public rule";
+  const pendingText = "PENDING_MANDATORY_CANARY rule starts later";
+  try {
+    await engine.context.index();
+    const source = (await engine.context.searchSymbols("public/rule.ts"))[0]!
+      .source;
+    const mandatory = async (text: string, validFrom?: number) => {
+      const memory = await engine.context.createMemory({
+        kind: "constraint",
+        text,
+        sources: [source],
+        ...(validFrom ? { validFrom: new Date(validFrom).toISOString() } : {}),
+      });
+      await engine.context.acceptMemory(memory.id);
+      await engine.context.promoteMemory(memory.id);
+      return memory;
+    };
+    const cloud = async () => {
+      const connection = await connect(engine, { client: "cloud" });
+      try {
+        const result = await connection.client.callTool({
+          name: "context_get",
+          arguments: { query: "rule" },
+        });
+        const text = (result.content as { text: string }[])[0]!.text;
+        return { isError: result.isError === true, text };
+      } finally {
+        await connection.close();
+      }
+    };
+    const lasting = await mandatory(lastingText);
+    await engine.context.authorizeMemoryExport(lasting.id, sha256(lastingText));
+    const pending = await mandatory(pendingText, clock.now + hour);
+
+    // Unauthorized and not yet valid: it neither refuses the packet nor
+    // appears in it, by text, hash or ID.
+    const early = await cloud();
+    expect(early.isError).toBe(false);
+    expect(early.text).not.toContain(pendingText);
+    expect(early.text).not.toContain(sha256(pendingText));
+    expect(early.text).not.toContain(pending.id);
+    expect(JSON.parse(early.text).mandatory).toEqual([lastingText]);
+
+    // From its start it is an ordinary mandatory memory again: refused until
+    // its exact text is authorized.
+    clock.now += hour;
+    const refused = await cloud();
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain(`memory ${pending.id}`);
+    await engine.context.authorizeMemoryExport(pending.id, sha256(pendingText));
+    const live = await cloud();
+    expect(live.isError).toBe(false);
+    expect(JSON.parse(live.text).mandatory).toEqual([lastingText, pendingText]);
+  } finally {
+    await cleanup();
+  }
+});
+
 it("cloud context_get leaves out expired mandatory memory and changes nothing else", async () => {
   const hour = 3_600_000;
   const clock = { now: Date.parse("2030-01-01T00:00:00.000Z") };
