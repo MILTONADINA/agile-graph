@@ -3481,6 +3481,9 @@ export class GraphEngine {
         let result: Awaited<ReturnType<typeof invokeReviewWorker>>;
         const scanFindings: ReviewScanFinding[] = [];
         let scanRulings: ScanRuling[];
+        // False when the reviewer saw a result in a path a cloud worker may
+        // not receive, so feedback quoting it is never forwarded to one.
+        let scanExportable = true;
         try {
           // The reviewer rules on every scanner result: new, baselined and
           // inline suppressions. Only text, no files, so what a cloud
@@ -3495,6 +3498,8 @@ export class GraphEngine {
               const id = scanFindingId(finding.fingerprint);
               if (seenIds.has(id)) continue;
               seenIds.add(id);
+              if (!isAllowedPath(finding.path, policy, true))
+                scanExportable = false;
               const open =
                 reviewer.kind === "local" ||
                 isAllowedPath(finding.path, policy, true);
@@ -3604,7 +3609,7 @@ export class GraphEngine {
         return {
           ...outcome,
           feedback,
-          exportable: exportable && !containsSecret(feedback),
+          exportable: exportable && scanExportable && !containsSecret(feedback),
         };
       };
       // One scan per verified snapshot, shared by the review (which rules on
