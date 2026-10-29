@@ -141,6 +141,13 @@ describe("verification configuration gate", () => {
     expect(changed("package.json", pkg, pkg.replace("tsc", "x"))).toBe(false);
     expect(changed("package.json", "{bad", "{bad2")).toBe(false);
     expect(changed("src/a.ts", "a", "b")).toBe(false);
+    const plain = '{"scripts":{"test":"vitest run"}}';
+    const weak = '{"scripts":{"test":"true"}}';
+    // npm strips a leading BOM, so it must not hide an edit.
+    expect(changed("package.json", plain, "\uFEFF" + weak)).toBe(true);
+    expect(changed("package.json", "\uFEFF" + plain, weak)).toBe(true);
+    // Readable before, unreadable after: fail closed.
+    expect(changed("package.json", plain, "{bad")).toBe(true);
   });
   it("refuses an edit to a script a test or check script runs", async () => {
     const chained =
@@ -167,6 +174,14 @@ describe("verification configuration gate", () => {
         chained.replace('"x"', '"y"'),
       ),
     ).toBe(false);
+    // pre and post hooks of a reached script run inside the check.
+    expect(
+      changedVerificationConfig(
+        "package.json",
+        chained,
+        chained.replace('"docs"', '"pretypecheck":"sh ./n.sh","docs"'),
+      ),
+    ).toBe(true);
     const loop = '{"scripts":{"test":"npm run test"}}';
     expect(changedVerificationConfig("package.json", loop, loop + " ")).toBe(
       false,
