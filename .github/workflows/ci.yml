@@ -87,6 +87,8 @@ jobs:
         run: node --test scripts/labelling.test.mjs
       - name: Versioning and support policy docs
         run: node --test scripts/docs-policy.test.mjs
+      - name: AGENTS.md safety rules
+        run: node --test scripts/agents-md-rules.test.mjs
       - name: npm packages and the installed CLI
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |

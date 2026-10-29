@@ -4,19 +4,18 @@ These rules apply to every coding agent working in this repository: Codex,
 Claude Code (which loads this file through `CLAUDE.md`) and any other. Edit
 the rules here, not in `CLAUDE.md`.
 
-Before working, read the **Start here** section at the top of the
-[agent handover](docs/claude-code-handover.md), and inspect the current Git
-state, the live `main` tip, open PRs and checks before acting. The
-handover has the detailed requirements and limits.
+Match the file to the situation: start from **Where to look** below and open
+only what the task needs. Inspect the current Git state, the live `main` tip,
+open PRs and checks before acting on anything that depends on them.
 
 ## Where to look
 
-Beyond that, read what the task needs:
+Read what the task needs:
 
-- In-flight work, the owner's requirements, or the repository and evidence
-  state:
-  the rest of the [agent handover](docs/claude-code-handover.md), which can be
-  out of date where the live state differs.
+- Picking up in-flight work, the owner's requirements, or the repository and
+  evidence state: the **Start here** section and the rest of the
+  [agent handover](docs/claude-code-handover.md), which can be out of date
+  where the live state differs.
 - Taking over as a local model with a small context window:
   [docs/qwen-handover.md](docs/qwen-handover.md).
 - Commands, configuration and policy: [docs/platform.md](docs/platform.md).
