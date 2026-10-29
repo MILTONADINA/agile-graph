@@ -212,7 +212,10 @@ import {
   resolveVerificationSelection,
 } from "./verification-selection.js";
 import { classifyError } from "./feedback.js";
-import { memoryExpired } from "./context/memory-assertions.js";
+import {
+  memoryExpired,
+  memoryNotYetValid,
+} from "./context/memory-assertions.js";
 import { failureSignature } from "./retro.js";
 import { parseSpec, planFromSpec, SPECS_DIR } from "./specs.js";
 import {
@@ -4000,7 +4003,8 @@ export class GraphEngine {
           if (
             !memory ||
             memory.status !== "accepted" ||
-            memoryExpired(memory, now)
+            memoryExpired(memory, now) ||
+            memoryNotYetValid(memory, now)
           )
             continue;
           const exportable = await lessonExportable(memory.id);

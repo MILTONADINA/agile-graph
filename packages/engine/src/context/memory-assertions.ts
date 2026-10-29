@@ -207,6 +207,19 @@ export function parseMemoryExpiry(input: unknown): string {
 }
 
 /**
+ * The instant a memory starts to apply, as a canonical UTC timestamp, with the
+ * same format rules as an expiry.
+ */
+export function parseMemoryValidFrom(input: unknown): string {
+  const parsed = timestamp.safeParse(input);
+  if (!parsed.success || !realCalendarDate(parsed.data))
+    throw new Error(
+      "A memory validFrom must be an ISO 8601 date-time with a time zone, for example 2026-12-31T23:59:59Z",
+    );
+  return new Date(parsed.data).toISOString();
+}
+
+/**
  * The written date and time exist on the calendar: Date would roll
  * 2030-02-31 over to 2 March, so the fields must survive a round trip.
  */
@@ -239,6 +252,12 @@ function realCalendarDate(value: string): boolean {
 export function memoryExpiresAt(record: MemoryRecord): number | undefined {
   const end = record.validUntil ? Date.parse(record.validUntil) : NaN;
   return Number.isFinite(end) ? end : undefined;
+}
+
+/** A memory is not yet valid before the instant its own validFrom. */
+export function memoryNotYetValid(record: MemoryRecord, now: number): boolean {
+  const start = record.validFrom ? Date.parse(record.validFrom) : NaN;
+  return Number.isFinite(start) && now < start;
 }
 
 /** A memory is expired from the instant its validity ends. */
@@ -407,6 +426,18 @@ export function reviewSupersession(
         relatedMemoryId: previous.id,
         reason:
           "Supersession chronology is invalid: a successor cannot predate its predecessor.",
+      });
+    }
+    if (
+      cursor.validFrom !== undefined &&
+      previous.validFrom !== undefined &&
+      !(Date.parse(cursor.validFrom) >= Date.parse(previous.validFrom))
+    ) {
+      findings.push({
+        kind: "supersession-conflict",
+        relatedMemoryId: previous.id,
+        reason:
+          "Supersession chronology is invalid: a successor's validFrom cannot precede its predecessor's.",
       });
     }
     cursor = previous;

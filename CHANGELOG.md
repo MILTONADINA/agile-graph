@@ -26,6 +26,10 @@
   multi-line values all count; a `pyproject.toml` that cannot be read
   confidently is treated as a configuration change. Ordinary dependency
   bumps (`pytest-cov` or `pytest` under any dependency table) are not gated.
+- A memory may carry `validFrom` (`--valid-from` on `memory-add` and
+  `memory-accept`): before that instant it is absent from local and cloud context
+  packets, and a successor whose `validFrom` precedes its predecessor's is
+  refused at acceptance.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice
