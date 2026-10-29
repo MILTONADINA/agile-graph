@@ -127,6 +127,9 @@ Teams need security tools chosen for what their repository actually contains, wi
 - AC33: `AGENTS.md` shall keep each rule that forbids pushing to `main`, publishing, memory export, key use, cost-cap changes and model downloads, and shall not instruct reading the handover before every task.
   - Test: scripts/agents-md-rules.test.mjs :: AGENTS.md keeps every safety rule
   - Test: scripts/agents-md-rules.test.mjs :: AGENTS.md does not instruct reading the handover before every task
+  - Test: scripts/agents-md-rules.test.mjs :: read-first patterns see through dots in file names
+  - Test: scripts/agents-md-rules.test.mjs :: AGENTS.md points to the handover by situation
+  - Test: scripts/agents-md-rules.test.mjs :: CLAUDE.md still imports AGENTS.md and adds no read-first rule
 
 ## Security considerations
 
