@@ -30,6 +30,11 @@
   `memory-accept`): before that instant it is absent from local and cloud context
   packets, and a successor whose `validFrom` precedes its predecessor's is
   refused at acceptance.
+- A configured reviewer now rules `raised` or `dropped`, with a reason, on every
+  security scan finding, baselined finding and inline suppression, each given a
+  stable ID. A missing, unknown or duplicate ID or an empty reason fails the
+  review as not completed, and a `dropped` ruling never clears the security
+  gate (code-review-gate AC15).
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice

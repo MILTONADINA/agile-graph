@@ -3402,6 +3402,11 @@ describe("code review gate", () => {
       line: number | null;
       message: string;
     }[];
+    scanRulings?: {
+      id: string;
+      ruling: "raised" | "dropped";
+      reason: string;
+    }[];
   };
   const approve: Review = {
     verdict: "approve",
@@ -3422,6 +3427,8 @@ describe("code review gate", () => {
     extraChanges?: { path: string; before: null; after: string }[];
     prepare?: (root: string) => Promise<void>;
     configure?: (config: ProjectConfig, root: string) => Promise<void>;
+    /** Builds the review from the scan findings the reviewer was given. */
+    reviewFrom?: (given: { id: string; status: string }[]) => unknown;
     securityScan?: Parameters<typeof GraphEngine.open>[1] extends infer D
       ? D extends { securityScan?: infer S }
         ? S
@@ -3488,7 +3495,10 @@ describe("code review gate", () => {
         reviewed.push(input.diff);
         const next = reviews.shift() ?? approve;
         if (next instanceof Error) throw next;
-        return { review: next, model: "reviewer-fixture", usage };
+        const built = options.reviewFrom
+          ? (options.reviewFrom(input.scanFindings ?? []) as Review)
+          : next;
+        return { review: built, model: "reviewer-fixture", usage };
       },
       verifyFix: async (input) => {
         fixChecked.push({ id: input.finding.id, diff: input.diff });
@@ -3604,6 +3614,14 @@ describe("code review gate", () => {
   it("refuses a person's approval for a run the reviewer approved that failed afterwards", async () => {
     const { engine, result } = await setup({
       reviews: [approve],
+      reviewFrom: (given) => ({
+        ...approve,
+        scanRulings: given.map(({ id }) => ({
+          id,
+          ruling: "dropped" as const,
+          reason: "toy",
+        })),
+      }),
       attempts: 1,
       prepare: async (root) => {
         await writeFile(
@@ -3666,6 +3684,142 @@ describe("code review gate", () => {
         .events(result.id)
         .some((event) => event.type === "review.person_approved"),
     ).toBe(false);
+  });
+
+  describe("scan rulings", () => {
+    const baselineOnly = async (root: string) => {
+      await writeFile(
+        path.join(root, ".graph/security-baseline.json"),
+        JSON.stringify({
+          version: 1,
+          findings: ["old", "supp"].map((fingerprint) => ({
+            fingerprint,
+            tool: "semgrep",
+            rule: "r",
+            path: "a.js",
+          })),
+        }),
+      );
+      await checked("git", ["add", ".graph/security-baseline.json"], {
+        cwd: root,
+      });
+      await checked("git", ["commit", "-m", "test: baseline"], { cwd: root });
+    };
+    const scanOf =
+      (...fingerprints: string[]) =>
+      async () => ({
+        tools: ["semgrep"],
+        findings: fingerprints.map((fingerprint) => ({
+          tool: fingerprint === "supp" ? "suppression" : "semgrep",
+          rule: "r",
+          path: "math.cjs",
+          line: 1,
+          message: "flagged",
+          fingerprint,
+        })),
+        errors: [],
+        unscanned: [],
+      });
+    type Given = { id: string; status: string }[];
+    const ruled = (given: Given, kind: "raised" | "dropped") => ({
+      ...approve,
+      scanRulings: given.map(({ id }) => ({ id, ruling: kind, reason: "why" })),
+    });
+    const seen: Given[] = [];
+
+    it("gives the reviewer every finding, baselined and suppression with a status and ID, and records the rulings", async () => {
+      seen.length = 0;
+      const { result, events } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf("old", "supp"),
+        reviewFrom: (given: Given) => {
+          seen.push(given);
+          return ruled(given, "dropped");
+        },
+      });
+      expect(seen[0]!.map((item) => item.status).sort()).toEqual([
+        "baselined",
+        "suppression",
+      ]);
+      const done = events.find((event) => event.type === "review.completed")
+        ?.data as {
+        scanRulings: { id: string; ruling: string; reason: string }[];
+      };
+      expect(done.scanRulings).toHaveLength(2);
+      expect(done.scanRulings[0]).toMatchObject({
+        ruling: "dropped",
+        reason: "why",
+      });
+      expect(result.status).toBe("succeeded");
+    });
+
+    it("fails the review as not completed when the answer omits an ID", async () => {
+      const { result, events } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf("old"),
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Code review did not complete");
+      expect(result.error).toContain("omitted");
+      expect(events.some((event) => event.type === "review.completed")).toBe(
+        false,
+      );
+    });
+
+    it("fails the review as not completed when the answer names an ID it was not given", async () => {
+      const { result } = await setup({
+        reviews: [
+          {
+            ...approve,
+            scanRulings: [{ id: "Fnope", ruling: "raised", reason: "x" }],
+          } as never,
+        ],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf(),
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Code review did not complete");
+      expect(result.error).toContain("not given");
+    });
+
+    it("never lets a dropped ruling clear the security gate", async () => {
+      const { result, events } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf("old", "fresh"),
+        reviewFrom: (given: Given) => ruled(given, "dropped"),
+      });
+      expect(
+        events.find((event) => event.type === "review.completed")?.data,
+      ).toMatchObject({ passed: true });
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Security scan found");
+      expect(
+        events.some((event) => event.type === "security.gate_passed"),
+      ).toBe(false);
+    });
+
+    it("gives a reviewer nothing when the scan has no findings", async () => {
+      const { result, events } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf(),
+      });
+      expect(result.status).toBe("succeeded");
+      expect(
+        (
+          events.find((event) => event.type === "review.completed")
+            ?.data as Record<string, unknown>
+        ).scanRulings,
+      ).toBeUndefined();
+    });
   });
 
   it("completes only after the reviewer approves, and records the review", async () => {
