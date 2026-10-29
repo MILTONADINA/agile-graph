@@ -142,6 +142,40 @@ describe("verification configuration gate", () => {
     expect(changed("package.json", "{bad", "{bad2")).toBe(false);
     expect(changed("src/a.ts", "a", "b")).toBe(false);
   });
+  it("refuses an edit to a script a test or check script runs", async () => {
+    const chained =
+      '{"scripts":{"check":"npm run typecheck && npm test","typecheck":"tsc","test":"vitest run","docs":"x"}}';
+    expect(
+      changedVerificationConfig(
+        "package.json",
+        chained,
+        chained.replace('"tsc"', '"true"'),
+      ),
+    ).toBe(true);
+    // Dropping the reference and editing the target in one patch is caught.
+    expect(
+      changedVerificationConfig(
+        "package.json",
+        chained,
+        chained.replace("npm run typecheck && ", "").replace('"tsc"', '"true"'),
+      ),
+    ).toBe(true);
+    expect(
+      changedVerificationConfig(
+        "package.json",
+        chained,
+        chained.replace('"x"', '"y"'),
+      ),
+    ).toBe(false);
+    const loop = '{"scripts":{"test":"npm run test"}}';
+    expect(changedVerificationConfig("package.json", loop, loop + " ")).toBe(
+      false,
+    );
+    const root = await workspace({ "package.json": chained });
+    await expect(edit(root, "package.json", '"tsc"', '"true"')).rejects.toThrow(
+      /Verification configuration needs approval: package\.json/,
+    );
+  });
   it("validates the approval list in a policy", () => {
     const policy = (paths: unknown) => ({
       ...DEFAULT_POLICY,
