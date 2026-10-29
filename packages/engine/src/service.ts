@@ -5729,6 +5729,11 @@ function patchErrorFeedback(
           : `${message}: that file already exists. Request it first, then edit it with a before that matches its content, or create a file with a different name.`,
       reason: "file-exists",
     };
+  if (message.startsWith("Verification configuration needs approval"))
+    return {
+      feedback: `${message}`,
+      reason: "verification-config",
+    };
   if (message.startsWith(PATH_ALIAS_ERROR))
     return {
       feedback: `${message}. Spell each file one way, and do not use one path as both a file and a directory in a patch.`,

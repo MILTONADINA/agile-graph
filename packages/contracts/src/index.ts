@@ -126,6 +126,13 @@ export interface ProjectPolicy {
    * in DEFAULT_POLICY, so policies without it keep their hash.
    */
   mutationRounds?: number;
+  /**
+   * Files the required checks load as configuration (the test runner config
+   * or test script entries) that a worker's patch may change because a
+   * person approved them. Absent or empty means none; it is not in
+   * DEFAULT_POLICY, so policies without it keep their hash.
+   */
+  approvedVerificationConfigPaths?: string[];
   timeoutSeconds: number;
   /**
    * Installed coding workers only: absent inherits timeoutSeconds; null
@@ -836,6 +843,19 @@ export const policySchema = {
     maxTurns: { type: "integer", minimum: 1, maximum: 100 },
     maxReadTurns: { type: "integer", minimum: 0, maximum: 100 },
     mutationRounds: { type: "integer", minimum: 0, maximum: 3 },
+    approvedVerificationConfigPaths: {
+      type: "array",
+      maxItems: 100,
+      uniqueItems: true,
+      items: {
+        type: "string",
+        minLength: 1,
+        maxLength: 1000,
+        // Plain relative paths, as for workingSet.
+        pattern:
+          "^(?!/)(?!.*//)(?!.*/$)(?!(?:.*/)?\\.{1,2}(?:/|$))[^*?\\[\\]{}!\\\\:\\u0000-\\u001f]+$",
+      },
+    },
     timeoutSeconds: { type: "integer", minimum: 1, maximum: 86400 },
     installedWorkerTimeoutSeconds: {
       anyOf: [

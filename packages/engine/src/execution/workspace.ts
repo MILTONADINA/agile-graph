@@ -15,6 +15,7 @@ import type { WorkerProposal } from "../workers/api.js";
 import { hash } from "../util.js";
 import { checkedGit, managedGit } from "./git.js";
 import { newDependencies } from "./dependencies.js";
+import { changedVerificationConfig } from "./verification-config.js";
 import {
   introducesSecret,
   isAllowedPath,
@@ -241,6 +242,18 @@ export async function prepareProposal(
         `New dependency needs approval: ${file} adds ${added.join(", ")}, which it did not declare before this patch. A new dependency needs a person's approval; add it to the manifest yourself before the run to approve it.`,
       );
   }
+  // The required checks load the runner config and test scripts, so a
+  // worker that edits them could pass by weakening the checks. A person
+  // approves a path by listing it in the policy.
+  const approved = new Set(policy.approvedVerificationConfigPaths ?? []);
+  for (const [file, { content }] of staged)
+    if (
+      !approved.has(file) &&
+      changedVerificationConfig(file, baselines.get(file) ?? "", content)
+    )
+      throw new Error(
+        `Verification configuration needs approval: ${file} is loaded by the required checks as test configuration. A person must approve this path in policy.approvedVerificationConfigPaths before a worker may change it; change the source under test instead.`,
+      );
   return staged;
 }
 /** True when `needle` occurs once, counting overlapping matches. */
