@@ -16,13 +16,25 @@ import {
 } from "./api.js";
 import {
   inputTokenCeiling,
+  outputReservation,
   REVIEW_OUTPUT_TOKENS,
   strictTokensForBytes,
   withOutputCap,
 } from "../tokens.js";
 
-/** Most scanner results one review is asked to rule on. */
-export const SCAN_FINDING_LIMIT = 100;
+/** Output tokens one ruling (ID, verdict and a short reason) is allowed. */
+export const SCAN_RULING_TOKENS = 40;
+/** Hard bound on rulings in one answer; the output budget binds sooner. */
+export const SCAN_RULINGS_MAX = 5000;
+
+/**
+ * Output tokens a review reserves and requests: the verdict plus a ruling for
+ * each scanner result it was given. Not capped by a count; the policy's
+ * output limit decides whether a project's baseline fits.
+ */
+export function reviewOutputTokens(scanResults: number): number {
+  return REVIEW_OUTPUT_TOKENS + scanResults * SCAN_RULING_TOKENS;
+}
 
 export const reviewSchema = z
   .object({
@@ -64,7 +76,7 @@ export const reviewSchema = z
           })
           .strict(),
       )
-      .max(SCAN_FINDING_LIMIT)
+      .max(SCAN_RULINGS_MAX)
       .optional(),
   })
   .strict();
@@ -145,7 +157,8 @@ export interface ReviewScanFinding {
   rule: string;
   path: string;
   line: number;
-  message: string;
+  /** Only for a "new" result; the others are judged by tool, rule and place. */
+  message?: string;
   /** "baselined" when the project's reviewed baseline already accepts it. */
   status: "new" | "baselined" | "suppression";
 }
@@ -205,6 +218,7 @@ function assertReviewerCall(
   texts: string[],
   request: string,
   what: string,
+  scanResults = 0,
 ): void {
   if (!isApiKind(provider.kind) && provider.kind !== "local")
     throw new Error(
@@ -215,8 +229,15 @@ function assertReviewerCall(
     throw new Error(
       `${what} input contains a potential secret; a cloud reviewer cannot receive it`,
     );
+  const outputTokens = reviewOutputTokens(scanResults);
+  // Rulings are output the reviewer must finish: refuse before the call if
+  // the policy cannot hold them, rather than fail as a truncated answer.
+  if (scanResults && outputReservation(policy, provider) < outputTokens)
+    throw new Error(
+      `${scanResults} scan results need ~${outputTokens} output tokens to rule on, more than this policy allows; raise policy.maxOutputTokens (and maxContextTokens if the window is small) or trim the security baseline`,
+    );
   const ceiling = inputTokenCeiling(
-    withOutputCap(policy, REVIEW_OUTPUT_TOKENS),
+    withOutputCap(policy, outputTokens),
     provider,
   );
   // A gate never judges input a provider might cut: strict one-token-per-byte
@@ -254,16 +275,20 @@ export async function invokeReviewWorker(
       ...(input.scanFindings ?? []).flatMap((item) => [
         item.path,
         item.rule,
-        item.message,
+        item.message ?? "",
       ]),
     ],
     user + REVIEW_INSTRUCTIONS + JSON.stringify(reviewJsonSchema),
     "Review",
+    input.scanFindings?.length ?? 0,
   );
   const { text, result } = await callStructuredProvider(
     {
       provider,
-      policy: withOutputCap(policy, REVIEW_OUTPUT_TOKENS),
+      policy: withOutputCap(
+        policy,
+        reviewOutputTokens(input.scanFindings?.length ?? 0),
+      ),
       instructions: REVIEW_INSTRUCTIONS,
       user,
       schema: reviewJsonSchema,

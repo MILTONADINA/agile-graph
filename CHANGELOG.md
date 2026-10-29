@@ -34,7 +34,9 @@
   security scan finding, baselined finding and inline suppression, each given a
   stable ID. A missing, unknown or duplicate ID or an empty reason fails the
   review as not completed, and a `dropped` ruling never clears the security
-  gate (code-review-gate AC15).
+  gate (code-review-gate AC15). The review reserves output for each result
+  instead of capping their number, and refuses up front, naming
+  `policy.maxOutputTokens`, when the policy cannot hold the rulings.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice

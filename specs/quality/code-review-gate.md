@@ -69,7 +69,7 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/review.test.ts :: reads rejections from events and finds the repeats
   - Test: packages/engine/tests/execution.test.ts :: carries earlier rejections' signatures into the next repair round, and stops when the same finding comes back
   - Test: packages/engine/tests/execution.test.ts :: continues when the next rejection raises a different finding
-- AC15: When a reviewer is configured and the run's security scan has findings, baselined findings or inline suppressions, the system shall give each to the reviewer with a stable ID (at most 100 per review; more fails the review), and shall fail the review as not completed if the reviewer's answer omits any ID, rules on one twice or names an ID it was not given; each ruling is `raised` or `dropped` with a non-empty reason, recorded in `review.completed`, and a `dropped` ruling never clears the security gate. The reviewer receives scanner text only, redacted, and for a cloud reviewer a finding in a path it may not receive is given by ID, tool and rule alone; no new files are sent, so cloud export and secret screens are unchanged. The scan runs once per verified snapshot before the review and is reused by the security gate.
+- AC15: When a reviewer is configured and the run's security scan has findings, baselined findings or inline suppressions, the system shall give each to the reviewer with a stable ID, and shall fail the review as not completed if the reviewer's answer omits any ID or names an ID it was not given; each ruling is `raised` or `dropped` with a non-empty reason, recorded in `review.completed`, and a `dropped` ruling never clears the security gate. Beyond that: a ruling on one ID twice also fails the review; the reviewer receives scanner text only, redacted, with a message only for a new finding, and for a non-local reviewer a finding in a path it may not receive is given by ID, tool and rule alone (path `(withheld)`, line 0); no new files are sent, so cloud export and secret screens are unchanged; the scan runs once per verified snapshot and is reused by the security gate, which alone records `security.scan_started`; and there is no fixed count limit, the review instead reserves 40 output tokens per result on top of its usual verdict budget and fails before calling the reviewer, naming `policy.maxOutputTokens`, when the policy cannot hold that.
   - Test: packages/engine/tests/review.test.ts :: fails when an ID is omitted
   - Test: packages/engine/tests/review.test.ts :: fails on an ID it was not given, or one ruled twice
   - Test: packages/engine/tests/review.test.ts :: fails on an empty or blank reason
@@ -77,6 +77,13 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/execution.test.ts :: fails the review as not completed when the answer names an ID it was not given
   - Test: packages/engine/tests/execution.test.ts :: never lets a dropped ruling clear the security gate
   - Test: packages/engine/tests/execution.test.ts :: gives the reviewer every finding, baselined and suppression with a status and ID, and records the rulings
+  - Test: packages/engine/tests/review.test.ts :: refuses up front, naming the remedy, when the policy's output cap cannot hold 210 rulings
+  - Test: packages/engine/tests/review.test.ts :: grows the requested output with the number of scan results when the policy allows
+  - Test: packages/engine/tests/execution.test.ts :: keeps the review stop visible to a person's approval: no scan_started follows a review that threw
+  - Test: packages/engine/tests/execution.test.ts :: scans once per verified snapshot, shared by the review and the gate
+  - Test: packages/engine/tests/execution.test.ts :: does not blame the reviewer when the scan itself stops the run
+  - Test: packages/engine/tests/execution.test.ts :: rules on more results than the old fixed cap of 100
+  - Test: packages/engine/tests/execution.test.ts :: sends a message only for a new finding, never for a baselined one or a suppression
 
 ## Security considerations
 

@@ -616,4 +616,69 @@ describe("scan rulings", () => {
     );
     expect(REVIEW_INSTRUCTIONS).toContain("scanRulings");
   });
+
+  describe("scan ruling output budget", () => {
+    const many = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `F${String(index).padStart(10, "0")}`,
+        tool: "semgrep",
+        rule: "r",
+        path: "a.js",
+        line: index,
+        message: "",
+        status: "baselined" as const,
+      }));
+    const call = (count: number, maxOutputTokens: number) => {
+      const bodies: Record<string, any>[] = [];
+      const fetch = vi.fn(async (_url: string, init: { body: string }) => {
+        bodies.push(JSON.parse(init.body));
+        return new Response(
+          JSON.stringify({
+            model: "m",
+            choices: [{ message: { content: JSON.stringify(approve) } }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 },
+          }),
+        );
+      });
+      return {
+        bodies,
+        fetch,
+        run: () =>
+          invokeReviewWorker(
+            {
+              provider: { id: "reviewer", kind: "local", model: "m" },
+              policy: {
+                ...DEFAULT_POLICY,
+                providers: ["reviewer"],
+                maxContextTokens: 200_000,
+                maxOutputTokens,
+              },
+              objective: "o",
+              acceptance: ["a"],
+              diff: "d",
+              checks: "c",
+              scanFindings: many(count),
+            },
+            fetch,
+          ),
+      };
+    };
+
+    it("refuses up front, naming the remedy, when the policy's output cap cannot hold 210 rulings", async () => {
+      const { fetch, run } = call(210, 4000);
+      await expect(run()).rejects.toThrow(/210 scan results.*maxOutputTokens/);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("grows the requested output with the number of scan results when the policy allows", async () => {
+      const small = call(2, 20_000);
+      await small.run();
+      const large = call(210, 20_000);
+      await large.run();
+      const asked = (body: Record<string, any>) =>
+        body.max_tokens ?? body.max_output_tokens;
+      expect(asked(small.bodies[0]!)).toBeLessThan(asked(large.bodies[0]!));
+      expect(asked(large.bodies[0]!)).toBeGreaterThan(REVIEW_OUTPUT_TOKENS);
+    });
+  });
 });

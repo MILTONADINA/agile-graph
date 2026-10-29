@@ -30,6 +30,7 @@ import {
   PROJECT_FILE,
 } from "../src/project.js";
 import { GraphEngine } from "../src/service.js";
+import { stoppedAtReview } from "../src/overview.js";
 import { classifyError } from "../src/feedback.js";
 import { findingSignature } from "../src/workers/review.js";
 import { similarFilesNote } from "../src/execution/requested-sources.js";
@@ -3803,6 +3804,114 @@ describe("code review gate", () => {
       expect(
         events.some((event) => event.type === "security.gate_passed"),
       ).toBe(false);
+    });
+
+    it("keeps the review stop visible to a person's approval: no scan_started follows a review that threw", async () => {
+      const { events } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf("old"),
+      });
+      expect(events.some((event) => event.type === "review.completed")).toBe(
+        false,
+      );
+      expect(
+        events.some((event) => event.type === "security.scan_started"),
+      ).toBe(false);
+      expect(stoppedAtReview(events)).toBe(true);
+    });
+
+    it("scans once per verified snapshot, shared by the review and the gate", async () => {
+      let calls = 0;
+      const scan = scanOf("old");
+      const { result } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: async (...args: Parameters<typeof scan>) => {
+          calls += 1;
+          return scan(...args);
+        },
+        reviewFrom: (given: Given) => ruled(given, "dropped"),
+      });
+      expect(result.status).toBe("succeeded");
+      expect(calls).toBe(1);
+    });
+
+    it("does not blame the reviewer when the scan itself stops the run", async () => {
+      const lockfile = "package-lock.json";
+      const { result } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf(),
+        extraChanges: [
+          {
+            path: lockfile,
+            before: null,
+            after: '{ "lockfileVersion": 3, "packages": {} }\n',
+          },
+        ],
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("no OSV vulnerability database");
+      expect(result.error).not.toMatch(/^Code review did not complete/);
+      expect(result.error).not.toContain("Code review did not complete");
+    });
+
+    it("rules on more results than the old fixed cap of 100", async () => {
+      const fingerprints = Array.from({ length: 150 }, (_, i) => `old${i}`);
+      const { result, events } = await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: async (root) => {
+          await writeFile(
+            path.join(root, ".graph/security-baseline.json"),
+            JSON.stringify({
+              version: 1,
+              findings: fingerprints.map((fingerprint) => ({
+                fingerprint,
+                tool: "semgrep",
+                rule: "r",
+                path: "math.cjs",
+              })),
+            }),
+          );
+          await checked("git", ["add", ".graph/security-baseline.json"], {
+            cwd: root,
+          });
+          await checked("git", ["commit", "-m", "test: baseline"], {
+            cwd: root,
+          });
+        },
+        securityScan: scanOf(...fingerprints),
+        reviewFrom: (given: Given) => ruled(given, "dropped"),
+      });
+      expect(result.error ?? "").toBe("");
+      expect(result.status).toBe("succeeded");
+      const done = events.find((event) => event.type === "review.completed")
+        ?.data as { scanRulings: unknown[] };
+      expect(done.scanRulings).toHaveLength(150);
+    });
+
+    it("sends a message only for a new finding, never for a baselined one or a suppression", async () => {
+      const messages: { status: string; message?: string }[] = [];
+      await setup({
+        reviews: [approve],
+        attempts: 1,
+        prepare: baselineOnly,
+        securityScan: scanOf("old", "supp", "fresh"),
+        reviewFrom: (given: Given) => {
+          messages.push(...(given as typeof messages));
+          return ruled(given, "dropped");
+        },
+      });
+      const by = (status: string) =>
+        messages.find((item) => item.status === status);
+      expect(by("new")?.message).toBe("flagged");
+      expect(by("baselined")?.message).toBeUndefined();
+      expect(by("suppression")?.message).toBeUndefined();
     });
 
     it("gives a reviewer nothing when the scan has no findings", async () => {

@@ -70,8 +70,14 @@ for the verified snapshot before the review, and the reviewer is given every
 result in it (new, already in the baseline, and inline scanner suppressions)
 as text with a stable ID. It must rule `raised` or `dropped`, with a reason,
 on each ID and on no other; an omitted, unknown or repeated ID, or an empty
-reason, fails the review as not completed, and a review has room for at most
-100 results. The rulings are recorded in `review.completed`. A `dropped`
+reason, fails the review as not completed. A weaker model may omit entries
+from a long list, and the review then fails as not completed by design.
+Only a new result carries its message; baselined results and suppressions
+are judged by tool, rule and place. There is no fixed count limit: each
+result reserves about 40 output tokens on top of the review's usual budget,
+and a review whose results do not fit `policy.maxOutputTokens` fails before
+the reviewer is called, with a message naming the setting (raise it, which
+changes the policy, or trim the baseline). The rulings are recorded in `review.completed`. A `dropped`
 ruling is the reviewer's opinion only: the security gate still decides on the
 scan and the baseline alone.
 
