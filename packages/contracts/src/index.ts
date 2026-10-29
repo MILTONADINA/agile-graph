@@ -333,6 +333,49 @@ export interface SourceReference {
   contentHash: string;
   snapshotId: string;
 }
+/**
+ * What an MCP tool result is based on: a source range, or a symbol with its
+ * source range. Only data the tool already holds; never private memory.
+ */
+export type McpEvidence =
+  | {
+      kind: "file";
+      path: string;
+      startLine: number;
+      endLine: number;
+      contentHash: string;
+    }
+  | {
+      kind: "symbol";
+      symbolId: string;
+      name: string;
+      path: string;
+      startLine: number;
+      endLine: number;
+      contentHash: string;
+    };
+/** Something a tool result could not determine, as a fixed sentence. */
+export interface McpUnknown {
+  kind:
+    "filtered" | "truncated" | "coverage" | "unresolved-edges" | "export-scope";
+  note: string;
+  count?: number;
+  /** Indexing diagnostics; a local client only, never a cloud client. */
+  details?: string[];
+}
+/** A bound that applied to a tool result. */
+export interface McpLimit {
+  name: string;
+  max: number;
+  used: number;
+  reached: boolean;
+}
+/** The optional, additive fields every MCP tool result may carry. */
+export interface McpResultContract {
+  evidence?: McpEvidence[];
+  unknowns?: McpUnknown[];
+  limits?: McpLimit[];
+}
 export interface CodeSymbol {
   id: string;
   name: string;

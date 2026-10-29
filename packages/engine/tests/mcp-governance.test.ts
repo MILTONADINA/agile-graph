@@ -738,3 +738,199 @@ it("starts a local and a cloud server against one project pin set taken from the
     }),
   ).toThrow(/not pinned: run_events, run_list, run_status/);
 });
+
+it("gives context_get, symbol_search and graph_neighbors typed evidence, unknowns and limits, and a cloud client's carry no private path or memory", async () => {
+  const { connect } = await limitationsFixture();
+  const local = await connect("local");
+  const cloud = await connect("cloud");
+  const cloudCalls = async () => ({
+    search: json(
+      await cloud.callTool({
+        name: "symbol_search",
+        arguments: { query: "limitsLogin" },
+      }),
+    ),
+    many: json(
+      await cloud.callTool({
+        name: "symbol_search",
+        arguments: { query: "limitsMany" },
+      }),
+    ),
+    packet: json(
+      await cloud.callTool({
+        name: "context_get",
+        arguments: { query: "export function return", budgetTokens: 400 },
+      }),
+    ),
+  });
+
+  // symbol_search: evidence names the symbols found, with their source.
+  const found = json(
+    await local.callTool({
+      name: "symbol_search",
+      arguments: { query: "limitsLogin" },
+    }),
+  );
+  expect(found.evidence).toEqual(
+    (found.symbols as any[]).map((symbol) => ({
+      kind: "symbol",
+      symbolId: symbol.id,
+      name: symbol.name,
+      path: symbol.source.path,
+      startLine: symbol.source.startLine,
+      endLine: symbol.source.endLine,
+      contentHash: symbol.source.contentHash,
+    })),
+  );
+  expect(found.evidence).toHaveLength(2);
+  expect(found.limits).toEqual([
+    { name: "maxSymbols", max: 100, used: 2, reached: false },
+  ]);
+  // A local client is told which files indexing skipped; paths are fine.
+  expect(found.unknowns).toEqual([
+    expect.objectContaining({ kind: "coverage" }),
+  ]);
+  const localCoverage = (found.unknowns as any[]).find(
+    (u) => u.kind === "coverage",
+  );
+  expect(localCoverage.note).toBe(MCP_LIMITATION_NOTES.coverage);
+  expect(JSON.stringify(localCoverage.details)).toContain(
+    "private/OVERSIZED_LIMITS_CANARY.txt",
+  );
+  expect((found.unknowns as any[]).some((u) => u.kind === "export-scope")).toBe(
+    false,
+  );
+
+  // graph_neighbors: evidence is the edges' source locations; limits the cap.
+  const fileSymbol = json(
+    await local.callTool({
+      name: "symbol_search",
+      arguments: { query: "public/limits.ts" },
+    }),
+  ).symbols[0];
+  const graph = json(
+    await local.callTool({
+      name: "graph_neighbors",
+      arguments: { symbolId: fileSymbol.id, depth: 2 },
+    }),
+  );
+  expect(graph.evidence.length).toBeGreaterThan(0);
+  for (const item of graph.evidence)
+    expect(item).toMatchObject({
+      kind: "file",
+      path: expect.any(String),
+      startLine: expect.any(Number),
+      endLine: expect.any(Number),
+      contentHash: expect.any(String),
+    });
+  expect(graph.limits).toEqual([
+    {
+      name: "maxEdges",
+      max: 200,
+      used: graph.edges.length,
+      reached: false,
+    },
+    { name: "depth", max: 3, used: 2, reached: false },
+  ]);
+  expect(graph.unknowns).toContainEqual(
+    expect.objectContaining({ kind: "unresolved-edges" }),
+  );
+  const deep = json(
+    await local.callTool({
+      name: "graph_neighbors",
+      arguments: { symbolId: fileSymbol.id, depth: 3 },
+    }),
+  );
+  expect(deep.limits[1]).toEqual({
+    name: "depth",
+    max: 3,
+    used: 3,
+    reached: true,
+  });
+
+  // context_get: evidence is the returned items' sources; the budget is a limit.
+  const packet = json(
+    await local.callTool({
+      name: "context_get",
+      arguments: {
+        query: "export function return",
+        budgetTokens: 400,
+        retrieval: "lexical",
+      },
+    }),
+  );
+  expect(packet.evidence).toEqual(
+    (packet.items as any[])
+      .filter((item) => item.source)
+      .map((item) => ({
+        kind: "file",
+        path: item.source.path,
+        startLine: item.source.startLine,
+        endLine: item.source.endLine,
+        contentHash: item.source.contentHash,
+      })),
+  );
+  expect(packet.evidence.length).toBeGreaterThan(0);
+  expect(packet.limits).toEqual([
+    {
+      name: "budgetTokens",
+      max: 400,
+      used: packet.estimatedTokens,
+      reached: true,
+    },
+  ]);
+  expect(packet.unknowns.map((u: any) => u.kind).sort()).toEqual([
+    "coverage",
+    "truncated",
+  ]);
+
+  // Cloud: the privacy-skipped file shows only as a fixed-sentence unknown.
+  const { search, many, packet: cloudPacket } = await cloudCalls();
+  for (const result of [search, many, cloudPacket]) {
+    const text = JSON.stringify({
+      evidence: result.evidence,
+      unknowns: result.unknowns,
+      limits: result.limits,
+    });
+    expect(text).not.toContain("private/");
+    expect(text).not.toContain("CANARY");
+    expect(result.unknowns).toContainEqual(
+      expect.objectContaining({
+        kind: "coverage",
+        note: MCP_LIMITATION_NOTES.cloudCoverage,
+      }),
+    );
+    // Files outside the export policy show only as a fixed sentence.
+    const scope = result.unknowns.filter((u: any) => u.kind === "export-scope");
+    expect(scope).toHaveLength(1);
+    expect(Object.keys(scope[0]).sort()).toEqual(["kind", "note"]);
+    expect(scope[0].note).toBe(MCP_LIMITATION_NOTES.exportScope);
+    for (const unknown of result.unknowns)
+      expect(unknown.details).toBeUndefined();
+    for (const item of result.evidence)
+      expect(item.path.startsWith("public/")).toBe(true);
+    for (const unknown of result.unknowns)
+      expect(Object.keys(unknown).sort()).toEqual(
+        unknown.count === undefined
+          ? ["kind", "note"]
+          : ["count", "kind", "note"],
+      );
+  }
+  // A capped result says which cap it hit.
+  expect(many.limits).toEqual([
+    { name: "maxSymbols", max: 100, used: 100, reached: true },
+  ]);
+  expect(many.unknowns).toContainEqual(
+    expect.objectContaining({
+      kind: "truncated",
+      note: MCP_LIMITATION_NOTES.symbolLimit,
+    }),
+  );
+  expect(cloudPacket.limits[0]).toMatchObject({
+    name: "budgetTokens",
+    max: 400,
+    reached: true,
+  });
+  // Evidence only ever cites the symbols and items actually returned.
+  expect(many.evidence).toHaveLength(many.symbols.length);
+});

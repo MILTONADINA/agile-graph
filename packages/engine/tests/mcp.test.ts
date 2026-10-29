@@ -724,6 +724,7 @@ it("cloud context_get leaves out expired mandatory memory and changes nothing el
         (entry: { memoryId: string }) => entry.memoryId === lasting.id,
       ),
       estimatedTokens: expect.any(Number),
+      limits: [{ ...before.limits[0], used: after.estimatedTokens }],
     });
     expect(after.estimatedTokens).toBeLessThan(before.estimatedTokens);
     const local = await engine.context.getContext({

@@ -11,6 +11,13 @@ import {
 } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import { z } from "zod";
+import type {
+  McpEvidence,
+  McpLimit,
+  McpResultContract,
+  McpUnknown,
+  SourceReference,
+} from "@agile-graph/contracts";
 import {
   MAX_VERIFICATION_SELECTION,
   VERIFICATION_CHECK_ID_PATTERN,
@@ -279,6 +286,58 @@ export function createMcpServer(
       notes,
     };
   };
+  // The result contract: unknowns restate the limitations as typed entries.
+  // Notes are the same fixed sentences; a local client's coverage entry also
+  // carries the indexing diagnostics, which a cloud client never gets.
+  const unknownsOf = (
+    limits: McpLimitations,
+    input: {
+      truncatedNote: string;
+      coverageErrors: readonly string[];
+    },
+  ): McpUnknown[] => {
+    const unknowns: McpUnknown[] = [];
+    if (cloud)
+      unknowns.push({
+        kind: "export-scope",
+        note: MCP_LIMITATION_NOTES.exportScope,
+      });
+    if (limits.filtered)
+      unknowns.push({
+        kind: "filtered",
+        note: MCP_LIMITATION_NOTES.filtered,
+        count: limits.filtered,
+      });
+    if (limits.truncated)
+      unknowns.push({ kind: "truncated", note: input.truncatedNote });
+    if (limits.unresolvedEdges)
+      unknowns.push({
+        kind: "unresolved-edges",
+        note: MCP_LIMITATION_NOTES.unresolved,
+        count: limits.unresolvedEdges,
+      });
+    if (limits.coverageIncomplete)
+      unknowns.push({
+        kind: "coverage",
+        note: cloud
+          ? MCP_LIMITATION_NOTES.cloudCoverage
+          : MCP_LIMITATION_NOTES.coverage,
+        ...(cloud ? {} : { details: [...input.coverageErrors] }),
+      });
+    return unknowns;
+  };
+  const contract = (
+    evidence: McpEvidence[],
+    unknowns: McpUnknown[],
+    limits: McpLimit[],
+  ): McpResultContract => ({ evidence, unknowns, limits });
+  const fileEvidence = (source: SourceReference): McpEvidence => ({
+    kind: "file",
+    path: source.path,
+    startLine: source.startLine,
+    endLine: source.endLine,
+    contentHash: source.contentHash,
+  });
   // The indexing diagnostics of the snapshot a result came from.
   const coverageErrors = async (snapshotId?: string) =>
     (snapshotId
@@ -379,7 +438,7 @@ export function createMcpServer(
     "context_get",
     {
       description:
-        "Retrieves a token-budgeted packet of source-backed context for one task from an index of the project's current working tree (git-tracked and unignored files, minus excluded, binary, over-1 MiB and credential-matching files). Returns JSON with snapshotId, mandatory (the text of every accepted requirement or constraint memory that has not expired, included whatever the query), items (ranked code, document or memory excerpts; code and document items carry path, line range and content hash), estimatedTokens, budgetTokens, coverage warnings and limitations (counts and flags for what the packet leaves out: filtered, truncated, coverageIncomplete and notes). Use it when a task needs this project's code, docs, requirements or constraints; use symbol_search to find a declaration by name and graph_neighbors to follow one symbol's relationships. The call fails when the query matches a credential pattern or when the query plus mandatory memory exceeds the budget. For a cloud-backed client, retrieval defaults to lexical, items come only from files the exportPaths policy allows, memory excerpts are withheld, and the call fails while the project policy is offline (inference local or network deny) or when any mandatory memory is private, unsourced, outside the exportPaths policy or not authorized for export by an operator (graph-engine memory-export-authorize).",
+        "Retrieves a token-budgeted packet of source-backed context for one task from an index of the project's current working tree (git-tracked and unignored files, minus excluded, binary, over-1 MiB and credential-matching files). Returns JSON with snapshotId, mandatory (the text of every accepted requirement or constraint memory that has not expired, included whatever the query), items (ranked code, document or memory excerpts; code and document items carry path, line range and content hash), estimatedTokens, budgetTokens, coverage warnings and limitations (counts and flags for what the packet leaves out: filtered, truncated, coverageIncomplete and notes). Use it when a task needs this project's code, docs, requirements or constraints; use symbol_search to find a declaration by name and graph_neighbors to follow one symbol's relationships. The call fails when the query matches a credential pattern or when the query plus mandatory memory exceeds the budget. For a cloud-backed client, retrieval defaults to lexical, items come only from files the exportPaths policy allows, memory excerpts are withheld, and the call fails while the project policy is offline (inference local or network deny) or when any mandatory memory is private, unsourced, outside the exportPaths policy or not authorized for export by an operator (graph-engine memory-export-authorize). The result also carries evidence (the source ranges or symbols it rests on), unknowns (what it could not determine, as fixed sentences) and limits (the caps that applied, with the amount used).",
       inputSchema: {
         query: z
           .string()
@@ -469,14 +528,36 @@ export function createMcpServer(
           ],
         };
       }
+      const errors = await coverageErrors(packet.snapshotId);
+      const limited = limitations({
+        filtered,
+        truncated,
+        truncatedNote: MCP_LIMITATION_NOTES.contextBudget,
+        coverageErrors: errors,
+      });
       return {
         ...packet,
-        limitations: limitations({
-          filtered,
-          truncated,
-          truncatedNote: MCP_LIMITATION_NOTES.contextBudget,
-          coverageErrors: await coverageErrors(packet.snapshotId),
-        }),
+        limitations: limited,
+        // Memory excerpts and mandatory memory are never cited here.
+        ...contract(
+          packet.items.flatMap((item) =>
+            item.source && item.kind !== "memory"
+              ? [fileEvidence(item.source)]
+              : [],
+          ),
+          unknownsOf(limited, {
+            truncatedNote: MCP_LIMITATION_NOTES.contextBudget,
+            coverageErrors: errors,
+          }),
+          [
+            {
+              name: "budgetTokens",
+              max: packet.budgetTokens,
+              used: packet.estimatedTokens,
+              reached: truncated,
+            },
+          ],
+        ),
       };
     },
   );
@@ -484,7 +565,7 @@ export function createMcpServer(
     "symbol_search",
     {
       description:
-        "Finds declarations in this project whose name contains the query, as a case-insensitive literal substring match on names only (not signatures or bodies). Returns JSON with symbols, an array of up to 100 symbols ordered by name, and limitations (counts and flags for what the result leaves out: filtered, truncated, coverageIncomplete and notes). Each symbol has id, name, kind, language, signature (the declaration text before its first line break or opening brace, up to 500 characters) and source (path, line range, content hash). Every indexed file is also a symbol named by its path, and declarations are parsed for TypeScript, JavaScript, Python, Go, Rust, Java, C# and Dart; syntax coverage is not a complete semantic call graph. Use context_get for text search across code and docs, and pass a result's id to graph_neighbors. For a cloud-backed client, results are limited to files the exportPaths policy allows, filtered after the 100-result cap so fewer or no results can come back and not counted in limitations, and the call fails while the project policy is offline.",
+        "Finds declarations in this project whose name contains the query, as a case-insensitive literal substring match on names only (not signatures or bodies). Returns JSON with symbols, an array of up to 100 symbols ordered by name, and limitations (counts and flags for what the result leaves out: filtered, truncated, coverageIncomplete and notes). Each symbol has id, name, kind, language, signature (the declaration text before its first line break or opening brace, up to 500 characters) and source (path, line range, content hash). Every indexed file is also a symbol named by its path, and declarations are parsed for TypeScript, JavaScript, Python, Go, Rust, Java, C# and Dart; syntax coverage is not a complete semantic call graph. Use context_get for text search across code and docs, and pass a result's id to graph_neighbors. For a cloud-backed client, results are limited to files the exportPaths policy allows, filtered after the 100-result cap so fewer or no results can come back and not counted in limitations, and the call fails while the project policy is offline. The result also carries evidence (the source ranges or symbols it rests on), unknowns (what it could not determine, as fixed sentences) and limits (the caps that applied, with the amount used).",
       inputSchema: {
         query: z
           .string()
@@ -509,14 +590,39 @@ export function createMcpServer(
             (s) => ![s.name, s.signature, s.source.path].some(containsSecret),
           )
         : exportable;
+      const errors = await coverageErrors();
+      const limited = limitations({
+        filtered: exportable.length - symbols.length,
+        truncated: exportable.length >= 100,
+        truncatedNote: MCP_LIMITATION_NOTES.symbolLimit,
+        coverageErrors: errors,
+      });
       return {
         symbols,
-        limitations: limitations({
-          filtered: exportable.length - symbols.length,
-          truncated: exportable.length >= 100,
-          truncatedNote: MCP_LIMITATION_NOTES.symbolLimit,
-          coverageErrors: await coverageErrors(),
-        }),
+        limitations: limited,
+        ...contract(
+          symbols.map((s): McpEvidence => ({
+            kind: "symbol",
+            symbolId: s.id,
+            name: s.name,
+            path: s.source.path,
+            startLine: s.source.startLine,
+            endLine: s.source.endLine,
+            contentHash: s.source.contentHash,
+          })),
+          unknownsOf(limited, {
+            truncatedNote: MCP_LIMITATION_NOTES.symbolLimit,
+            coverageErrors: errors,
+          }),
+          [
+            {
+              name: "maxSymbols",
+              max: 100,
+              used: symbols.length,
+              reached: limited.truncated,
+            },
+          ],
+        ),
       };
     },
   );
@@ -524,7 +630,7 @@ export function createMcpServer(
     "graph_neighbors",
     {
       description:
-        "Lists the relationship edges that touch one symbol, in either direction, and with depth above 1 repeats from every symbol those edges reach. Returns JSON with edges, an array of at most 200 edges, and limitations (counts and flags for what the result leaves out: filtered, truncated, unresolvedEdges, coverageIncomplete and notes). Each edge has from and to symbol IDs (to is null when the target is unresolved or hidden), target (the called expression, import or declared name), kind (imports, calls or contains), evidence (resolved, heuristic or syntactic) and source location. Edges come from syntax parsing plus bounded static compiler bindings, so they do not prove runtime dispatch, and a missing edge does not show that no relationship exists. An unknown symbol ID returns no edges. For a cloud-backed client, traversal skips symbols outside the exportPaths policy, and the call fails while the project policy is offline.",
+        "Lists the relationship edges that touch one symbol, in either direction, and with depth above 1 repeats from every symbol those edges reach. Returns JSON with edges, an array of at most 200 edges, and limitations (counts and flags for what the result leaves out: filtered, truncated, unresolvedEdges, coverageIncomplete and notes). Each edge has from and to symbol IDs (to is null when the target is unresolved or hidden), target (the called expression, import or declared name), kind (imports, calls or contains), evidence (resolved, heuristic or syntactic) and source location. Edges come from syntax parsing plus bounded static compiler bindings, so they do not prove runtime dispatch, and a missing edge does not show that no relationship exists. An unknown symbol ID returns no edges. For a cloud-backed client, traversal skips symbols outside the exportPaths policy, and the call fails while the project policy is offline. The result also carries evidence (the source ranges or symbols it rests on), unknowns (what it could not determine, as fixed sentences) and limits (the caps that applied, with the amount used).",
       inputSchema: {
         symbolId: z
           .string()
@@ -555,15 +661,45 @@ export function createMcpServer(
             (e) => ![e.target, e.source.path].some(containsSecret),
           )
         : exportable;
+      const errors = await coverageErrors();
+      const limited = limitations({
+        filtered: exportable.length - edges.length,
+        truncated: found.length >= 200,
+        truncatedNote: MCP_LIMITATION_NOTES.edgeLimit,
+        coverageErrors: errors,
+        unresolvedEdges: edges.filter((e) => e.to === null).length,
+      });
+      const seen = new Set<string>();
       return {
         edges,
-        limitations: limitations({
-          filtered: exportable.length - edges.length,
-          truncated: found.length >= 200,
-          truncatedNote: MCP_LIMITATION_NOTES.edgeLimit,
-          coverageErrors: await coverageErrors(),
-          unresolvedEdges: edges.filter((e) => e.to === null).length,
-        }),
+        limitations: limited,
+        // The distinct source ranges the edges were parsed from.
+        ...contract(
+          edges.flatMap((e) => {
+            const key = `${e.source.path}:${e.source.startLine}-${e.source.endLine}`;
+            if (seen.has(key)) return [];
+            seen.add(key);
+            return [fileEvidence(e.source)];
+          }),
+          unknownsOf(limited, {
+            truncatedNote: MCP_LIMITATION_NOTES.edgeLimit,
+            coverageErrors: errors,
+          }),
+          [
+            {
+              name: "maxEdges",
+              max: 200,
+              used: edges.length,
+              reached: limited.truncated,
+            },
+            {
+              name: "depth",
+              max: 3,
+              used: depth ?? 1,
+              reached: (depth ?? 1) >= 3,
+            },
+          ],
+        ),
       };
     },
   );
