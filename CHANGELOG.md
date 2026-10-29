@@ -4,6 +4,12 @@
 
 ### Added
 
+- `context_get`, `symbol_search` and `graph_neighbors` results now carry
+  optional `evidence` (source ranges or symbols), `unknowns` and `limits`
+  next to `limitations`; the fields are additive and a cloud client gets no
+  path, diagnostic or count beyond what it already had. The three tool
+  descriptions changed, so pins in `mcp.toolHashes` must be taken again with
+  `graph-engine mcp-tools --hashes`.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice

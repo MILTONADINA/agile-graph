@@ -171,6 +171,17 @@ notes are fixed sentences with no paths or diagnostics, and results outside
 the export policy are left out before counting, so a count cannot reveal
 private names; a local client's notes also include the indexing diagnostics.
 
+`context_get`, `symbol_search` and `graph_neighbors` also return three
+additive fields. `evidence` lists what the result rests on: `file` entries
+(path, line range, content hash) or `symbol` entries (id, name and the same
+source fields), never memory. `unknowns` lists what it could not determine:
+each has a `kind` (`filtered`, `truncated`, `coverage`, `unresolved-edges` or,
+for a cloud client, `export-scope`), a fixed-sentence `note` and sometimes a
+`count`; only a local client's `coverage` entry has `details`, the indexing
+diagnostics. `limits` lists each cap with its `name`, `max`, `used` and
+`reached`. They are built from data the result already holds, so a cloud
+client gets no path or count it could not already see.
+
 The [platform guide](platform.md#mcp-clients) has the full export and run
 rules.
 
