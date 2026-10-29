@@ -5731,7 +5731,10 @@ function patchErrorFeedback(
     };
   if (message.startsWith("Verification configuration needs approval"))
     return {
-      feedback: `${message}`,
+      feedback:
+        stepId === TESTER_STEP_ID
+          ? `${message}. Test configuration and setup files are not yours to create; put your tests in new test files that run under the existing configuration.`
+          : `${message}. Change the source under test instead, or ask for a person to approve the path.`,
       reason: "verification-config",
     };
   if (message.startsWith(PATH_ALIAS_ERROR))

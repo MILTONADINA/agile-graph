@@ -2,12 +2,13 @@ import path from "node:path";
 
 /**
  * Files the required checks load as configuration: the test runner's own
- * config and the test entries of a manifest. A worker that can edit them can
+ * config, the package-manager rc files the test script runs under, and the
+ * test entries of a manifest. A worker that can edit them can
  * weaken the checks it is judged by, so a patch to them needs a person's
  * approval. Reading is shallow and offline, like the dependency gate.
  */
 const RUNNER_CONFIG =
-  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
+  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^\.npmrc$|^\.yarnrc(\.yml)?$|^\.pnpmfile\.cjs$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
 const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
@@ -78,7 +79,7 @@ function pytestSections(text: string): string {
     if (header !== undefined) inside = /^(tool[.:])?pytest(\.|$)/.test(header);
     // A dotted key (tool.pytest.ini_options.addopts = ...) sets the same
     // option outside a pytest section.
-    if (inside || /^\s*["']?[\w."'-]*pytest[\w."'-]*\s*=/.test(raw))
+    if (inside || /^\s*["']?(?:tool[.:]pytest|pytest\.)[\w."'-]*\s*=/.test(raw))
       kept.push(raw.trim());
   }
   return kept.join("\n");
