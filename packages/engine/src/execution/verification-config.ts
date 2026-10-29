@@ -16,7 +16,7 @@ const NPM_RUN =
 
 function parse(text: string): Record<string, unknown> | undefined {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text.replace(/^\uFEFF/, ""));
     if (parsed && typeof parsed === "object")
       return parsed as Record<string, unknown>;
   } catch {
@@ -45,10 +45,12 @@ function gatedNames(all: Record<string, unknown>[]): Set<string> {
         if (typeof command !== "string") continue;
         for (const match of command.matchAll(NPM_RUN)) {
           const target = match[1] ?? "test";
-          if (!names.has(target)) {
-            names.add(target);
-            grew = true;
-          }
+          // npm also runs the pre and post hooks of every script it reaches.
+          for (const hooked of [target, `pre${target}`, `post${target}`])
+            if (!names.has(hooked)) {
+              names.add(hooked);
+              grew = true;
+            }
         }
       }
   }
@@ -94,7 +96,8 @@ export function changedVerificationConfig(
   if (base === "package.json") {
     const was = parse(before);
     const now = parse(after);
-    if (!now) return false;
+    // A manifest npm cannot read now but could before is not a safe edit.
+    if (!now) return was !== undefined;
     const names = gatedNames([scriptsOf(was), scriptsOf(now)]);
     return (
       JSON.stringify(was ? npmEntries(was, names) : []) !==
