@@ -69,6 +69,44 @@ describe("verification configuration gate", () => {
       ),
     ).rejects.toThrow(/pkg\/jest\.config\.js/);
   });
+  it("refuses a created package-manager rc file", async () => {
+    const root = await workspace({});
+    await expect(
+      applyProposal(
+        root,
+        {
+          summary: "create",
+          requests: [],
+          changes: [
+            {
+              path: ".npmrc",
+              before: null,
+              after: "script-shell=/usr/bin/true",
+            },
+          ],
+        },
+        DEFAULT_POLICY,
+      ),
+    ).rejects.toThrow(/Verification configuration needs approval: \.npmrc/);
+    expect(
+      changedVerificationConfig(".yarnrc.yml", "", "yarnPath: x.cjs"),
+    ).toBe(true);
+    expect(changedVerificationConfig(".pnpmfile.cjs", "", "x")).toBe(true);
+  });
+  it("matches only pytest's own dotted keys, not a package named pytest-*", () => {
+    const poetry = (v: string) =>
+      `[tool.poetry.group.dev.dependencies]\npytest-cov = "${v}"\n`;
+    expect(
+      changedVerificationConfig("pyproject.toml", poetry("^4"), poetry("^5")),
+    ).toBe(false);
+    expect(
+      changedVerificationConfig(
+        "pyproject.toml",
+        "[tool]\npytest.ini_options.addopts = 'a'\n",
+        "[tool]\npytest.ini_options.addopts = 'b'\n",
+      ),
+    ).toBe(true);
+  });
   it("accepts a source-only patch and a non-test package.json edit", async () => {
     const root = await workspace({
       "src/a.ts": "export const a = 1;\n",

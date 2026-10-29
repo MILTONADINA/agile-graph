@@ -12,7 +12,8 @@
   `graph-engine mcp-tools --hashes`.
 - A worker patch that edits a file the required checks load as
   configuration (a test runner config, or the test script entries of
-  `package.json` and the scripts they reach through `npm run`, or the pytest
+  `package.json` and the scripts they reach through `npm run`, the package-manager
+  rc files `.npmrc`, `.yarnrc`, `.yarnrc.yml` and `.pnpmfile.cjs`, or the pytest
   sections of `pyproject.toml` and `setup.cfg`) is refused and returned
   to the worker as feedback unless a person listed the path in
   `policy.approvedVerificationConfigPaths`.
