@@ -27,9 +27,10 @@ A team learns by looking back at what it decided and how that turned out. Operat
   - Test: packages/engine/tests/ledger.test.ts :: drops a pending acceptance from a run it records as needing reconciliation
 - AC6: A rejection's note becomes a proposed, private memory that needs a second human decision to take effect.
   - Test: packages/engine/tests/outcomes.test.ts :: turns a rejection's note into a proposed memory
-- AC7: If a worker's patch changes a file the required checks load as configuration (the project's test runner config or test script entries), then the system shall refuse the patch and return it as feedback unless a person approved that path in `policy.approvedVerificationConfigPaths`.
+- AC7: If a worker's patch changes a file the required checks load as configuration (the project's test runner config or test script entries, including scripts they reach through `npm run`), then the system shall refuse the patch and return it as feedback unless a person approved that path in `policy.approvedVerificationConfigPaths`.
   - Test: packages/engine/tests/verification-config-gate.test.ts :: refuses a patch that edits the test runner config
   - Test: packages/engine/tests/verification-config-gate.test.ts :: refuses a patch that edits a test script entry
+  - Test: packages/engine/tests/verification-config-gate.test.ts :: refuses an edit to a script a test or check script runs
   - Test: packages/engine/tests/verification-config-gate.test.ts :: accepts a source-only patch and a non-test package.json edit
   - Test: packages/engine/tests/verification-config-gate.test.ts :: accepts a path a person approved in the policy
 

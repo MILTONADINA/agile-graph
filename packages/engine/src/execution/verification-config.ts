@@ -11,21 +11,58 @@ const RUNNER_CONFIG =
 const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
-function npmEntries(text: string): string[] | undefined {
-  let parsed: unknown;
+const NPM_RUN =
+  /\b(?:npm\s+(?:run|run-script)|pnpm\s+run|yarn\s+run|yarn|pnpm)\s+([\w:.-]+)|\bnpm\s+(?:test|t)\b/g;
+
+function parse(text: string): Record<string, unknown> | undefined {
   try {
-    parsed = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === "object")
+      return parsed as Record<string, unknown>;
   } catch {
-    return undefined;
+    // Not JSON: nothing to read.
   }
-  if (!parsed || typeof parsed !== "object") return undefined;
-  const record = parsed as Record<string, unknown>;
+  return undefined;
+}
+function scriptsOf(record: Record<string, unknown> | undefined) {
+  const scripts = record?.scripts;
+  return scripts && typeof scripts === "object" && !Array.isArray(scripts)
+    ? (scripts as Record<string, unknown>)
+    : {};
+}
+// Test script names plus every script a gated command runs through `npm run`,
+// followed to a fixpoint over all the given manifests.
+function gatedNames(all: Record<string, unknown>[]): Set<string> {
+  const names = new Set<string>();
+  for (const scripts of all)
+    for (const name of Object.keys(scripts))
+      if (TEST_SCRIPT.test(name)) names.add(name);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const scripts of all)
+      for (const name of [...names]) {
+        const command = scripts[name];
+        if (typeof command !== "string") continue;
+        for (const match of command.matchAll(NPM_RUN)) {
+          const target = match[1] ?? "test";
+          if (!names.has(target)) {
+            names.add(target);
+            grew = true;
+          }
+        }
+      }
+  }
+  return names;
+}
+function npmEntries(
+  record: Record<string, unknown>,
+  names: Set<string>,
+): string[] {
+  const scripts = scriptsOf(record);
   const entries: string[] = [];
-  const scripts = record.scripts;
-  if (scripts && typeof scripts === "object" && !Array.isArray(scripts))
-    for (const [name, command] of Object.entries(scripts))
-      if (TEST_SCRIPT.test(name))
-        entries.push(`script ${name}=${JSON.stringify(command)}`);
+  for (const name of names)
+    if (name in scripts)
+      entries.push(`script ${name}=${JSON.stringify(scripts[name])}`);
   for (const key of NPM_RUNNER_KEYS)
     if (key in record) entries.push(`${key}=${JSON.stringify(record[key])}`);
   return entries.sort();
@@ -55,10 +92,14 @@ export function changedVerificationConfig(
   const base = path.posix.basename(file).toLowerCase();
   if (RUNNER_CONFIG.test(base)) return true;
   if (base === "package.json") {
-    const was = npmEntries(before);
-    const now = npmEntries(after);
+    const was = parse(before);
+    const now = parse(after);
     if (!now) return false;
-    return JSON.stringify(was ?? []) !== JSON.stringify(now);
+    const names = gatedNames([scriptsOf(was), scriptsOf(now)]);
+    return (
+      JSON.stringify(was ? npmEntries(was, names) : []) !==
+      JSON.stringify(npmEntries(now, names))
+    );
   }
   if (base === "pyproject.toml" || base === "setup.cfg")
     return pytestSections(before) !== pytestSections(after);
