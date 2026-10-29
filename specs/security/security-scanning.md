@@ -124,6 +124,9 @@ Teams need security tools chosen for what their repository actually contains, wi
 - AC32: When CI runs on a pull request or on `main`, the system shall fail the platform job if `npm audit --omit=dev --audit-level=high` reports a high or critical advisory in production dependencies, and an update bot shall open weekly grouped pull requests for npm and GitHub Actions.
   - Test: scripts/ci-gitleaks.test.mjs :: CI audits production dependencies and fails on high advisories
   - Test: scripts/ci-gitleaks.test.mjs :: the update bot runs weekly for npm and GitHub Actions
+- AC33: `AGENTS.md` shall keep each rule that forbids pushing to `main`, publishing, memory export, key use, cost-cap changes and model downloads, and shall not instruct reading the handover before every task.
+  - Test: scripts/agents-md-rules.test.mjs :: AGENTS.md keeps every safety rule
+  - Test: scripts/agents-md-rules.test.mjs :: AGENTS.md does not instruct reading the handover before every task
 
 ## Security considerations
 
