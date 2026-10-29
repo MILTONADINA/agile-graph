@@ -103,8 +103,13 @@ import {
   runWrittenPaths as writtenPaths,
 } from "./execution/change-diff.js";
 import {
+  checkScanRulings,
   findingId,
   invokeReviewWorker,
+  SCAN_FINDING_LIMIT,
+  scanFindingId,
+  type ReviewScanFinding,
+  type ScanRuling,
   invokeRepeatDecision,
   invokeVerifyFix,
   priorBlockingFindings,
@@ -3474,7 +3479,45 @@ export class GraphEngine {
           }
         }
         let result: Awaited<ReturnType<typeof invokeReviewWorker>>;
+        const scanFindings: ReviewScanFinding[] = [];
+        let scanRulings: ScanRuling[];
         try {
+          // The reviewer rules on every scanner result: new, baselined and
+          // inline suppressions. Only text, no files, so what a cloud
+          // reviewer may receive is screened as before.
+          if (securityBaseline) {
+            const scan = await scanSnapshot();
+            const accepted = new Set(
+              securityBaseline.findings.map((item) => item.fingerprint),
+            );
+            const seenIds = new Set<string>();
+            for (const finding of scan.findings) {
+              const id = scanFindingId(finding.fingerprint);
+              if (seenIds.has(id)) continue;
+              seenIds.add(id);
+              const open =
+                reviewer.kind === "local" ||
+                isAllowedPath(finding.path, policy, true);
+              scanFindings.push({
+                id,
+                tool: finding.tool,
+                rule: finding.rule,
+                path: open ? finding.path : "(withheld)",
+                line: open ? finding.line : 0,
+                message: open ? redact(finding.message).slice(0, 300) : "",
+                status:
+                  finding.tool === "suppression"
+                    ? "suppression"
+                    : accepted.has(finding.fingerprint)
+                      ? "baselined"
+                      : "new",
+              });
+            }
+            if (scanFindings.length > SCAN_FINDING_LIMIT)
+              throw new Error(
+                `the security scan has ${scanFindings.length} results to rule on, more than the ${SCAN_FINDING_LIMIT} one review can take`,
+              );
+          }
           result = await this.invokeReviewer(
             {
               provider: reviewer,
@@ -3485,9 +3528,14 @@ export class GraphEngine {
               checks: checks
                 .map((check) => `${check.argv.join(" ")}: exit ${check.code}`)
                 .join("\n"),
+              ...(scanFindings.length ? { scanFindings } : {}),
               signal,
             },
             run.plan,
+          );
+          scanRulings = checkScanRulings(
+            scanFindings,
+            result.review.scanRulings,
           );
         } catch (error) {
           if (signal.aborted) throw error;
@@ -3514,6 +3562,16 @@ export class GraphEngine {
               evidence: redact(criterion.evidence),
             })),
             minutes: reviewMinutes(),
+            // A dropped ruling is recorded opinion; the security gate below
+            // reads the scan alone.
+            ...(scanRulings.length
+              ? {
+                  scanRulings: scanRulings.map((item) => ({
+                    ...item,
+                    reason: redact(item.reason),
+                  })),
+                }
+              : {}),
             findings: result.review.findings.map((finding) => ({
               ...finding,
               message: redact(finding.message),
@@ -3549,15 +3607,11 @@ export class GraphEngine {
           exportable: exportable && !containsSecret(feedback),
         };
       };
-      // Scans the verified workspace against the committed baseline. An
-      // incomplete scan, or a worker-written file no scanner could read,
-      // stops the run; new findings are returned for the next attempt.
-      const securityGate = async (): Promise<{
-        passed: boolean;
-        count: number;
-        feedback: string;
-        exportable: boolean;
-      }> => {
+      // One scan per verified snapshot, shared by the review (which rules on
+      // its results) and the security gate (which alone decides on them).
+      let scanned: { hash: string | undefined; scan: SecurityScan } | undefined;
+      const scanSnapshot = async (): Promise<SecurityScan> => {
+        if (scanned && scanned.hash === verifiedHash) return scanned.scan;
         this.store.event(run.id, "security.scan_started", {
           snapshotHash: verifiedHash,
         });
@@ -3608,6 +3662,20 @@ export class GraphEngine {
               `This run changed ${changed.slice(0, 5).join(", ")}, but no OSV vulnerability database has been downloaded, so its dependencies were not scanned. To keep this run, ${OSV_DATABASE_ADVICE}. Then resume it with graph-engine resume ${run.id} --reconciled; planning it again would pay for its work again`,
             );
         }
+        scanned = { hash: verifiedHash, scan };
+        return scan;
+      };
+      // Scans the verified workspace against the committed baseline. An
+      // incomplete scan, or a worker-written file no scanner could read,
+      // stops the run; new findings are returned for the next attempt.
+      const securityGate = async (): Promise<{
+        passed: boolean;
+        count: number;
+        feedback: string;
+        exportable: boolean;
+      }> => {
+        const scan = await scanSnapshot();
+        const workerPaths = new Set(await runWrittenPaths());
         const unreviewed = newFindings(scan, securityBaseline!);
         // A newly published advisory about a dependency the run did not
         // touch is not this change's doing: it is recorded, not gated.

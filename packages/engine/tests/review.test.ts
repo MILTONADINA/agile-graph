@@ -13,6 +13,8 @@ import {
   reusableFixVerdicts,
   ADVISORY_FEEDBACK_LIMIT,
   ADVISORY_MESSAGE_LIMIT,
+  checkScanRulings,
+  scanFindingId,
   reviewOutcome,
   VERIFY_FIX_INSTRUCTIONS,
   type WorkerReview,
@@ -514,5 +516,104 @@ describe("finding signature", () => {
       { type: "review.repeated_finding", data: {} },
     ]);
     expect(repeatedSignatures(resumed.at(-1)!, history[0]!)).toHaveLength(0);
+  });
+});
+
+describe("scan rulings", () => {
+  const items = [{ id: "Fone" }, { id: "Ftwo" }];
+  const ruling = (id: string, kind = "raised", reason = "because") => ({
+    id,
+    ruling: kind as "raised" | "dropped",
+    reason,
+  });
+
+  it("gives a finding the same ID whatever the repeat suffix or case of its text", () => {
+    expect(scanFindingId("abc")).toBe(scanFindingId("abc"));
+    expect(scanFindingId("abc")).not.toBe(scanFindingId("abc#2"));
+    expect(scanFindingId("abc")).toMatch(/^F[0-9a-f]{10}$/);
+  });
+
+  it("accepts one ruling per given ID, in any order, and keeps the reasons", () => {
+    expect(
+      checkScanRulings(items, [
+        ruling("Ftwo", "dropped", " a note "),
+        ruling("Fone"),
+      ]),
+    ).toEqual([
+      { id: "Ftwo", ruling: "dropped", reason: "a note" },
+      { id: "Fone", ruling: "raised", reason: "because" },
+    ]);
+    expect(checkScanRulings([], undefined)).toEqual([]);
+  });
+
+  it("fails when an ID is omitted", () => {
+    expect(() => checkScanRulings(items, [ruling("Fone")])).toThrow(
+      /omitted.*Ftwo/,
+    );
+    expect(() => checkScanRulings(items, undefined)).toThrow(/omitted/);
+  });
+
+  it("fails on an ID it was not given, or one ruled twice", () => {
+    expect(() =>
+      checkScanRulings(items, [ruling("Fone"), ruling("Ftwo"), ruling("Fx")]),
+    ).toThrow(/not given.*Fx/);
+    expect(() => checkScanRulings([], [ruling("Fone")])).toThrow(/not given/);
+    expect(() =>
+      checkScanRulings(items, [ruling("Fone"), ruling("Fone"), ruling("Ftwo")]),
+    ).toThrow(/more than once/);
+  });
+
+  it("fails on an empty or blank reason", () => {
+    expect(() =>
+      checkScanRulings(items, [
+        ruling("Fone", "dropped", "  "),
+        ruling("Ftwo"),
+      ]),
+    ).toThrow(/reason/);
+  });
+
+  it("sends the findings with their IDs and asks for rulings", async () => {
+    let sent: Record<string, any> = {};
+    const fetch = vi.fn(async (_url: string, init: { body: string }) => {
+      sent = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({
+          model: "m",
+          choices: [{ message: { content: JSON.stringify(approve) } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      );
+    });
+    await invokeReviewWorker(
+      {
+        provider: { id: "reviewer", kind: "local", model: "m" },
+        policy: { ...DEFAULT_POLICY, providers: ["reviewer"] },
+        objective: "o",
+        acceptance: ["a"],
+        diff: "d",
+        checks: "c",
+        scanFindings: [
+          {
+            id: "Fone",
+            tool: "semgrep",
+            rule: "r",
+            path: "a.js",
+            line: 1,
+            message: "m",
+            status: "baselined",
+          },
+        ],
+      },
+      fetch,
+    );
+    expect(
+      JSON.parse(unwrapUntrusted(sent.messages[1].content)!),
+    ).toMatchObject({
+      scanFindings: [{ id: "Fone", status: "baselined" }],
+    });
+    expect(sent.response_format.json_schema.schema.required).toContain(
+      "scanRulings",
+    );
+    expect(REVIEW_INSTRUCTIONS).toContain("scanRulings");
   });
 });

@@ -69,6 +69,14 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/review.test.ts :: reads rejections from events and finds the repeats
   - Test: packages/engine/tests/execution.test.ts :: carries earlier rejections' signatures into the next repair round, and stops when the same finding comes back
   - Test: packages/engine/tests/execution.test.ts :: continues when the next rejection raises a different finding
+- AC15: When a reviewer is configured and the run's security scan has findings, baselined findings or inline suppressions, the system shall give each to the reviewer with a stable ID (at most 100 per review; more fails the review), and shall fail the review as not completed if the reviewer's answer omits any ID, rules on one twice or names an ID it was not given; each ruling is `raised` or `dropped` with a non-empty reason, recorded in `review.completed`, and a `dropped` ruling never clears the security gate. The reviewer receives scanner text only, redacted, and for a cloud reviewer a finding in a path it may not receive is given by ID, tool and rule alone; no new files are sent, so cloud export and secret screens are unchanged. The scan runs once per verified snapshot before the review and is reused by the security gate.
+  - Test: packages/engine/tests/review.test.ts :: fails when an ID is omitted
+  - Test: packages/engine/tests/review.test.ts :: fails on an ID it was not given, or one ruled twice
+  - Test: packages/engine/tests/review.test.ts :: fails on an empty or blank reason
+  - Test: packages/engine/tests/execution.test.ts :: fails the review as not completed when the answer omits an ID
+  - Test: packages/engine/tests/execution.test.ts :: fails the review as not completed when the answer names an ID it was not given
+  - Test: packages/engine/tests/execution.test.ts :: never lets a dropped ruling clear the security gate
+  - Test: packages/engine/tests/execution.test.ts :: gives the reviewer every finding, baselined and suppression with a status and ID, and records the rulings
 
 ## Security considerations
 

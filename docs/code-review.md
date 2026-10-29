@@ -65,6 +65,16 @@ with it and named in the feedback. A failing review's feedback also lists its
 advisory findings, under a section marked optional; a passing review sends
 nothing back.
 
+When the project has a committed security baseline, the run's scan runs once
+for the verified snapshot before the review, and the reviewer is given every
+result in it (new, already in the baseline, and inline scanner suppressions)
+as text with a stable ID. It must rule `raised` or `dropped`, with a reason,
+on each ID and on no other; an omitted, unknown or repeated ID, or an empty
+reason, fails the review as not completed, and a review has room for at most
+100 results. The rulings are recorded in `review.completed`. A `dropped`
+ruling is the reviewer's opinion only: the security gate still decides on the
+scan and the baseline alone.
+
 On a retry, when the run's latest AI review asked for changes with blocking
 findings, the next review first checks each of them (at most 20; any more
 count as inconclusive) in a fresh, separate call to the reviewer that carries
