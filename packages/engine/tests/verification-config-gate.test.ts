@@ -1,0 +1,137 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { DEFAULT_POLICY, assertProjectPolicy } from "@agile-graph/contracts";
+import { applyProposal } from "../src/execution/workspace.js";
+import { changedVerificationConfig } from "../src/execution/verification-config.js";
+
+const roots: string[] = [];
+afterEach(async () => {
+  while (roots.length) await rm(roots.pop()!, { recursive: true, force: true });
+});
+async function workspace(files: Record<string, string>) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vconf-gate-"));
+  roots.push(root);
+  for (const [name, content] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), content);
+  }
+  return root;
+}
+const edit = (
+  root: string,
+  file: string,
+  before: string,
+  after: string,
+  policy = DEFAULT_POLICY,
+) =>
+  applyProposal(
+    root,
+    { summary: "edit", requests: [], changes: [{ path: file, before, after }] },
+    policy,
+  );
+const pkg =
+  '{\n  "scripts": {\n    "test": "vitest run",\n    "build": "tsc"\n  }\n}\n';
+
+describe("verification configuration gate", () => {
+  it("refuses a patch that edits the test runner config", async () => {
+    const original = "export default { test: { include: ['a.test.ts'] } };\n";
+    const root = await workspace({ "vitest.config.ts": original });
+    await expect(
+      edit(root, "vitest.config.ts", "['a.test.ts']", "[]"),
+    ).rejects.toThrow(
+      /Verification configuration needs approval: vitest\.config\.ts/,
+    );
+    expect(await readFile(path.join(root, "vitest.config.ts"), "utf8")).toBe(
+      original,
+    );
+  });
+  it("refuses a patch that edits a test script entry", async () => {
+    const root = await workspace({ "package.json": pkg });
+    await expect(
+      edit(root, "package.json", '"vitest run"', '"true"'),
+    ).rejects.toThrow(
+      /Verification configuration needs approval: package\.json/,
+    );
+  });
+  it("refuses a created runner config", async () => {
+    const root = await workspace({});
+    await expect(
+      applyProposal(
+        root,
+        {
+          summary: "create",
+          requests: [],
+          changes: [{ path: "pkg/jest.config.js", before: null, after: "{}" }],
+        },
+        DEFAULT_POLICY,
+      ),
+    ).rejects.toThrow(/pkg\/jest\.config\.js/);
+  });
+  it("accepts a source-only patch and a non-test package.json edit", async () => {
+    const root = await workspace({
+      "src/a.ts": "export const a = 1;\n",
+      "package.json": pkg,
+    });
+    await expect(edit(root, "src/a.ts", "1", "2")).resolves.toEqual([
+      "src/a.ts",
+    ]);
+    await expect(
+      edit(root, "package.json", '"tsc"', '"tsc -p ."'),
+    ).resolves.toEqual(["package.json"]);
+  });
+  it("accepts a path a person approved in the policy", async () => {
+    const root = await workspace({
+      "vitest.config.ts": "export default { test: { retry: 0 } };\n",
+    });
+    const policy = {
+      ...DEFAULT_POLICY,
+      approvedVerificationConfigPaths: ["vitest.config.ts"],
+    };
+    await expect(
+      edit(root, "vitest.config.ts", "retry: 0", "retry: 1", policy),
+    ).resolves.toEqual(["vitest.config.ts"]);
+    // Approval covers only the named path.
+    const other = await workspace({ "jest.config.js": "{}\n" });
+    await expect(
+      edit(other, "jest.config.js", "{}", "{ }", policy),
+    ).rejects.toThrow(/jest\.config\.js/);
+  });
+  it("reads each config shape and ignores malformed input", () => {
+    const changed = (file: string, before: string, after: string) =>
+      changedVerificationConfig(file, before, after);
+    expect(changed("tox.ini", "a", "b")).toBe(true);
+    expect(changed("tox.ini", "a", "a")).toBe(false);
+    expect(changed("sub/conftest.py", "", "x")).toBe(true);
+    expect(
+      changed(
+        "pyproject.toml",
+        "[tool.pytest.ini_options]\naddopts = '-x'\n",
+        "[tool.pytest.ini_options]\naddopts = ''\n",
+      ),
+    ).toBe(true);
+    expect(
+      changed(
+        "pyproject.toml",
+        "[project]\nname='a'\n",
+        "[project]\nname='b'\n",
+      ),
+    ).toBe(false);
+    expect(changed("package.json", pkg, pkg.replace("vitest run", "x"))).toBe(
+      true,
+    );
+    expect(changed("package.json", pkg, pkg.replace("tsc", "x"))).toBe(false);
+    expect(changed("package.json", "{bad", "{bad2")).toBe(false);
+    expect(changed("src/a.ts", "a", "b")).toBe(false);
+  });
+  it("validates the approval list in a policy", () => {
+    const policy = (paths: unknown) => ({
+      ...DEFAULT_POLICY,
+      approvedVerificationConfigPaths: paths,
+    });
+    expect(() => assertProjectPolicy(policy(["a/b.config.ts"]))).not.toThrow();
+    expect(() => assertProjectPolicy(policy(["a/../b"]))).toThrow();
+    expect(() => assertProjectPolicy(policy([1]))).toThrow();
+  });
+});

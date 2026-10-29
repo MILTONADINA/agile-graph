@@ -10,6 +10,11 @@
   path, diagnostic or count beyond what it already had. The three tool
   descriptions changed, so pins in `mcp.toolHashes` must be taken again with
   `graph-engine mcp-tools --hashes`.
+- A worker patch that edits a file the required checks load as
+  configuration (a test runner config, or the test script entries of
+  `package.json`, `pyproject.toml` or `setup.cfg`) is refused and returned
+  to the worker as feedback unless a person listed the path in
+  `policy.approvedVerificationConfigPaths`.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice
