@@ -6,9 +6,21 @@ import path from "node:path";
  * test entries of a manifest. A worker that can edit them can
  * weaken the checks it is judged by, so a patch to them needs a person's
  * approval. Reading is shallow and offline, like the dependency gate.
+ *
+ * Maven and Gradle files are gated whole, never parsed: a surefire setting can
+ * arrive through a `${skipTests}` property, a profile, `pluginManagement`, an
+ * in-repo parent POM, and a Gradle script is a program
+ * (`tasks.withType<Test> { ignoreFailures = true }`), so any partial reading
+ * is a bypass surface. Deliberately not gated: a coverage rc file named with
+ * `--rcfile` or `--cov-config` (the same class as a `setupFiles` target),
+ * `turbo.json`, `nx.json` and `lerna.json` task graphs, plugin code under an
+ * included build other than `buildSrc/`, `gradle/libs.versions.toml` (a version
+ * catalog cannot skip tests), `nps`, Windows `.cmd` shims of `run-s`, and flags
+ * such as `-x test` in a Makefile or CI file (an invocation, not a file the
+ * checks load; docs/platform.md lists those as out of scope).
  */
 const RUNNER_CONFIG =
-  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^karma\.conf\.[cm]?[jt]s$|^\.babelrc(\.json)?$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^\.npmrc$|^\.yarnrc(\.yml)?$|^\.pnpmfile\.cjs$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
+  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^karma\.conf\.[cm]?[jt]s$|^\.babelrc(\.json)?$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^\.c8rc(\.[a-z]+)?$|^\.coveragerc$|^jest-preset\.(cjs|mjs|js|json)$|^pnpm-workspace\.ya?ml$|^(pom\.xml|mvnw(\.cmd)?|gradlew(\.bat)?|gradle\.properties)$|\.gradle(\.kts)?$|^\.npmrc$|^\.yarnrc(\.yml)?$|^\.pnpmfile\.cjs$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
 const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
@@ -105,6 +117,27 @@ function tokenize(command: string): { text: string; quoted: boolean }[][] {
   return segments;
 }
 
+const NPM_RUN_ALL = new Set(["run-s", "run-p", "npm-run-all"]);
+const NPM_RUN_ALL_VALUE_OPTIONS = new Set(["--max-parallel", "--npm-path"]);
+const NPM_RUN_ALL_BOOLEAN_OPTIONS = new Set([
+  "-s",
+  "--sequential",
+  "--serial",
+  "-p",
+  "--parallel",
+  "-c",
+  "--continue-on-error",
+  "-l",
+  "--print-label",
+  "-n",
+  "--print-name",
+  "-r",
+  "--race",
+  "--aggregate-output",
+  "--silent",
+]);
+const firstWord = (text: string) => text.trim().split(/\s+/)[0] ?? "";
+
 // Script names a command line runs through npm, pnpm, yarn or `node --run`.
 // `unresolved` is set when an invocation's script cannot be read with
 // confidence. A quoted word with spaces is read as a command line itself, so
@@ -123,8 +156,41 @@ function runnerTargets(command: string): {
       if (inner.unresolved) unresolved = true;
     }
     const words = segment.map((word) => word.text);
+    // `concurrently npm:a yarn:b` runs scripts by prefix, in any word.
+    // Concurrently's own options are not modelled; a word such as `npm:x`
+    // elsewhere over-includes, which is safe.
+    for (const word of words) {
+      const prefixed = /^(?:npm|yarn|pnpm|bun):(.+)$/.exec(word);
+      if (prefixed) targets.push(firstWord(prefixed[1]!));
+    }
     for (let at = 0; at < words.length; at++) {
       const runner = path.posix.basename(words[at]!);
+      if (NPM_RUN_ALL.has(runner)) {
+        // Every positional is a script (or a pattern); a quoted one may carry
+        // arguments after its first word. `--` and an option not listed could
+        // take a value, so the invocation cannot be resolved.
+        for (let k = at + 1; k < segment.length; k++) {
+          const word = segment[k]!.text;
+          if (word === "--") {
+            unresolved = true;
+            break;
+          }
+          if (!word.startsWith("-")) {
+            targets.push(firstWord(word));
+            continue;
+          }
+          if (word.includes("=")) continue;
+          if (NPM_RUN_ALL_VALUE_OPTIONS.has(word)) k++;
+          else if (!NPM_RUN_ALL_BOOLEAN_OPTIONS.has(word)) {
+            const next = words[k + 1];
+            if (next !== undefined && !next.startsWith("-")) {
+              unresolved = true;
+              break;
+            }
+          }
+        }
+        continue;
+      }
       if (runner === "node") {
         for (let k = at + 1; k < words.length; k++) {
           const word = words[k]!;
@@ -242,6 +308,10 @@ function gatedNames(all: Record<string, unknown>[]): {
         if (unresolved) everything = true;
         for (const target of targets) {
           if (target.startsWith("-")) continue;
+          // A glob, a variable, a substitution or a pnpm regex names scripts
+          // this reader does not expand: every script counts.
+          if (/[*?{$`]/.test(target) || target.startsWith("/"))
+            everything = true;
           // npm also runs the pre and post hooks of every script it reaches.
           for (const hooked of [target, `pre${target}`, `post${target}`])
             if (!names.has(hooked)) {
@@ -266,19 +336,20 @@ function npmEntries(
     if (key in record) entries.push(`${key}=${JSON.stringify(record[key])}`);
   return entries.sort();
 }
-// Lines of the pytest sections of an ini file (setup.cfg).
+// Lines of the pytest and coverage sections of an ini file (setup.cfg).
 function pytestIniSections(text: string): string {
   const kept: string[] = [];
   let inside = false;
   for (const raw of text.split(/\r?\n/)) {
     const header = /^\s*\[+\s*([^\]]+?)\s*\]+\s*(?:[#;].*)?$/.exec(raw)?.[1];
-    if (header !== undefined) inside = /^(tool[.:])?pytest(\.|$)/.test(header);
+    if (header !== undefined)
+      inside = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
     if (inside) kept.push(raw.trim());
   }
   return kept.join("\n");
 }
 
-// The pytest settings of a pyproject.toml as sorted `path = value` lines, with
+// The pytest and coverage settings of a pyproject.toml as sorted `path = value` lines, with
 // header and key spelling normalised: quotes and spaces around dots, dotted
 // keys, tables and inline tables all give the same path. Returns undefined
 // when the text is not read with confidence, so the caller fails closed.
@@ -343,7 +414,10 @@ function pytestToml(text: string): string | undefined {
     }
   };
   const keep = (path: string[], value: string) => {
-    if (path[0] === "tool" && path[1] === "pytest")
+    // The whole tool.coverage table: omit, source and exclude_lines weaken
+    // coverage as much as fail_under does. A dependency named coverage is not
+    // under tool.*, so it is not matched.
+    if (path[0] === "tool" && (path[1] === "pytest" || path[1] === "coverage"))
       out.push(`${JSON.stringify(path)} = ${value}`);
   };
   const value = (path: string[]) => {
@@ -380,8 +454,19 @@ function pytestToml(text: string): string | undefined {
     } else {
       const m = /^[^\s,\]}#]+/.exec(src.slice(i));
       if (!m) return fail();
-      keep(path, m[0]);
-      i += m[0].length;
+      let len = m[0].length;
+      // TOML 1.0 allows a space between the date and the time of a date-time.
+      // Non-ASCII bare keys stay unread on purpose: they are invalid TOML 1.0
+      // (tomllib rejects them too), so failing closed matches the parser.
+      if (
+        /^\d{4}-\d\d-\d\d$/.test(m[0]) &&
+        /^ \d\d:/.test(src.slice(i + len, i + len + 4))
+      ) {
+        const time = /^ \d\d:[^\s,\]}#]*/.exec(src.slice(i + len));
+        if (time) len += time[0].length;
+      }
+      keep(path, src.slice(i, i + len));
+      i += len;
     }
   };
   try {
@@ -429,6 +514,15 @@ export function changedVerificationConfig(
   if (before === after) return false;
   const base = path.posix.basename(file).toLowerCase();
   if (RUNNER_CONFIG.test(base)) return true;
+  // Maven and Gradle wrapper and tool settings live in directories, not only
+  // in files with a distinctive name. `buildSrc` is case-sensitive, as Gradle is.
+  const segments = file.split("/");
+  if (
+    segments[0] === ".mvn" ||
+    segments[0] === "buildSrc" ||
+    file.startsWith("gradle/wrapper/")
+  )
+    return true;
   if (base === "package.json") {
     const was = parse(before);
     const now = parse(after);
