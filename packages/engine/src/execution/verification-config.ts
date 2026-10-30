@@ -156,6 +156,10 @@ function runnerTargets(command: string): {
       if (inner.unresolved) unresolved = true;
     }
     const words = segment.map((word) => word.text);
+    // A backslash or variable anywhere in a segment can spell a runner or
+    // subcommand this reader cannot see: the invocation is unresolved. This
+    // over-gates `FOO=$BAR npm run unit` on purpose.
+    if (words.some((w) => /[\\$]/.test(w))) unresolved = true;
     // `concurrently npm:a yarn:b` runs scripts by prefix, in any word.
     // Concurrently's own options are not modelled; a word such as `npm:x`
     // elsewhere over-includes, which is safe.
@@ -309,8 +313,11 @@ function gatedNames(all: Record<string, unknown>[]): {
         for (const target of targets) {
           if (target.startsWith("-")) continue;
           // A glob, a variable, a substitution or a pnpm regex names scripts
-          // this reader does not expand: every script counts.
-          if (/[*?{$`\\]/.test(target) || target.startsWith("/"))
+          // this reader does not expand: every script counts. That includes
+          // the minimatch forms npm-run-all expands: character classes
+          // `[u]nit` and extglobs `+(a)`, `@(a)`, `!(a)` (quoted, as bare
+          // parentheses are separators).
+          if (/[*?{}[\]()!+@$`\\]/.test(target) || target.startsWith("/"))
             everything = true;
           // npm also runs the pre and post hooks of every script it reaches.
           for (const hooked of [target, `pre${target}`, `post${target}`])
@@ -349,7 +356,9 @@ function pytestIniSections(text: string): string {
       .trim();
     if (header !== undefined)
       inside = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
-    if (inside) kept.push(raw.trim());
+    // Leading whitespace is kept: an indented line is a continuation of the
+    // key above, so indenting a key removes it from the section.
+    if (inside) kept.push(raw.trimEnd());
   }
   return kept.join("\n");
 }

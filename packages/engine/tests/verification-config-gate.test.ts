@@ -676,6 +676,19 @@ describe("verification configuration gate", () => {
           changedVerificationConfig("setup.cfg", before, before + added),
           label,
         ).toBe(want);
+      // Leading whitespace is a continuation line in configparser, so
+      // indenting a key folds it into the key above and removes it.
+      for (const [a, b] of [
+        [
+          "[coverage:report]\nexclude_lines = x\nfail_under = 80\n",
+          "[coverage:report]\nexclude_lines = x\n    fail_under = 80\n",
+        ],
+        [
+          "[tool:pytest]\naddopts = -q\nminversion = 6\n",
+          "[tool:pytest]\naddopts = -q\n  minversion = 6\n",
+        ],
+      ] as const)
+        expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
     });
     it("follows scripts reached through run-s, npm-run-all and concurrently npm:x", () => {
       const manifest = (test: string, unit: string, other = "echo") =>
@@ -720,6 +733,14 @@ describe("verification configuration gate", () => {
         "run-s ?nit",
         "npm run /^u/",
         "npm run uni\\t",
+        "run-s [u]nit",
+        'run-s "+(unit)"',
+        'run-s "@(unit)"',
+        'run-s "!(lint)"',
+        "run-s un[i]t",
+        "np\\m run unit",
+        "npm r\\un unit",
+        "$npm_execpath run unit",
       ])
         expect(unrelated(test), test).toBe(true);
       // A resolved target does not gate unrelated scripts.
