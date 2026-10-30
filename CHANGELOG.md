@@ -30,7 +30,7 @@
   variable gates every script. Not gated, on purpose: a coverage rc file named
   with `--rcfile`, `turbo.json`/`nx.json` task graphs, and `-x test` in a
   Makefile or CI file. A `pyproject.toml` date-time written with a space is now
-  read instead of refused. Closes #246.
+  read instead of refused (#246).
   The `pyproject.toml` pytest settings are read as TOML with the key path
   normalised, so spaced, quoted or escaped dotted keys and headers, inline tables and
   multi-line values all count; a `pyproject.toml` that cannot be read

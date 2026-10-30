@@ -543,6 +543,12 @@ describe("verification configuration gate", () => {
         "gradlew.bat",
         "buildSrc/build.gradle.kts",
         "buildSrc/src/main/kotlin/x.kt",
+        "sub/.mvn/maven.config",
+        "mod/buildSrc/build.gradle.kts",
+        "mod/buildSrc/src/main/kotlin/X.kt",
+        "sub/gradle/wrapper/gradle-wrapper.properties",
+        ".MVN/maven.config",
+        "BuildSrc/build.gradle.kts",
       ])
         expect(gate(f), f).toBe(true);
       for (const f of [
@@ -657,6 +663,11 @@ describe("verification configuration gate", () => {
           true,
         ],
         ["doubled brackets", "[[coverage:report]]\nfail_under = 0\n", true],
+        [
+          "trailing text after header",
+          "[coverage:report]x\nfail_under = 0\n",
+          true,
+        ],
         ["unrelated [metadata] edit", "[metadata]\nx = 1\n", false],
       ];
       const before = "[metadata]\nname = a\n";
@@ -708,6 +719,7 @@ describe("verification configuration gate", () => {
         'run-p "{a,b}"',
         "run-s ?nit",
         "npm run /^u/",
+        "npm run uni\\t",
       ])
         expect(unrelated(test), test).toBe(true);
       // A resolved target does not gate unrelated scripts.
