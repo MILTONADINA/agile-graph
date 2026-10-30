@@ -3321,6 +3321,12 @@ export class GraphEngine {
             { cause: error },
           );
         }
+        // Scanned before the review starts: a scan that stops the run (no
+        // OSV database for a changed lockfile) is not the reviewer's stop, and
+        // its time is not review time.
+        const scan = securityBaseline
+          ? await scanSnapshot(snapshotHash)
+          : undefined;
         // A retry first checks the latest AI review's blocking findings, one
         // fresh call each, so the reviewer never confirms its own finding
         // inside a review looking for new ones. Any not shown fixed fails
@@ -3480,11 +3486,6 @@ export class GraphEngine {
         let result: Awaited<ReturnType<typeof invokeReviewWorker>>;
         const scanFindings: ReviewScanFinding[] = [];
         let scanRulings: ScanRuling[];
-        // Scanned before the review's error wrapping: a scan that stops the
-        // run (no OSV database for a changed lockfile) is not the reviewer's.
-        const scan = securityBaseline
-          ? await scanSnapshot(snapshotHash)
-          : undefined;
         // False when the reviewer saw a result in a path a cloud worker may
         // not receive, so feedback quoting it is never forwarded to one.
         let scanExportable = true;

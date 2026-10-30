@@ -3424,6 +3424,8 @@ describe("code review gate", () => {
     /** Answers for checks of earlier findings; each defaults to fixed. */
     fixChecks?: (FixCheck | Error)[];
     reviewer?: { kind: "local" | "openai" };
+    /** Runs the worker as a cloud provider, ahead of the reviewer. */
+    cloudWorker?: boolean;
     attempts?: number;
     extraChanges?: { path: string; before: null; after: string }[];
     prepare?: (root: string) => Promise<void>;
@@ -3438,9 +3440,12 @@ describe("code review gate", () => {
   }) => {
     const { root, config, data } = await fixture();
     const reviewerKind = options.reviewer?.kind ?? "local";
-    config.policy.providers = ["local", "reviewer"];
+    config.policy.providers = [
+      options.cloudWorker ? "cloud" : "local",
+      "reviewer",
+    ];
     config.policy.maxAttempts = options.attempts ?? 3;
-    if (reviewerKind !== "local") {
+    if (reviewerKind !== "local" || options.cloudWorker) {
       config.policy.inference = "allowlisted";
       config.policy.network = "allowlisted";
       config.policy.allowedHosts = ["api.openai.com"];
@@ -3457,6 +3462,13 @@ describe("code review gate", () => {
         ? { apiKeyEnv: "GRAPH_TEST_REVIEW_KEY" }
         : {}),
     });
+    if (options.cloudWorker) {
+      await configureProvider(data, {
+        id: "cloud",
+        kind: "openai",
+        model: "fixture",
+      });
+    }
     const feedback: (string | undefined)[] = [];
     const reviewed: string[] = [];
     const fixChecked: { id: string; diff: string }[] = [];
@@ -3515,6 +3527,7 @@ describe("code review gate", () => {
     const plan = await engine.createPlan({
       objective: "Fix addition",
       acceptance: ["2 + 3 is 5"],
+      ...(options.cloudWorker ? { providerId: "cloud" } : {}),
     });
     const result = await engine.wait(
       (await engine.start(plan.id, { approvedByPerson: true })).id,
@@ -3833,6 +3846,49 @@ describe("code review gate", () => {
       ).toBe(false);
     });
 
+    it("keeps a local reviewer's feedback quoting a non-export path away from a cloud worker", async () => {
+      vi.stubEnv("GRAPH_TEST_REVIEW_KEY", "fixture-only-not-a-real-key");
+      const changes = (given: Given) => ({
+        ...approve,
+        verdict: "request-changes" as const,
+        summary: "Fix the finding in private/notes.txt",
+        scanRulings: given.map(({ id }) => ({
+          id,
+          ruling: "raised" as const,
+          reason: "private/notes.txt leaks a value",
+        })),
+      });
+      const { feedback } = await setup({
+        cloudWorker: true,
+        reviews: [approve],
+        attempts: 2,
+        prepare: baselineOnly,
+        configure: async (config) => {
+          config.policy.exportPaths = ["math.cjs", "math.test.cjs"];
+        },
+        securityScan: async () => ({
+          tools: ["semgrep"],
+          findings: [
+            {
+              tool: "semgrep",
+              rule: "r",
+              path: "private/notes.txt",
+              line: 7,
+              message: "do not send this",
+              fingerprint: "fresh",
+            },
+          ],
+          errors: [],
+          unscanned: [],
+        }),
+        reviewFrom: changes,
+      });
+      expect(feedback).toHaveLength(2);
+      expect(feedback[1]).toContain("Code review requested changes");
+      expect(feedback[1]).not.toContain("private/notes.txt");
+      expect(feedback[1]).not.toContain("do not send this");
+    });
+
     it("never lets a dropped ruling clear the security gate", async () => {
       const { result, events } = await setup({
         reviews: [approve],
@@ -3886,7 +3942,7 @@ describe("code review gate", () => {
 
     it("does not blame the reviewer when the scan itself stops the run", async () => {
       const lockfile = "package-lock.json";
-      const { result } = await setup({
+      const { result, events } = await setup({
         reviews: [approve],
         attempts: 1,
         prepare: baselineOnly,
@@ -3903,6 +3959,7 @@ describe("code review gate", () => {
       expect(result.error).toContain("no OSV vulnerability database");
       expect(result.error).not.toMatch(/^Code review did not complete/);
       expect(result.error).not.toContain("Code review did not complete");
+      expect(stoppedAtReview(events)).toBe(false);
     });
 
     it("rules on more results than the old fixed cap of 100", async () => {

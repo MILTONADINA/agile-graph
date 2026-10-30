@@ -195,9 +195,10 @@ started from, so neither an uncommitted edit nor a later checkout, branch
 switch or commit can accept findings or switch the gate off for that run; a
 malformed baseline, or a Git error reading it, fails the run. When a run starts, the engine checks that the
 scanner image (`graph-security:local`) is built, before any worker is paid.
-Each time a result passes the required checks (and review, when a reviewer
-is configured), it scans the run's verified workspace, including files the
-worker created, and records `security.scan_completed`.
+The engine scans the run's verified workspace, including files the worker
+created, once per verified snapshot (before the review when a reviewer is
+configured), and the gate records `security.scan_completed` once the result
+has passed the required checks and review.
 
 - A finding missing from the baseline is returned to the worker as feedback
   (tool, rule, file and line) and the worker tries again within

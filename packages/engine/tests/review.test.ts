@@ -527,7 +527,7 @@ describe("scan rulings", () => {
     reason,
   });
 
-  it("gives a finding the same ID whatever the repeat suffix or case of its text", () => {
+  it("derives a stable ID from a fingerprint and a different one for a repeat", () => {
     expect(scanFindingId("abc")).toBe(scanFindingId("abc"));
     expect(scanFindingId("abc")).not.toBe(scanFindingId("abc#2"));
     expect(scanFindingId("abc")).toMatch(/^F[0-9a-f]{10}$/);
