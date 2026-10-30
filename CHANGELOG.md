@@ -61,6 +61,9 @@
 
 ### Fixed
 
+- Published `@agile-graph/engine` and `@agile-graph/contracts` JavaScript no
+  longer ends with `sourceMappingURL` comments naming maps the tarballs never
+  carried (#247).
 - `npm run preflight` now builds the engine before the script tests when one
   of them needs `packages/engine/dist`, so a fresh checkout no longer fails
   `readme-quickstart.test.mjs` (#228).
