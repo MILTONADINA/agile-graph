@@ -225,19 +225,18 @@ describe("property: pytest ini reader", () => {
       });
     return { prefix: lines(random, int(random, 3)), sections };
   }
-  // Only variation iniconfig ignores: line ending, trailing whitespace and a
-  // trailing comment after a header. Leading indentation and spaces inside a
-  // header change what pytest reads, so they are not generated.
-  type Style = { eol: string; pad: () => string; note: () => string };
+  // Only variation the gate provably ignores: line ending and trailing
+  // whitespace. Header comments, leading indentation and spaces inside a
+  // header are kept as written (fail closed), so they are not generated.
+  type Style = { eol: string; pad: () => string };
   const style = (random: Random): Style => ({
     eol: pick(random, ["\n", "\r\n"]),
     pad: () => pick(random, ["", " ", "\t", "  "]),
-    note: () => pick(random, ["", " ; x", " # y"]),
   });
   function render(doc: Document, how: Style): string {
     const out = doc.prefix.map((text) => text + how.pad());
     for (const section of doc.sections) {
-      out.push(`[${section.header}]${how.pad()}${how.note()}`);
+      out.push(`[${section.header}]${how.pad()}`);
       for (const text of section.lines) out.push(text + how.pad());
     }
     return out.join(how.eol) + how.eol;
@@ -260,7 +259,7 @@ describe("property: pytest ini reader", () => {
       expect(pytestIniSections(once), fail(JSON.stringify(text))).toBe(once);
     }
   });
-  it("ignores line endings, trailing whitespace and header comments", () => {
+  it("ignores line endings and trailing whitespace", () => {
     const random = mulberry32(SEED);
     for (let index = 0; index < CASES; index++) {
       const doc = document(random);
@@ -286,7 +285,7 @@ describe("property: pytest ini reader", () => {
             : { ...section, lines: lines(random, int(random, 5)) },
         ),
       };
-      const how = { ...style(random), note: () => "" };
+      const how = style(random);
       const a = render(doc, how);
       const b = render(other, how);
       expect(changed("setup.cfg", a, b), fail(JSON.stringify([a, b]))).toBe(
@@ -312,7 +311,7 @@ describe("property: pytest ini reader", () => {
           return { ...section, lines: copy };
         }),
       };
-      const how = { ...style(random), note: () => "" };
+      const how = style(random);
       const a = render(doc, how);
       const b = render(edited, how);
       expect(changed("setup.cfg", a, b), fail(JSON.stringify([a, b]))).toBe(

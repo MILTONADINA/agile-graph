@@ -522,7 +522,7 @@ describe("verification configuration gate", () => {
     expect(changed(cfg("[tool:pytest]"), cfg("  [  tool:pytest  ]  "))).toBe(
       true,
     );
-    expect(changed(cfg("[pytest]"), cfg("[pytest]  ; note"))).toBe(false);
+    expect(changed(cfg("[pytest]"), cfg("[pytest]  ; note"))).toBe(true);
     expect(changed(cfg("[pytest]"), cfg("[pytest2]"))).toBe(true);
     expect(changed(cfg("[pytest]"), cfg("[tool:pytest]"))).toBe(true);
   });
