@@ -183,6 +183,37 @@ describe("verification configuration gate", () => {
         ),
       ).toBe(false);
     });
+    it("reads a table header and an inline table as the same settings", () => {
+      expect(
+        changed(
+          '[tool.pytest]\nini_options = { addopts = "-x" }\n',
+          '[tool.pytest.ini_options]\naddopts = "-x"\n',
+        ),
+      ).toBe(false);
+      expect(
+        changed(
+          "[tool.pytest.ini_options]\n",
+          "tool.pytest.ini_options = {}\n",
+        ),
+      ).toBe(false);
+      expect(
+        changed(
+          "tool.pytest = { ini_options = { addopts = '-x' } }\n",
+          "tool.pytest.ini_options.addopts = '-x'\n",
+        ),
+      ).toBe(false);
+      expect(
+        changed(
+          "[tool.pytest]\nini_options = { addopts = '-x' }\n",
+          "[tool.pytest]\nini_options = { addopts = '-y' }\n",
+        ),
+      ).toBe(true);
+    });
+    it("sees an added entry of an array of tables, even an empty one", () => {
+      const entry = "[[tool.pytest.hooks]]\nname = 'a'\n";
+      expect(changed(entry, entry + entry)).toBe(true);
+      expect(changed(entry, entry + "[[tool.pytest.hooks]]\n")).toBe(true);
+    });
     it("leaves ordinary dependency bumps alone, including inline tables", () => {
       const dev = (v: string) =>
         base +
@@ -482,6 +513,17 @@ describe("verification configuration gate", () => {
   it("gates karma.conf.js and .babelrc", () => {
     for (const f of ["karma.conf.js", ".babelrc", ".babelrc.json"])
       expect(changedVerificationConfig(f, "a", "b"), f).toBe(true);
+  });
+  it("reads a setup.cfg pytest header the same however it is spaced", () => {
+    const cfg = (header: string) => `${header}\naddopts = -x\n`;
+    const changed = (before: string, after: string) =>
+      changedVerificationConfig("setup.cfg", before, after);
+    expect(changed(cfg("[pytest]"), cfg("[ pytest ]"))).toBe(false);
+    expect(changed(cfg("[tool:pytest]"), cfg("  [  tool:pytest  ]  "))).toBe(
+      false,
+    );
+    expect(changed(cfg("[pytest]"), cfg("[pytest2]"))).toBe(true);
+    expect(changed(cfg("[pytest]"), cfg("[tool:pytest]"))).toBe(true);
   });
   it("reads a setup.cfg section header with a semicolon comment", () => {
     expect(
