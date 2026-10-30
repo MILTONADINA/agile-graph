@@ -652,6 +652,10 @@ export function changedVerificationConfig(
       pytestIniSections(before) !== pytestIniSections(after)
     );
   if (base === "pyproject.toml") {
+    // pytest and coverage open the file in text mode, where a bare CR is a
+    // line break; the gate lexes it as whitespace, so a comment could hide a
+    // section from the gate. Fail closed, as for ODD_INI_BYTES.
+    if (/\r(?!\n)/.test(before) || /\r(?!\n)/.test(after)) return true;
     const was = pytestToml(before);
     const now = pytestToml(after);
     // Text that cannot be read with confidence counts as a change.

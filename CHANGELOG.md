@@ -29,7 +29,7 @@
   `npm-run-all` or `concurrently "npm:x"` are followed, and a script pattern or
   variable gates every script, as does a backslash, variable or backtick anywhere in a gated
   script's command line or a glob character class or extglob in a `run-s` target.
-  Leading whitespace in `setup.cfg` lines is significant for the comparison. Fail closed on bytes the two Python readers lex differently: a `setup.cfg` that contains a bare CR, VT, FF, `\x1c`-`\x1f`, NEL, LS, PS, BOM or NUL anywhere is treated as a change (configparser and iniconfig split or strip those differently); comment lines are skipped like configparser; a header is read both as configparser does (to the last `]`) and as iniconfig does (cut at the first `#` or `;`); `[DEFAULT]` counts as a gated section.
+  Leading whitespace in `setup.cfg` lines is significant for the comparison. Fail closed on bytes the two Python readers lex differently: a `setup.cfg` that contains a bare CR, VT, FF, `\x1c`-`\x1f`, NEL, LS, PS, BOM or NUL anywhere is treated as a change (configparser and iniconfig split or strip those differently); comment lines are skipped like configparser; a header is read both as configparser does (to the last `]`) and as iniconfig does (cut at the first `#` or `;`); `[DEFAULT]` counts as a gated section. A `pyproject.toml` that contains a bare CR anywhere is treated as a change (pytest and coverage read it in text mode, where a bare CR is a line break).
   Not gated, on purpose: a coverage rc file named
   with `--rcfile`, `turbo.json`/`nx.json` task graphs, and `-x test` in a
   Makefile or CI file. A `pyproject.toml` date-time written with a space is now
