@@ -514,14 +514,15 @@ describe("verification configuration gate", () => {
     for (const f of ["karma.conf.js", ".babelrc", ".babelrc.json"])
       expect(changedVerificationConfig(f, "a", "b"), f).toBe(true);
   });
-  it("reads a setup.cfg pytest header the same however it is spaced", () => {
+  it("counts a respelled setup.cfg pytest header as a change", () => {
     const cfg = (header: string) => `${header}\naddopts = -x\n`;
     const changed = (before: string, after: string) =>
       changedVerificationConfig("setup.cfg", before, after);
-    expect(changed(cfg("[pytest]"), cfg("[ pytest ]"))).toBe(false);
+    expect(changed(cfg("[pytest]"), cfg("[ pytest ]"))).toBe(true);
     expect(changed(cfg("[tool:pytest]"), cfg("  [  tool:pytest  ]  "))).toBe(
-      false,
+      true,
     );
+    expect(changed(cfg("[pytest]"), cfg("[pytest]  ; note"))).toBe(false);
     expect(changed(cfg("[pytest]"), cfg("[pytest2]"))).toBe(true);
     expect(changed(cfg("[pytest]"), cfg("[tool:pytest]"))).toBe(true);
   });

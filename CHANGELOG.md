@@ -79,8 +79,8 @@
   carried (#247).
 - The verification-config gate no longer counts a `pyproject.toml` that
   respells the same pytest settings (a table header against an inline table or
-  dotted keys) or a `setup.cfg` header with different inner spacing as a
-  change, and it now sees an added empty `[[tool.pytest...]]` entry.
+  dotted keys) as a change, and it now sees an added empty
+  `[[tool.pytest...]]` entry.
 - `npm run preflight` now builds the engine before the script tests when one
   of them needs `packages/engine/dist`, so a fresh checkout no longer fails
   `readme-quickstart.test.mjs` (#228).
