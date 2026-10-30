@@ -598,3 +598,13 @@ export function changedVerificationConfig(
   }
   return false;
 }
+
+/** Exported for property tests, not part of the engine API. */
+export const internals = {
+  tokenize,
+  runnerTargets,
+  pytestIniSections,
+  pytestToml,
+  BOOLEAN_OPTIONS,
+  VALUE_OPTIONS,
+};
