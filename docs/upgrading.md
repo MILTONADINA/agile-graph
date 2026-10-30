@@ -80,9 +80,11 @@ a database only when its version is newer than its own.
 3. Restore your old `mcp.toolHashes` and client configuration from git. The
    0.2.0 server is named `graph-engineering` and has its own hashes.
 4. The run database needs no change. If you want the pre-upgrade state,
-   restore the backup into a new directory with
-   `graph-engine restore <backup> <destination>` and point
-   `GRAPH_ENGINE_DATA_DIR` at it.
+   restore the backup into the project folder of a new data root with
+   `graph-engine restore <backup> <new-root>/projects/<projectId>`, then set
+   `GRAPH_ENGINE_DATA_DIR` to `<new-root>`. The engine looks for a project's
+   data in `projects/<projectId>` under that variable, so pointing it at the
+   restore destination itself opens an empty database.
 5. 0.2.0 looks for the `graph-engineering` data folder. If 0.3.0 or later
    created the `agile-graph` folder on a machine with no old folder, set
    `GRAPH_ENGINE_DATA_DIR` to that folder when you roll back, or 0.2.0 sees no
