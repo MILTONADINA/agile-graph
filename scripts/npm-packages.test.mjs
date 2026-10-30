@@ -5,7 +5,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repository = fileURLToPath(new URL("..", import.meta.url));
@@ -152,4 +154,58 @@ test("the release workflow publishes only reviewed commits from main, without a 
   assert.doesNotMatch(workflow, /secrets\.|NPM_TOKEN|NODE_AUTH_TOKEN/);
   assert.match(workflow, /node --test scripts\/npm-packages\.test\.mjs/);
   assert.match(workflow, /node scripts\/npm-smoke\.mjs/);
+});
+
+async function javaScriptFiles(directory) {
+  const found = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...(await javaScriptFiles(path)));
+    else if (entry.name.endsWith(".js")) found.push(path);
+  }
+  return found;
+}
+
+test("no packed JavaScript file points at a source map", async () => {
+  // The tarballs hold no .map files, so a sourceMappingURL comment would name
+  // a file that is not there. This packs for real and reads the tarball.
+  execFileSync(
+    "node",
+    ["packages/engine/scripts/prepack.mjs", "--assets-only"],
+    { cwd: repository, stdio: "inherit" },
+  );
+  const scratch = await mkdtemp(join(tmpdir(), "ag-sourcemap-"));
+  try {
+    for (const workspace of ["packages/contracts", "packages/engine"]) {
+      const destination = await mkdtemp(join(scratch, "pack-"));
+      const [result] = JSON.parse(
+        execFileSync(
+          "npm",
+          [
+            "pack",
+            "--json",
+            "--ignore-scripts",
+            "--workspace",
+            workspace,
+            "--pack-destination",
+            destination,
+          ],
+          { cwd: repository, encoding: "utf8" },
+        ),
+      );
+      execFileSync("tar", ["-xzf", join(destination, result.filename)], {
+        cwd: destination,
+      });
+      const files = await javaScriptFiles(join(destination, "package", "dist"));
+      assert.ok(files.length > 0, `no JavaScript packed for ${workspace}`);
+      for (const file of files)
+        assert.doesNotMatch(
+          await readFile(file, "utf8"),
+          /\/\/[#@]\s*sourceMappingURL=/,
+          `${workspace}: ${file.slice(destination.length + 1)}`,
+        );
+    }
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
 });

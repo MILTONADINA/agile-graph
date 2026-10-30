@@ -64,6 +64,10 @@ it.
   - Test: scripts/pack-twice.test.mjs :: two packs of an unchanged package are identical
   - Test: scripts/pack-twice.test.mjs :: a package whose content changes on every pack fails with a file diff
   - Test: scripts/pack-twice.test.mjs :: the release and CI workflows run the script
+- AC9: The system shall ship no JavaScript file in either tarball that ends
+  with a `sourceMappingURL` comment, since the maps it would name are not
+  published.
+  - Test: scripts/npm-packages.test.mjs :: no packed JavaScript file points at a source map
 
 ## Security considerations
 
