@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
 ### Added
 
 - `context_get`, `symbol_search` and `graph_neighbors` results now carry
