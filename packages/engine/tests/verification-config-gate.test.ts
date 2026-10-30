@@ -119,6 +119,22 @@ describe("verification configuration gate", () => {
         ),
       ).toBe(true);
     });
+    it("decodes escapes in double-quoted keys", () => {
+      const add = '["\\u0074ool".pytest.ini_options]\naddopts = "-k nothing"\n';
+      expect(changed(base, base + add)).toBe(true);
+      expect(
+        changed(
+          base,
+          '"\\u0074ool".pytest.ini_options.addopts = "-k x"\n' + base,
+        ),
+      ).toBe(true);
+      expect(
+        changed(
+          "[tool]\n",
+          '[tool]\n"py\\u0074est" = { ini_options = { addopts = "-k x" } }\n',
+        ),
+      ).toBe(true);
+    });
     it("sees a quoted or spaced table header", () => {
       expect(
         changed(
@@ -306,6 +322,35 @@ describe("verification configuration gate", () => {
     await expect(edit(root, "package.json", '"tsc"', '"true"')).rejects.toThrow(
       /Verification configuration needs approval: package\.json/,
     );
+  });
+  it("follows npm run, pnpm and yarn with option flags before the script", () => {
+    for (const run of [
+      "npm run -s unit",
+      "npm run --silent unit",
+      "npm --silent run unit",
+      "yarn --silent unit",
+      "pnpm -s run unit",
+    ]) {
+      const m = (u: string) =>
+        JSON.stringify({ scripts: { test: run, unit: u } });
+      expect(
+        changedVerificationConfig("package.json", m("vitest run"), m("true")),
+        run,
+      ).toBe(true);
+    }
+  });
+  it("gates karma.conf.js and .babelrc", () => {
+    for (const f of ["karma.conf.js", ".babelrc", ".babelrc.json"])
+      expect(changedVerificationConfig(f, "a", "b"), f).toBe(true);
+  });
+  it("reads a setup.cfg section header with a semicolon comment", () => {
+    expect(
+      changedVerificationConfig(
+        "setup.cfg",
+        "[metadata]\nname = a\n",
+        "[metadata]\nname = a\n[tool:pytest] ; x\naddopts = -k nothing\n",
+      ),
+    ).toBe(true);
   });
   it("validates the approval list in a policy", () => {
     const policy = (paths: unknown) => ({
