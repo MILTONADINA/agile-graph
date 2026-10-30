@@ -310,7 +310,7 @@ function gatedNames(all: Record<string, unknown>[]): {
           if (target.startsWith("-")) continue;
           // A glob, a variable, a substitution or a pnpm regex names scripts
           // this reader does not expand: every script counts.
-          if (/[*?{$`]/.test(target) || target.startsWith("/"))
+          if (/[*?{$`\\]/.test(target) || target.startsWith("/"))
             everything = true;
           // npm also runs the pre and post hooks of every script it reaches.
           for (const hooked of [target, `pre${target}`, `post${target}`])
@@ -341,7 +341,12 @@ function pytestIniSections(text: string): string {
   const kept: string[] = [];
   let inside = false;
   for (const raw of text.split(/\r?\n/)) {
-    const header = /^\s*\[+\s*([^\]]+?)\s*\]+\s*(?:[#;].*)?$/.exec(raw)?.[1];
+    // configparser reads any line led by "[" up to the last "]" as a
+    // header, even with text after it, so the gate does too.
+    const header = /^\s*\[(.+)\]/
+      .exec(raw)?.[1]
+      ?.replace(/^\[+|\]+$/g, "")
+      .trim();
     if (header !== undefined)
       inside = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
     if (inside) kept.push(raw.trim());
@@ -515,12 +520,19 @@ export function changedVerificationConfig(
   const base = path.posix.basename(file).toLowerCase();
   if (RUNNER_CONFIG.test(base)) return true;
   // Maven and Gradle wrapper and tool settings live in directories, not only
-  // in files with a distinctive name. `buildSrc` is case-sensitive, as Gradle is.
-  const segments = file.split("/");
+  // in files with a distinctive name, at any depth. Names are lowercased: a
+  // differently cased directory lands in the real one on a case-insensitive
+  // checkout.
+  const segments = file.toLowerCase().split("/");
   if (
-    segments[0] === ".mvn" ||
-    segments[0] === "buildSrc" ||
-    file.startsWith("gradle/wrapper/")
+    segments.includes(".mvn") ||
+    segments.includes("buildsrc") ||
+    segments.some(
+      (s, i) =>
+        s === "gradle" &&
+        segments[i + 1] === "wrapper" &&
+        i + 1 < segments.length - 1,
+    )
   )
     return true;
   if (base === "package.json") {
