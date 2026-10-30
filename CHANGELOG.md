@@ -17,6 +17,11 @@
   sections of `pyproject.toml` and `setup.cfg`) is refused and returned
   to the worker as feedback unless a person listed the path in
   `policy.approvedVerificationConfigPaths`.
+  The `pyproject.toml` pytest settings are read as TOML with the key path
+  normalised, so spaced or quoted dotted keys and headers, inline tables and
+  multi-line values all count; a `pyproject.toml` that cannot be read
+  confidently is treated as a configuration change. Ordinary dependency
+  bumps (`pytest-cov` or `pytest` under any dependency table) are not gated.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice

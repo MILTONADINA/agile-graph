@@ -70,19 +70,148 @@ function npmEntries(
     if (key in record) entries.push(`${key}=${JSON.stringify(record[key])}`);
   return entries.sort();
 }
-// Lines of the pytest sections of an ini or TOML file.
-function pytestSections(text: string): string {
+// Lines of the pytest sections of an ini file (setup.cfg).
+function pytestIniSections(text: string): string {
   const kept: string[] = [];
   let inside = false;
   for (const raw of text.split(/\r?\n/)) {
     const header = /^\s*\[+\s*([^\]]+?)\s*\]+\s*(?:#.*)?$/.exec(raw)?.[1];
     if (header !== undefined) inside = /^(tool[.:])?pytest(\.|$)/.test(header);
-    // A dotted key (tool.pytest.ini_options.addopts = ...) sets the same
-    // option outside a pytest section.
-    if (inside || /^\s*["']?(?:tool[.:]pytest|pytest\.)[\w."'-]*\s*=/.test(raw))
-      kept.push(raw.trim());
+    if (inside) kept.push(raw.trim());
   }
   return kept.join("\n");
+}
+
+// The pytest settings of a pyproject.toml as sorted `path = value` lines, with
+// header and key spelling normalised: quotes and spaces around dots, dotted
+// keys, tables and inline tables all give the same path. Returns undefined
+// when the text is not read with confidence, so the caller fails closed.
+function pytestToml(text: string): string | undefined {
+  const src = text.replace(new RegExp("^\\uFEFF"), "");
+  const out: string[] = [];
+  let i = 0;
+  const fail = (): never => {
+    throw new Error("unreadable");
+  };
+  const blank = () => {
+    while (i < src.length && /[ \t\r]/.test(src[i]!)) i++;
+  };
+  const skipAll = () => {
+    for (;;) {
+      blank();
+      if (src[i] === "#") while (i < src.length && src[i] !== "\n") i++;
+      else if (src[i] === "\n") i++;
+      else return;
+    }
+  };
+  const str = (): string => {
+    const q = src[i]!;
+    const triple = src.startsWith(q + q + q, i);
+    const open = triple ? 3 : 1;
+    let j = i + open;
+    for (;;) {
+      if (j >= src.length) return fail();
+      if (q === '"' && src[j] === "\\") j += 2;
+      else if (triple ? src.startsWith(q + q + q, j) : src[j] === q) break;
+      else if (!triple && src[j] === "\n") return fail();
+      else j++;
+    }
+    // A closing run of quotes may be longer by up to two quotes.
+    let end = j + open;
+    if (triple) while (src[end] === q && end - j < 5) end++;
+    const raw = src.slice(i, end);
+    i = end;
+    return raw;
+  };
+  const unquote = (raw: string): string => {
+    const m = /^("""|'''|"|')([\s\S]*)\1$/.exec(raw);
+    return m ? m[2]! : raw;
+  };
+  const key = (): string[] => {
+    const parts: string[] = [];
+    for (;;) {
+      blank();
+      if (src[i] === '"' || src[i] === "'") parts.push(unquote(str()));
+      else {
+        const m = /^[A-Za-z0-9_-]+/.exec(src.slice(i, i + 256));
+        if (!m) return fail();
+        parts.push(m[0]);
+        i += m[0].length;
+      }
+      blank();
+      if (src[i] !== ".") return parts;
+      i++;
+    }
+  };
+  const keep = (path: string[], value: string) => {
+    if (path[0] === "tool" && path[1] === "pytest")
+      out.push(`${JSON.stringify(path)} = ${value}`);
+  };
+  const value = (path: string[]) => {
+    blank();
+    const c = src[i];
+    if (c === '"' || c === "'") keep(path, str());
+    else if (c === "[") {
+      i++;
+      for (let n = 0; ; n++) {
+        skipAll();
+        if (src[i] === "]") break;
+        value([...path, `[${n}]`]);
+        skipAll();
+        if (src[i] === ",") i++;
+        else if (src[i] !== "]") fail();
+      }
+      i++;
+    } else if (c === "{") {
+      i++;
+      keep(path, "{}");
+      for (;;) {
+        skipAll();
+        if (src[i] === "}") break;
+        const k = key();
+        blank();
+        if (src[i] !== "=") fail();
+        i++;
+        value([...path, ...k]);
+        skipAll();
+        if (src[i] === ",") i++;
+        else if (src[i] !== "}") fail();
+      }
+      i++;
+    } else {
+      const m = /^[^\s,\]}#]+/.exec(src.slice(i));
+      if (!m) return fail();
+      keep(path, m[0]);
+      i += m[0].length;
+    }
+  };
+  try {
+    let table: string[] = [];
+    for (;;) {
+      skipAll();
+      if (i >= src.length) break;
+      if (src[i] === "[") {
+        const array = src[i + 1] === "[";
+        i += array ? 2 : 1;
+        table = key();
+        blank();
+        if (src.slice(i, i + (array ? 2 : 1)) !== (array ? "]]" : "]")) fail();
+        i += array ? 2 : 1;
+      } else {
+        const k = key();
+        blank();
+        if (src[i] !== "=") fail();
+        i++;
+        value([...table, ...k]);
+      }
+      blank();
+      if (src[i] === "#") while (i < src.length && src[i] !== "\n") i++;
+      if (i < src.length && src[i] !== "\n") fail();
+    }
+  } catch {
+    return undefined;
+  }
+  return out.sort().join("\n");
 }
 
 /** Whether going from `before` to `after` changes what the checks load. */
@@ -105,7 +234,13 @@ export function changedVerificationConfig(
       JSON.stringify(npmEntries(now, names))
     );
   }
-  if (base === "pyproject.toml" || base === "setup.cfg")
-    return pytestSections(before) !== pytestSections(after);
+  if (base === "setup.cfg")
+    return pytestIniSections(before) !== pytestIniSections(after);
+  if (base === "pyproject.toml") {
+    const was = pytestToml(before);
+    const now = pytestToml(after);
+    // Text that cannot be read with confidence counts as a change.
+    return was === undefined || now === undefined || was !== now;
+  }
   return false;
 }
