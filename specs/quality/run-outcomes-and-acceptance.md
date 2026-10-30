@@ -45,10 +45,11 @@ A team learns by looking back at what it decided and how that turned out. Operat
   - Test: packages/engine/tests/verification-config-gate.test.ts :: follows scripts reached through run-s, npm-run-all and concurrently npm:x
   - Test: packages/engine/tests/verification-config-gate.test.ts :: accepts a source-only patch and a non-test package.json edit
   - Test: packages/engine/tests/verification-config-gate.test.ts :: accepts a path a person approved in the policy
-- AC8: When a `pyproject.toml` or `setup.cfg` patch only respells the pytest settings (table headers, dotted keys, inline tables, comments, key order, line endings), or a `setup.cfg` patch only changes trailing whitespace or line endings, the system shall not count it as a verification-configuration change; any change to a value under `tool.pytest`, and any change to a `setup.cfg` section header's text (spacing, indentation or a trailing comment), shall be refused.
+- AC8: When a `pyproject.toml` patch only respells the pytest settings (table headers, dotted keys, inline tables, comments, key order, line endings), or a `setup.cfg` patch only changes trailing whitespace or line endings, the system shall not count it as a verification-configuration change; any change to a value under `tool.pytest`, and any change to a `setup.cfg` section header's text (spacing, indentation or a trailing comment), shall be refused. For `setup.cfg` a header with a trailing comment is read the way iniconfig reads it, and a changed comment line or reordered key inside a pytest section is a change.
   - Test: packages/engine/tests/verification-config-gate.test.ts :: reads a table header and an inline table as the same settings
   - Test: packages/engine/tests/verification-config-gate.test.ts :: sees an added entry of an array of tables, even an empty one
   - Test: packages/engine/tests/verification-config-gate.test.ts :: counts a respelled setup.cfg pytest header as a change
+  - Test: packages/engine/tests/verification-config-gate.test.ts :: reads a setup.cfg header the way iniconfig cuts comments
   - Test: packages/engine/tests/property-verification-config.test.ts :: reads every spelling of the same settings as the same settings
   - Test: packages/engine/tests/property-verification-config.test.ts :: sees any changed, added or removed setting under tool.pytest, in any spelling
   - Test: packages/engine/tests/property-verification-config.test.ts :: ignores line endings and trailing whitespace

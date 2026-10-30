@@ -526,6 +526,36 @@ describe("verification configuration gate", () => {
     expect(changed(cfg("[pytest]"), cfg("[pytest2]"))).toBe(true);
     expect(changed(cfg("[pytest]"), cfg("[tool:pytest]"))).toBe(true);
   });
+  it("reads a setup.cfg header the way iniconfig cuts comments", () => {
+    const changed = (before: string, after: string) =>
+      changedVerificationConfig("setup.cfg", before, after);
+    const h = "[tool:pytest] ; x]\n";
+    expect(changed(`${h}addopts = -x\n`, `${h}addopts = -x --no-cov\n`)).toBe(
+      true,
+    );
+    expect(changed(`${h}addopts = -x\n`, `${h}addopts = -x\nk = v\n`)).toBe(
+      true,
+    );
+    const c = "[tool:pytest] # c]\n";
+    expect(
+      changed(`${c}addopts = -x\n`, `${c}addopts = -x\npython_files = a\n`),
+    ).toBe(true);
+    // "[metadata#]" is a continuation line for iniconfig, not a section end.
+    const m = "[tool:pytest]\naddopts = -x\n[metadata#]\n";
+    expect(changed(m, `${m}testpaths = nowhere\n`)).toBe(true);
+    const t = "[tool:pytest]\naddopts = -x\n[tool;x]\n";
+    expect(changed(t, `${t}testpaths = nowhere\n`)).toBe(true);
+  });
+  it("sees an empty array added or removed in pyproject.toml", () => {
+    const t = (body: string) => `[tool.pytest.ini_options]\n${body}\n`;
+    const changed = (a: string, b: string) =>
+      changedVerificationConfig("pyproject.toml", t(a), t(b));
+    expect(changed("testpaths = []", 'testpaths = ["a"]')).toBe(true);
+    expect(changed("addopts = '-x'\ntestpaths = []", "addopts = '-x'")).toBe(
+      true,
+    );
+    expect(changed("testpaths = []", "testpaths=[ ]")).toBe(false);
+  });
   it("reads a setup.cfg section header with a semicolon comment", () => {
     expect(
       changedVerificationConfig(
