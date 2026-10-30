@@ -699,6 +699,35 @@ describe("verification configuration gate", () => {
           "[metadata]\nname = a\n[egg_info]\n",
           "[metadata]\nname = a\n[egg_info]\n  [coverage:report]\nfail_under = 0\n",
         ],
+        // configparser drops comment lines before its indent logic.
+        ...["#", ";"].map((c) => [
+          "[metadata]\nname = a\n[egg_info]\n",
+          `[metadata]\nname = a\n[egg_info]\n${c} tag\n    [coverage:report]\nfail_under = 0\n`,
+        ]),
+        [
+          "# c\n[flake8]\nx = 1\n",
+          "# c\n    [coverage:report]\nfail_under = 0\n[flake8]\nx = 1\n",
+        ],
+        [
+          "[coverage:run]\nsource = pkg\n",
+          "[coverage:run]\nsource = pkg\n        # c\n  [x]\nomit = *\n",
+        ],
+        // Python splits lines on more than LF and CRLF.
+        ...["\r", "\x1c", "\x0c", "\u2028"].map((sep) => [
+          "[metadata]\nname = a\n",
+          `[metadata]\nname = a${sep}[tool:pytest]${sep}addopts = -q\n`,
+        ]),
+        // Dropping a header that ends a pytest section folds the next
+        // indented header into that section's last value.
+        [
+          "[tool:pytest]\nfail_under = 90\n[flake8]\n    [coverage:report]\n",
+          "[tool:pytest]\nfail_under = 90\n    [coverage:report]\n",
+        ],
+        // Python strips \x1f and \x85 as whitespace; JS does not.
+        ...["\x1f", "\x1c", "\x85"].map((ws) => [
+          "[metadata]\nname = a\n[egg_info]\n",
+          `[metadata]\nname = a\n[egg_info]\n${ws}[coverage:report]\nfail_under = 0\n`,
+        ]),
       ] as const)
         expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
     });

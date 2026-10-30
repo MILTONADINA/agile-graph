@@ -353,20 +353,32 @@ function pytestIniSections(text: string): string {
   // reads a more-indented line after an option as a continuation of its
   // value, even when it looks like a header.
   let optionIndent: number | undefined;
-  for (const raw of text.split(/\r?\n/)) {
-    const indent = raw.length - raw.trimStart().length;
+  // Python splits lines on more than LF and CRLF (bare CR, \v, \f,
+  // \x1c-\x1e, NEL, LS, PS); splitting on the superset only over-gates.
+  const WS = /^[\s\x1c-\x1f\x85]+/;
+  for (const raw of text.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/)) {
+    const indent = raw.length - raw.replace(WS, "").length;
+    // configparser drops blank and comment lines before its indent logic.
+    if (raw.trim() === "" || /^\s*[#;]/.test(raw)) {
+      if (inside) kept.push(raw.trimEnd());
+      continue;
+    }
     const continuation = optionIndent !== undefined && indent > optionIndent;
     if (!continuation) {
       // configparser reads any line led by "[" up to the last "]" as a
       // header, even with text after it, so the gate does too.
-      const header = /^\s*\[(.+)\]/
+      const header = /^[\s\x1c-\x1f\x85]*\[(.+)\]/
         .exec(raw)?.[1]
         ?.replace(/^\[+|\]+$/g, "")
         .trim();
       if (header !== undefined) {
-        inside = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
+        const now = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
+        // Mark where a section ends, so removing the header that ends it
+        // (which folds what follows into its last value) shows up.
+        if (inside && !now) kept.push("\u0000end");
+        inside = now;
         optionIndent = undefined;
-      } else if (raw.trim() !== "") optionIndent = indent;
+      } else optionIndent = indent;
     }
     // Leading whitespace is kept: an indented line is a continuation of the
     // key above, so indenting a key removes it from the section.
