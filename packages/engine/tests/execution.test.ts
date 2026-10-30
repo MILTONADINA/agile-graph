@@ -3430,6 +3430,8 @@ describe("code review gate", () => {
     extraChanges?: { path: string; before: null; after: string }[];
     prepare?: (root: string) => Promise<void>;
     configure?: (config: ProjectConfig, root: string) => Promise<void>;
+    /** Runs as the worker is called for the given (1-based) round. */
+    beforeWorker?: (round: number, data: string) => Promise<void>;
     /** Builds the review from the scan findings the reviewer was given. */
     reviewFrom?: (given: { id: string; status: string }[]) => unknown;
     securityScan?: Parameters<typeof GraphEngine.open>[1] extends infer D
@@ -3479,6 +3481,7 @@ describe("code review gate", () => {
       dockerAvailable: async () => true,
       worker: viewing(["math.cjs", "math.test.cjs"], async (input) => {
         feedback.push(input.feedback);
+        await options.beforeWorker?.(feedback.length, data);
         return {
           model: "fixture",
           proposal: {
@@ -3887,6 +3890,74 @@ describe("code review gate", () => {
       expect(feedback[1]).toContain("Code review requested changes");
       expect(feedback[1]).not.toContain("private/notes.txt");
       expect(feedback[1]).not.toContain("do not send this");
+    });
+
+    it("withholds a local reviewer's stored finding from a reviewer reconfigured to a cloud provider, and from the worker", async () => {
+      vi.stubEnv("GRAPH_TEST_REVIEW_KEY", "fixture-only-not-a-real-key");
+      const quoted = "do not send this value";
+      const raised = (given: Given) => ({
+        ...approve,
+        verdict: "request-changes" as const,
+        summary: "Fix it",
+        findings: [
+          {
+            severity: "blocking" as const,
+            path: "private/notes.txt",
+            line: 7,
+            message: quoted,
+          },
+        ],
+        scanRulings: given.map(({ id }) => ({
+          id,
+          ruling: "raised" as const,
+          reason: "leaks a value",
+        })),
+      });
+      const { feedback, fixChecked, events } = await setup({
+        cloudWorker: true,
+        reviews: [approve],
+        attempts: 3,
+        prepare: baselineOnly,
+        configure: async (config) => {
+          config.policy.exportPaths = ["math.cjs", "math.test.cjs"];
+        },
+        beforeWorker: async (round, data) => {
+          // The reviewer is switched to a cloud provider before the retry.
+          if (round === 2)
+            await configureProvider(data, {
+              id: "reviewer",
+              kind: "openai",
+              model: "reviewer-fixture",
+              apiKeyEnv: "GRAPH_TEST_REVIEW_KEY",
+            });
+        },
+        securityScan: async () => ({
+          tools: ["semgrep"],
+          findings: [
+            {
+              tool: "semgrep",
+              rule: "r",
+              path: "private/notes.txt",
+              line: 7,
+              message: quoted,
+              fingerprint: "fresh",
+            },
+          ],
+          errors: [],
+          unscanned: [],
+        }),
+        reviewFrom: raised,
+      });
+      const completed = events.filter(
+        (event) => event.type === "review.completed",
+      );
+      // The cloud reviewer is never asked about the stored finding.
+      expect(fixChecked).toHaveLength(0);
+      for (const text of feedback.slice(1)) {
+        expect(text).not.toContain("private/notes.txt");
+        expect(text).not.toContain(quoted);
+      }
+      expect(completed[0]?.data.scanExportable).toBe(false);
     });
 
     it("never lets a dropped ruling clear the security gate", async () => {
