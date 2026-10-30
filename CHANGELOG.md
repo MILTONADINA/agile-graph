@@ -27,7 +27,7 @@
   skipped when finding the script, and an invocation that cannot be resolved
   gates every script of the manifests. Scripts named through `run-s`, `run-p`,
   `npm-run-all` or `concurrently "npm:x"` are followed, and a script pattern or
-  variable gates every script, as does a backslash or variable anywhere in a gated
+  variable gates every script, as does a backslash, variable or backtick anywhere in a gated
   script's command line or a glob character class or extglob in a `run-s` target.
   Leading whitespace in `setup.cfg` lines is significant for the comparison.
   Not gated, on purpose: a coverage rc file named

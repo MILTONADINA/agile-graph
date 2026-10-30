@@ -148,6 +148,8 @@ function runnerTargets(command: string): {
 } {
   const targets: string[] = [];
   let unresolved = false;
+  // A backtick is a command substitution the tokenizer cannot read.
+  if (command.includes("`")) unresolved = true;
   for (const segment of tokenize(command)) {
     for (const word of segment) {
       if (!word.quoted || !/\s/.test(word.text)) continue;
@@ -347,15 +349,25 @@ function npmEntries(
 function pytestIniSections(text: string): string {
   const kept: string[] = [];
   let inside = false;
+  // Indent of the last option line of the current section. configparser
+  // reads a more-indented line after an option as a continuation of its
+  // value, even when it looks like a header.
+  let optionIndent: number | undefined;
   for (const raw of text.split(/\r?\n/)) {
-    // configparser reads any line led by "[" up to the last "]" as a
-    // header, even with text after it, so the gate does too.
-    const header = /^\s*\[(.+)\]/
-      .exec(raw)?.[1]
-      ?.replace(/^\[+|\]+$/g, "")
-      .trim();
-    if (header !== undefined)
-      inside = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
+    const indent = raw.length - raw.trimStart().length;
+    const continuation = optionIndent !== undefined && indent > optionIndent;
+    if (!continuation) {
+      // configparser reads any line led by "[" up to the last "]" as a
+      // header, even with text after it, so the gate does too.
+      const header = /^\s*\[(.+)\]/
+        .exec(raw)?.[1]
+        ?.replace(/^\[+|\]+$/g, "")
+        .trim();
+      if (header !== undefined) {
+        inside = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
+        optionIndent = undefined;
+      } else if (raw.trim() !== "") optionIndent = indent;
+    }
     // Leading whitespace is kept: an indented line is a continuation of the
     // key above, so indenting a key removes it from the section.
     if (inside) kept.push(raw.trimEnd());

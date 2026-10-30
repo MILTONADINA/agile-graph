@@ -687,6 +687,18 @@ describe("verification configuration gate", () => {
           "[tool:pytest]\naddopts = -q\nminversion = 6\n",
           "[tool:pytest]\naddopts = -q\n  minversion = 6\n",
         ],
+        [
+          "[coverage:report]\nexclude_lines =\n    pragma: no cover\n[flake8]\nmax-line-length = 100\n",
+          "[coverage:report]\nexclude_lines =\n    pragma: no cover\n  [x]\nexclude_also = .\n[flake8]\nmax-line-length = 100\n",
+        ],
+        [
+          "[coverage:run]\nsource = pkg\n[coverage:report]\nfail_under = 90\n",
+          "[coverage:run]\nsource = pkg\n  [x]\nomit = *\n[coverage:report]\nfail_under = 90\n",
+        ],
+        [
+          "[metadata]\nname = a\n[egg_info]\n",
+          "[metadata]\nname = a\n[egg_info]\n  [coverage:report]\nfail_under = 0\n",
+        ],
       ] as const)
         expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
     });
@@ -741,6 +753,7 @@ describe("verification configuration gate", () => {
         "np\\m run unit",
         "npm r\\un unit",
         "$npm_execpath run unit",
+        "`echo npm` run unit",
       ])
         expect(unrelated(test), test).toBe(true);
       // A resolved target does not gate unrelated scripts.
