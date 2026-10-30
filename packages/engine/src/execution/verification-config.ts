@@ -8,12 +8,15 @@ import path from "node:path";
  * approval. Reading is shallow and offline, like the dependency gate.
  */
 const RUNNER_CONFIG =
-  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^\.npmrc$|^\.yarnrc(\.yml)?$|^\.pnpmfile\.cjs$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
+  /^(vitest|vite|jest|playwright|karma|cypress|ava|babel)\.(config|workspace)\.[cm]?[jt]s(on)?$|^(vitest|jest)\.(setup|global-setup)\.[cm]?[jt]s$|^karma\.conf\.[cm]?[jt]s$|^\.babelrc(\.json)?$|^\.mocharc(\.[a-z]+)?$|^\.nycrc(\.[a-z]+)?$|^\.npmrc$|^\.yarnrc(\.yml)?$|^\.pnpmfile\.cjs$|^(\.?pytest\.(ini|toml)|tox\.ini|conftest\.py|noxfile\.py|phpunit\.xml(\.dist)?)$/;
 const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
-const NPM_RUN =
-  /\b(?:npm\s+(?:run|run-script)|pnpm\s+run|yarn\s+run|yarn|pnpm)\s+([\w:.-]+)|\bnpm\s+(?:test|t)\b/g;
+const FLAGS = String.raw`(?:\s+-{1,2}[\w-]+(?:=\S*)?)*`;
+const NPM_RUN = new RegExp(
+  String.raw`\b(?:npm${FLAGS}\s+(?:run|run-script)|pnpm${FLAGS}\s+run|yarn\s+run|yarn|pnpm)${FLAGS}\s+([\w:.-]+)|\bnpm\s+(?:test|t)\b`,
+  "g",
+);
 
 function parse(text: string): Record<string, unknown> | undefined {
   try {
@@ -46,6 +49,7 @@ function gatedNames(all: Record<string, unknown>[]): Set<string> {
         if (typeof command !== "string") continue;
         for (const match of command.matchAll(NPM_RUN)) {
           const target = match[1] ?? "test";
+          if (target.startsWith("-")) continue;
           // npm also runs the pre and post hooks of every script it reaches.
           for (const hooked of [target, `pre${target}`, `post${target}`])
             if (!names.has(hooked)) {
@@ -75,7 +79,7 @@ function pytestIniSections(text: string): string {
   const kept: string[] = [];
   let inside = false;
   for (const raw of text.split(/\r?\n/)) {
-    const header = /^\s*\[+\s*([^\]]+?)\s*\]+\s*(?:#.*)?$/.exec(raw)?.[1];
+    const header = /^\s*\[+\s*([^\]]+?)\s*\]+\s*(?:[#;].*)?$/.exec(raw)?.[1];
     if (header !== undefined) inside = /^(tool[.:])?pytest(\.|$)/.test(header);
     if (inside) kept.push(raw.trim());
   }
@@ -125,6 +129,9 @@ function pytestToml(text: string): string | undefined {
   };
   const unquote = (raw: string): string => {
     const m = /^("""|'''|"|')([\s\S]*)\1$/.exec(raw);
+    // A basic string decodes escapes (\u0074 is t), so a key spelled with one
+    // cannot be compared as written: fail closed rather than decode.
+    if (m && m[1] === '"' && m[2]!.includes("\\")) return fail();
     return m ? m[2]! : raw;
   };
   const key = (): string[] => {

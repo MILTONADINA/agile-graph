@@ -18,7 +18,7 @@
   to the worker as feedback unless a person listed the path in
   `policy.approvedVerificationConfigPaths`.
   The `pyproject.toml` pytest settings are read as TOML with the key path
-  normalised, so spaced or quoted dotted keys and headers, inline tables and
+  normalised, so spaced, quoted or escaped dotted keys and headers, inline tables and
   multi-line values all count; a `pyproject.toml` that cannot be read
   confidently is treated as a configuration change. Ordinary dependency
   bumps (`pytest-cov` or `pytest` under any dependency table) are not gated.
