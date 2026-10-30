@@ -45,6 +45,13 @@ A team learns by looking back at what it decided and how that turned out. Operat
   - Test: packages/engine/tests/verification-config-gate.test.ts :: follows scripts reached through run-s, npm-run-all and concurrently npm:x
   - Test: packages/engine/tests/verification-config-gate.test.ts :: accepts a source-only patch and a non-test package.json edit
   - Test: packages/engine/tests/verification-config-gate.test.ts :: accepts a path a person approved in the policy
+- AC8: When a `pyproject.toml` or `setup.cfg` patch only respells the pytest settings (table headers, dotted keys, inline tables, header spacing, comments, key order, line endings), the system shall not count it as a verification-configuration change, and any change to a value under `tool.pytest` shall be refused.
+  - Test: packages/engine/tests/verification-config-gate.test.ts :: reads a table header and an inline table as the same settings
+  - Test: packages/engine/tests/verification-config-gate.test.ts :: sees an added entry of an array of tables, even an empty one
+  - Test: packages/engine/tests/verification-config-gate.test.ts :: reads a setup.cfg pytest header the same however it is spaced
+  - Test: packages/engine/tests/property-verification-config.test.ts :: reads every spelling of the same settings as the same settings
+  - Test: packages/engine/tests/property-verification-config.test.ts :: sees any changed, added or removed setting under tool.pytest, in any spelling
+  - Test: packages/engine/tests/property-verification-config.test.ts :: ignores line endings, padding and header spacing
 
 ## Security considerations
 
