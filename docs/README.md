@@ -57,4 +57,5 @@ Start with [working as an AI agile team](agile-team.md), then the
 | [Completion checklist](completion-checklist.md)                 | The detailed chronological history                       |
 | [Local validation](local-validation.md)                         | Measured local runs and pilots                           |
 | [Publishing to npm](publishing.md)                              | How the owner releases the engine and contracts packages |
+| [Upgrading](upgrading.md)                                       | Moving from 0.2.0 to the next release, and rolling back  |
 | [Mac runbook](mac-local-runbook.md)                             | This development machine's setup                         |

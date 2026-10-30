@@ -80,6 +80,13 @@
   running the suite a second time, and its time limit goes back to 45 minutes
   (#232).
 
+### Documentation
+
+- `docs/upgrading.md` explains how to upgrade from 0.2.0 and roll back: tool
+  hash re-pinning, the new refusals and policy fields, and the run store.
+  A docs policy test requires a heading there for every release that
+  mentions hashes or breaking changes.
+
 ### Security
 
 - A worker patch that adds a dependency name to a `package.json`,

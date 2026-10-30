@@ -68,6 +68,14 @@ it.
   with a `sourceMappingURL` comment, since the maps it would name are not
   published.
   - Test: scripts/npm-packages.test.mjs :: no packed JavaScript file points at a source map
+- AC10: When a CHANGELOG release section mentions tool hashes or a breaking
+  change, the system shall fail the docs policy test unless docs/upgrading.md
+  has a heading for that version, states a Node.js range equal to
+  `engines.node`, and is linked from the README and docs/publishing.md.
+  - Test: scripts/docs-policy.test.mjs :: docs/upgrading.md has a heading for every changelog release that mentions hashes or breaking changes
+  - Test: scripts/docs-policy.test.mjs :: a release section that mentions hashes needs an upgrading heading, one that does not is exempt
+  - Test: scripts/docs-policy.test.mjs :: Node.js range in upgrading.md matches engines.node
+  - Test: scripts/docs-policy.test.mjs :: README.md and publishing.md link docs/upgrading.md
 
 ## Security considerations
 

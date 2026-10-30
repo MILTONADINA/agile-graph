@@ -98,7 +98,8 @@ branch. Never push to it directly; commits use the human Git identity without AI
 co-author trailers. See [contributing](CONTRIBUTING.md). Releases to npm are
 the owner's step, described in [publishing](docs/publishing.md); its
 [versioning and support](docs/publishing.md#versioning-and-support) section
-states the 0.x compatibility and end-of-life rules. To report a vulnerability, see the [security policy](SECURITY.md).
+states the 0.x compatibility and end-of-life rules. To move from an
+earlier release, see [upgrading](docs/upgrading.md). To report a vulnerability, see the [security policy](SECURITY.md).
 
 ## Current boundaries
 
