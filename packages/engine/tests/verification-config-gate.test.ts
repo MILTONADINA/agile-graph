@@ -111,6 +111,30 @@ describe("verification configuration gate", () => {
     const changed = (before: string, after: string) =>
       changedVerificationConfig("pyproject.toml", before, after);
     const base = "[project]\nname = 'a'\n";
+    it("treats a bare CR as a change, since pytest and coverage read the file in text mode", () => {
+      const p = '[project]\nname = "a"\n# c\n';
+      expect(
+        changed(
+          p,
+          '[project]\nname = "a"\n# c\r[tool.pytest.ini_options]\raddopts = "-k nothing"\n',
+        ),
+      ).toBe(true);
+      expect(
+        changed(
+          p,
+          '[project]\nname = "a"\n# c\r[tool.coverage.report]\rfail_under = 0\n',
+        ),
+      ).toBe(true);
+      const q = '[tool.pytest.ini_options]\naddopts = "-q"\n# c\n';
+      expect(
+        changed(
+          q,
+          '[tool.pytest.ini_options]\naddopts = "-q"\n# c\rtestpaths = ["nowhere"]\n',
+        ),
+      ).toBe(true);
+      const lf = '[tool.pytest.ini_options]\naddopts = "-q"\n';
+      expect(changed(lf, lf.replace(/\n/g, "\r\n"))).toBe(false);
+    });
     it("sees a dotted key with spaces around the dots", () => {
       expect(
         changed(
