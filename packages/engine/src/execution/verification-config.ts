@@ -371,11 +371,30 @@ function pytestIniSections(text: string): string {
         .exec(raw)?.[1]
         ?.replace(/^\[+|\]+$/g, "")
         .trim();
-      if (header !== undefined) {
-        const now = /^(tool[.:])?pytest(\.|$)|^coverage:/.test(header);
-        // Mark where a section ends, so removing the header that ends it
-        // (which folds what follows into its last value) shows up.
-        if (inside && !now) kept.push("\u0000end");
+      // iniconfig (which pytest uses) cuts the line at the first "#" or ";"
+      // first, so "[tool:pytest] ; x]" is the section "tool:pytest" and
+      // "[metadata#]" is no header at all.
+      const cut = raw.startsWith("[")
+        ? raw.split(/[#;]/)[0].trimEnd()
+        : undefined;
+      const iniName = cut?.endsWith("]") ? cut.slice(1, -1) : undefined;
+      if (header !== undefined || iniName !== undefined) {
+        const isWatched = (name: string | undefined) =>
+          name !== undefined &&
+          /^(tool[.:])?pytest(\.|$)|^coverage:/.test(name);
+        const now = isWatched(header) || isWatched(iniName);
+        // A line only one reading takes for a header neither ends nor starts
+        // an unwatched section. Mark where a section ends, so removing the
+        // header that ends it (which folds what follows into its last value)
+        // shows up.
+        if (inside && !now) {
+          if (header !== undefined && iniName !== undefined)
+            kept.push("\u0000end");
+          else {
+            kept.push(raw.trimEnd());
+            continue;
+          }
+        }
         inside = now;
         optionIndent = undefined;
       } else optionIndent = indent;
@@ -473,7 +492,8 @@ function pytestToml(text: string): string | undefined {
     if (c === '"' || c === "'") keep(path, str());
     else if (c === "[") {
       i++;
-      for (let n = 0; ; n++) {
+      let n = 0;
+      for (; ; n++) {
         skipAll();
         if (src[i] === "]") break;
         value([...path, `[${n}]`]);
@@ -481,6 +501,8 @@ function pytestToml(text: string): string | undefined {
         if (src[i] === ",") i++;
         else if (src[i] !== "]") fail();
       }
+      // An empty array has no element line, so mark it itself.
+      if (n === 0) keep(path, "[]");
       i++;
     } else if (c === "{") {
       i++;

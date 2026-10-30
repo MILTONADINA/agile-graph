@@ -210,6 +210,7 @@ describe("property: pytest ini reader", () => {
                 "tool:pytest",
                 "tool.pytest",
                 "pytest.extra",
+                "tool:pytest] ; x",
               ])
             : pick(random, ["metadata", "flake8", "pytest2", "options"]),
           pytest,

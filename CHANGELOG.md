@@ -81,6 +81,10 @@
   respells the same pytest settings (a table header against an inline table or
   dotted keys) as a change, and it now sees an added empty
   `[[tool.pytest...]]` entry.
+- The verification-config gate now reads a `setup.cfg` header with a trailing
+  `#` or `;` comment, and where a pytest section ends, the way iniconfig does,
+  so `[tool:pytest] ; x]` and a `[metadata#]` line no longer hide a change; it
+  also sees a `pyproject.toml` empty array (`testpaths = []`) added or removed.
 - `npm run preflight` now builds the engine before the script tests when one
   of them needs `packages/engine/dist`, so a fresh checkout no longer fails
   `readme-quickstart.test.mjs` (#228).
