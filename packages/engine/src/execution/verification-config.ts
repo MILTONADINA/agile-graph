@@ -540,17 +540,28 @@ function pytestToml(text: string): string | undefined {
   };
   try {
     let table: string[] = [];
+    const entries = new Map<string, number>();
     for (;;) {
       skipAll();
       if (i >= src.length) break;
       if (src[i] === "[") {
         const array = src[i + 1] === "[";
         i += array ? 2 : 1;
-        table = key();
+        const written = key();
+        // An entry of an array of tables is indexed, and a header below an
+        // array path belongs to its latest entry, the way tomllib reads it.
+        table = [];
+        written.forEach((part, at) => {
+          table.push(part);
+          const id = JSON.stringify(table);
+          const last = at === written.length - 1;
+          if (last && array) {
+            const n = entries.get(id) ?? 0;
+            entries.set(id, n + 1);
+            table.push(`[${n}]`);
+          } else if (entries.has(id)) table.push(`[${entries.get(id)! - 1}]`);
+        });
         keep(table);
-        // Each entry of an array of tables counts, even an empty one.
-        if (array && watched(table))
-          out.push(`${JSON.stringify(table)} = [[]]`);
         blank();
         if (src.slice(i, i + (array ? 2 : 1)) !== (array ? "]]" : "]")) fail();
         i += array ? 2 : 1;
