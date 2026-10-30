@@ -226,6 +226,19 @@ describe("verification configuration gate", () => {
       const sub = (v: string) => `${h}[tool.pytest.hooks.s]\nv=${v}\n`;
       expect(changed(sub("1"), sub("2"))).toBe(true);
     });
+    it('does not read a quoted "[0]" key as an array index', () => {
+      const t = "[tool.pytest]\n";
+      expect(changed(`${t}x = [1]\n`, `${t}x."[0]" = 1\n`)).toBe(true);
+      expect(
+        changed("[[tool.pytest.h]]\nx=1\n", '[tool.pytest.h]\n"[0]".x=1\n'),
+      ).toBe(true);
+      expect(
+        changed(
+          "[[tool.pytest.h]]\n[tool.pytest.h.s]\nv=1\n",
+          '[tool.pytest.h."[0]".s]\nv=1\n',
+        ),
+      ).toBe(true);
+    });
     it("leaves ordinary dependency bumps alone, including inline tables", () => {
       const dev = (v: string) =>
         base +
