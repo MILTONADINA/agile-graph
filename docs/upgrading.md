@@ -1,8 +1,8 @@
 # Upgrading
 
-How to move from `@agile-graph/engine` 0.2.0 to the next published release.
-0.3.0 was never published on npm, so going from 0.2.0 to the next release
-means reading both the 0.3.0 and the Unreleased sections below. The full
+How to move from `@agile-graph/engine` 0.2.0 to 0.4.0. 0.3.0 was never
+published on npm, so going from 0.2.0 to 0.4.0 means reading both the 0.3.0
+and the 0.4.0 sections below. The full
 list of changes is the [CHANGELOG](../CHANGELOG.md); this page covers only
 what needs an action from you.
 
@@ -43,7 +43,7 @@ what needs an action from you.
 - **Smaller changes.** Zod's own error wording differs, and a plan step's
   `dependsOn` accepts at most 100 entries.
 
-## Unreleased
+## 0.4.0
 
 This heading is renamed to the version number when a release is cut.
 
