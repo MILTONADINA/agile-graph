@@ -736,6 +736,23 @@ export function priorBlockingFindings(
 }
 
 /**
+ * Whether a stored review record's findings may go to a reviewer or worker
+ * that is not local. A record that ruled on scanner results is exportable
+ * only when it says so: a missing or malformed flag fails closed, since the
+ * reviewer may have quoted a result from a path nothing non-local may see.
+ * A record that never saw scanner results has nothing to withhold.
+ */
+export function reviewRecordExportable(
+  record: Record<string, unknown> | undefined,
+): boolean {
+  if (!record) return true;
+  if (record.scanExportable === true) return true;
+  if (record.scanExportable === false) return false;
+  if (record.scanExportable !== undefined) return false;
+  return !(Array.isArray(record.scanRulings) && record.scanRulings.length > 0);
+}
+
+/**
  * Earlier `fixed` verdicts this run recorded against this exact snapshot,
  * by finding ID with their stored evidence, so a resumed review does not
  * pay to check the same finding at the same snapshot again. A verdict from

@@ -9,6 +9,7 @@ import {
   invokeReviewWorker,
   invokeVerifyFix,
   priorBlockingFindings,
+  reviewRecordExportable,
   REVIEW_INSTRUCTIONS,
   reusableFixVerdicts,
   ADVISORY_FEEDBACK_LIMIT,
@@ -680,5 +681,31 @@ describe("scan rulings", () => {
       expect(asked(small.bodies[0]!)).toBeLessThan(asked(large.bodies[0]!));
       expect(asked(large.bodies[0]!)).toBeGreaterThan(REVIEW_OUTPUT_TOKENS);
     });
+  });
+});
+
+describe("reviewRecordExportable", () => {
+  it("allows a record that never saw scanner results", () => {
+    expect(reviewRecordExportable(undefined)).toBe(true);
+    expect(reviewRecordExportable({ passed: false, findings: [] })).toBe(true);
+  });
+
+  it("follows the stored flag", () => {
+    const scanRulings = [{ id: "F1", ruling: "raised", reason: "x" }];
+    expect(reviewRecordExportable({ scanRulings, scanExportable: true })).toBe(
+      true,
+    );
+    expect(reviewRecordExportable({ scanRulings, scanExportable: false })).toBe(
+      false,
+    );
+  });
+
+  it("fails closed when a record with scan rulings lacks a boolean flag", () => {
+    const scanRulings = [{ id: "F1", ruling: "raised", reason: "x" }];
+    expect(reviewRecordExportable({ scanRulings })).toBe(false);
+    expect(reviewRecordExportable({ scanRulings, scanExportable: "yes" })).toBe(
+      false,
+    );
+    expect(reviewRecordExportable({ scanExportable: "yes" })).toBe(false);
   });
 });

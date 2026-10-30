@@ -112,6 +112,7 @@ import {
   invokeRepeatDecision,
   invokeVerifyFix,
   priorBlockingFindings,
+  reviewRecordExportable,
   earlierFindingsNotice,
   findingSignature,
   rejectionHistory,
@@ -3361,12 +3362,27 @@ export class GraphEngine {
             `Code review raised the same finding on two rounds in a row (${signatures.join(", ")}); the run stopped instead of repeating the same repair. Change the approach: narrow the scope, make a structural fix, or mark the run blocked`,
           );
         };
-        const prior = priorBlockingFindings(
-          this.store
-            .events(run.id)
-            .filter((event) => event.type === "review.completed")
-            .at(-1)?.data,
-        );
+        const latestReview = this.store
+          .events(run.id)
+          .filter((event) => event.type === "review.completed")
+          .at(-1)?.data;
+        const prior = priorBlockingFindings(latestReview);
+        // Stored findings can quote scanner results a non-local reviewer or
+        // worker may not receive, whatever provider raised them. A record
+        // that ruled on scan results and lacks the flag counts as unsafe.
+        const priorExportable = reviewRecordExportable(latestReview);
+        const historyExportable = this.store
+          .events(run.id)
+          .filter(
+            (event) =>
+              event.type === "review.completed" && event.data.by !== "person",
+          )
+          .every((event) => reviewRecordExportable(event.data));
+        const priorSawScan =
+          latestReview !== undefined &&
+          (latestReview.scanExportable !== undefined ||
+            (Array.isArray(latestReview.scanRulings) &&
+              latestReview.scanRulings.length > 0));
         this.store.event(
           run.id,
           "review.started",
@@ -3393,24 +3409,30 @@ export class GraphEngine {
               const check: VerifyFixResult =
                 reused !== undefined
                   ? { verdict: "fixed", evidence: reused }
-                  : index < VERIFY_FIX_LIMIT
-                    ? (
-                        await this.invokeFixCheck(
-                          {
-                            provider: reviewer,
-                            policy,
-                            objective: run.plan.objective,
-                            finding,
-                            diff,
-                            signal,
-                          },
-                          run.plan,
-                        )
-                      ).result
-                    : {
+                  : reviewer.kind !== "local" && !priorExportable
+                    ? {
                         verdict: "inconclusive",
-                        evidence: `Not checked: a review checks at most ${VERIFY_FIX_LIMIT} earlier findings`,
-                      };
+                        evidence:
+                          "Not checked: the finding may quote scanner results a non-local reviewer may not receive; a person or a local reviewer can check it",
+                      }
+                    : index < VERIFY_FIX_LIMIT
+                      ? (
+                          await this.invokeFixCheck(
+                            {
+                              provider: reviewer,
+                              policy,
+                              objective: run.plan.objective,
+                              finding,
+                              diff,
+                              signal,
+                            },
+                            run.plan,
+                          )
+                        ).result
+                      : {
+                          verdict: "inconclusive",
+                          evidence: `Not checked: a review checks at most ${VERIFY_FIX_LIMIT} earlier findings`,
+                        };
               run.usage = this.store.usage(run.plan.id);
               const evidence = redact(check.evidence);
               this.store.event(
@@ -3460,6 +3482,9 @@ export class GraphEngine {
                 verdict: "request-changes",
                 stage: "verify-fix",
                 snapshotHash,
+                // The findings are the earlier review's, so its export
+                // restriction stays with them.
+                ...(priorSawScan ? { scanExportable: priorExportable } : {}),
                 summary: `${unfixed.length} of ${prior.length} earlier blocking finding(s) are not shown to be fixed`,
                 criteria: [],
                 minutes: reviewMinutes(),
@@ -3479,7 +3504,8 @@ export class GraphEngine {
             return {
               passed: false,
               feedback,
-              exportable: exportable && !containsSecret(feedback),
+              exportable:
+                exportable && historyExportable && !containsSecret(feedback),
             };
           }
         }
@@ -3565,6 +3591,9 @@ export class GraphEngine {
             passed: outcome.passed,
             verdict: result.review.verdict,
             snapshotHash,
+            // Whether these findings may go to a non-local reviewer or
+            // worker later; a retry or resume reads it from here.
+            ...(scanRulings.length ? { scanExportable } : {}),
             summary: redact(result.review.summary),
             criteria: result.review.criteria.map((criterion) => ({
               met: criterion.met,
@@ -3613,7 +3642,11 @@ export class GraphEngine {
         return {
           ...outcome,
           feedback,
-          exportable: exportable && scanExportable && !containsSecret(feedback),
+          exportable:
+            exportable &&
+            scanExportable &&
+            historyExportable &&
+            !containsSecret(feedback),
         };
       };
       // One scan per verified snapshot, shared by the review (which rules on

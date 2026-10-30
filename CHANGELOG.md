@@ -37,6 +37,11 @@
   gate (code-review-gate AC15). The review reserves output for each result
   instead of capping their number, and refuses up front, naming
   `policy.maxOutputTokens`, when the policy cannot hold the rulings.
+  The review record keeps whether its findings may leave the machine; a retry
+  or resume after the reviewer was reconfigured to a cloud provider never
+  sends a stored finding that quotes scan results from a non-exportable path
+  to that reviewer or to a cloud worker, and fails closed when the flag is
+  missing.
 - `graph-engine retro` reports `graphOwnedWithoutFollowUp` per run and in
   total: graph-owned terminal stops for which no `converge` follow-up plan
   names the run, read through a new read-only store accessor. Second slice
