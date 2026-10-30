@@ -829,6 +829,58 @@ describe("verification configuration gate", () => {
       ] as const)
         expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
     });
+    it("treats bytes the two Python readers lex differently as a change, and DEFAULT as gated", () => {
+      const rows: [string, string][] = [];
+      const base = "[egg_info]\n    name = a\n[flake8]\nx = 1\n";
+      rows.push([
+        base,
+        "[egg_info]\n    name = a\x1f\n  [coverage:report]\nfail_under = 0\n[flake8]\nx = 1\n",
+      ]);
+      for (const c of ["#", ";"])
+        rows.push([
+          "  [tool:pytest]\naddopts = -q\n",
+          `\x1f${c} c\n  [tool:pytest]\naddopts = -q\n`,
+        ]);
+      for (const b of ["\x85", "\x1c", "\x1e", "\x0b", "\x0c", "\u2028"])
+        rows.push([
+          "[coverage:report]\nfail_under = 90\n",
+          `[egg_info]\nname = a\n${b}[coverage:report]\nfail_under = 90\n`,
+        ]);
+      rows.push([
+        "[tool:pytest]\naddopts = --strict-markers\n",
+        "[egg_info]\nname = a\n\x85[tool:pytest]\naddopts = --strict-markers\n",
+      ]);
+      // A NUL, BOM or bare CR on either side alone is a change.
+      rows.push(["[metadata]\nname = a\n", "[metadata]\nname = a\0\n"]);
+      rows.push(["[metadata]\nname = a\n", "\ufeff[metadata]\nname = a\n"]);
+      rows.push(["[metadata]\nname = a\r", "\n[metadata]\nname = a\n"]);
+      // DEFAULT values reach every section.
+      rows.push([
+        "[coverage:run]\nsource = pkg\n",
+        "[DEFAULT]\nexclude_lines = .\n[coverage:run]\nsource = pkg\n",
+      ]);
+      rows.push([
+        "[DEFAULT]\nexclude_lines = a\n[coverage:report]\nfail_under = 90\n",
+        "[DEFAULT]\nexclude_lines = .\n[coverage:report]\nfail_under = 90\n",
+      ]);
+      rows.push([
+        "[tool:pytest]\naddopts = -q\n",
+        "[DEFAULT]\nx = 1\n[tool:pytest]\naddopts = -q\n",
+      ]);
+      rows.push(["\t[coverage:run]\n", "\t[coverage:run]\n[DEFAULT]\nk: v"]);
+      for (const [a, b] of rows)
+        expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
+      // Plain edits stay allowed.
+      const same: [string, string][] = [
+        ["[metadata]\nname = a\n", "[metadata]\r\nname = a\r\n"],
+        ["[metadata]\nname = a\n", "[metadata]\nname = a  \n"],
+        ["[metadata]\nname = a\n", "[metadata]\nname = b\n"],
+        ["# a\n[metadata]\nname = a\n", "# b\n[metadata]\nname = a\n"],
+        ["[default]\nx = 1\n", "[default]\nx = 2\n"],
+      ];
+      for (const [a, b] of same)
+        expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(false);
+    });
     it("follows scripts reached through run-s, npm-run-all and concurrently npm:x", () => {
       const manifest = (test: string, unit: string, other = "echo") =>
         JSON.stringify({ scripts: { test, unit, lint: "eslint .", other } });
