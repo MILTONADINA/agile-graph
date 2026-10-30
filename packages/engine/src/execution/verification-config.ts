@@ -393,6 +393,7 @@ function pytestIniSections(text: string): string {
 // when the text is not read with confidence, so the caller fails closed.
 function pytestToml(text: string): string | undefined {
   const src = text.replace(new RegExp("^\\uFEFF"), "");
+  const tables = new Set<string>();
   const out: string[] = [];
   let i = 0;
   const fail = (): never => {
@@ -451,12 +452,20 @@ function pytestToml(text: string): string | undefined {
       i++;
     }
   };
-  const keep = (path: string[], value: string) => {
-    // The whole tool.coverage table: omit, source and exclude_lines weaken
-    // coverage as much as fail_under does. A dependency named coverage is not
-    // under tool.*, so it is not matched.
-    if (path[0] === "tool" && (path[1] === "pytest" || path[1] === "coverage"))
-      out.push(`${JSON.stringify(path)} = ${value}`);
+  // Every table on the way to a pytest or coverage setting is recorded as
+  // `{}`, whether it was written as a header, a dotted key or an inline table,
+  // so the spellings read the same. Without a value `path` is itself a table.
+  // The whole tool.coverage table counts: omit, source and exclude_lines
+  // weaken coverage as much as fail_under does. A dependency named coverage is
+  // not under tool.*, so it is not matched.
+  const watched = (path: string[]) =>
+    path[0] === "tool" && (path[1] === "pytest" || path[1] === "coverage");
+  const keep = (path: string[], value?: string) => {
+    if (!watched(path)) return;
+    const depth = value === undefined ? path.length : path.length - 1;
+    for (let n = 2; n <= depth; n++)
+      tables.add(`${JSON.stringify(path.slice(0, n))} = {}`);
+    if (value !== undefined) out.push(`${JSON.stringify(path)} = ${value}`);
   };
   const value = (path: string[]) => {
     blank();
@@ -475,7 +484,7 @@ function pytestToml(text: string): string | undefined {
       i++;
     } else if (c === "{") {
       i++;
-      keep(path, "{}");
+      keep(path);
       for (;;) {
         skipAll();
         if (src[i] === "}") break;
@@ -516,6 +525,10 @@ function pytestToml(text: string): string | undefined {
         const array = src[i + 1] === "[";
         i += array ? 2 : 1;
         table = key();
+        keep(table);
+        // Each entry of an array of tables counts, even an empty one.
+        if (array && watched(table))
+          out.push(`${JSON.stringify(table)} = [[]]`);
         blank();
         if (src.slice(i, i + (array ? 2 : 1)) !== (array ? "]]" : "]")) fail();
         i += array ? 2 : 1;
@@ -533,7 +546,7 @@ function pytestToml(text: string): string | undefined {
   } catch {
     return undefined;
   }
-  return out.sort().join("\n");
+  return [...tables, ...out].sort().join("\n");
 }
 
 /**
