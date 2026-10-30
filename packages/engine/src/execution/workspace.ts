@@ -246,15 +246,74 @@ export async function prepareProposal(
   // worker that edits them could pass by weakening the checks. A person
   // approves a path by listing it in the policy.
   const approved = new Set(policy.approvedVerificationConfigPaths ?? []);
+  const manifests = [...staged.keys()].some(
+    (file) => path.posix.basename(file).toLowerCase() === "package.json",
+  )
+    ? await otherManifests(workspace, staged, baselines)
+    : [];
   for (const [file, { content }] of staged)
     if (
       !approved.has(file) &&
-      changedVerificationConfig(file, baselines.get(file) ?? "", content)
+      changedVerificationConfig(
+        file,
+        baselines.get(file) ?? "",
+        content,
+        manifests.filter((m) => m.file !== file).map((m) => m.text),
+      )
     )
       throw new Error(
         `Verification configuration needs approval: ${file} is loaded by the required checks as test configuration. A person must approve this path in policy.approvedVerificationConfigPaths before a worker may change it; change the source under test instead.`,
       );
   return staged;
+}
+/**
+ * Every package.json in the checkout, as it was before the patch and as
+ * patched, so a script a root test script reaches in another workspace is
+ * known. The walk is shallow and bounded; past the bound it stops, and the
+ * gate then sees fewer manifests.
+ */
+async function otherManifests(
+  workspace: string,
+  staged: Map<string, { absolute: string; content: string }>,
+  baselines: Map<string, string>,
+): Promise<{ file: string; text: string }[]> {
+  const found: { file: string; text: string }[] = [];
+  const pending = [""];
+  let visited = 0;
+  while (pending.length && visited++ < 2000) {
+    const dir = pending.pop()!;
+    let entries;
+    try {
+      entries = await readdir(path.join(workspace, dir), {
+        withFileTypes: true,
+      });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const relative = dir ? `${dir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (entry.name !== "node_modules" && entry.name !== ".git")
+          pending.push(relative);
+      } else if (entry.name === "package.json") {
+        try {
+          found.push({
+            file: relative,
+            text: await readFile(path.join(workspace, relative), "utf8"),
+          });
+        } catch {
+          // Unreadable: nothing to learn from it.
+        }
+      }
+    }
+  }
+  for (const [file, { content }] of staged)
+    if (path.posix.basename(file) === "package.json") {
+      // Both states of a patched manifest count.
+      found.push({ file, text: content });
+      found.push({ file, text: baselines.get(file) ?? "" });
+    }
+  return found;
 }
 /** True when `needle` occurs once, counting overlapping matches. */
 function occursExactlyOnce(haystack: string, needle: string): boolean {

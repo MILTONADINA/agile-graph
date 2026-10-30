@@ -339,6 +339,87 @@ describe("verification configuration gate", () => {
       ).toBe(true);
     }
   });
+  it("refuses a weakened script in a workspace a root test script delegates to", async () => {
+    const rootManifest = (run: string) =>
+      JSON.stringify({ scripts: { test: run } });
+    const child = (u: string) => JSON.stringify({ scripts: { unit: u } });
+    for (const run of [
+      "npm run unit --workspace child",
+      "npm run unit -w child",
+      "npm run unit --workspaces",
+      "npm --prefix child run unit",
+      "pnpm --filter child unit",
+      "pnpm -r run unit",
+      "yarn workspace child unit",
+      "yarn workspace child run unit",
+    ]) {
+      expect(
+        changedVerificationConfig(
+          "child/package.json",
+          child("vitest run"),
+          child("true"),
+          [rootManifest(run)],
+        ),
+        run,
+      ).toBe(true);
+    }
+    // A script nothing reaches stays editable.
+    expect(
+      changedVerificationConfig(
+        "child/package.json",
+        JSON.stringify({ scripts: { docs: "a" } }),
+        JSON.stringify({ scripts: { docs: "b" } }),
+        [rootManifest("npm run unit -w child")],
+      ),
+    ).toBe(false);
+    // Without the other manifests, a nested script change fails closed.
+    expect(
+      changedVerificationConfig(
+        "child/package.json",
+        child("vitest run"),
+        child("true"),
+      ),
+    ).toBe(true);
+    const root = await workspace({
+      "package.json": rootManifest("npm run unit --workspace child"),
+      "child/package.json": child("vitest run"),
+      "other/package.json": JSON.stringify({ scripts: { docs: "a" } }),
+    });
+    await expect(
+      edit(root, "child/package.json", '"vitest run"', '"true"'),
+    ).rejects.toThrow(
+      /Verification configuration needs approval: child\/package\.json/,
+    );
+    await expect(
+      edit(root, "other/package.json", '"a"', '"b"'),
+    ).resolves.toBeDefined();
+  });
+  it("resolves the script after value-taking options, else gates every script", () => {
+    for (const run of [
+      "npm run --script-shell /bin/sh unit",
+      "npm --prefix . run unit",
+      "pnpm --filter child run unit",
+      "pnpm --dir . run unit",
+      "yarn --cwd . run unit",
+      "npm run -C . unit",
+      "npm run --unknown-option value unit",
+    ]) {
+      const m = (u: string) =>
+        JSON.stringify({ scripts: { test: run, unit: u, docs: "a" } });
+      expect(
+        changedVerificationConfig("package.json", m("vitest run"), m("true")),
+        run,
+      ).toBe(true);
+    }
+    // An invocation that cannot be resolved gates every script of the manifest.
+    const m = (d: string) =>
+      JSON.stringify({
+        scripts: { test: "npm run --unknown-option value unit", docs: d },
+      });
+    expect(changedVerificationConfig("package.json", m("a"), m("b"))).toBe(
+      true,
+    );
+  });
   it("gates karma.conf.js and .babelrc", () => {
     for (const f of ["karma.conf.js", ".babelrc", ".babelrc.json"])
       expect(changedVerificationConfig(f, "a", "b"), f).toBe(true);

@@ -16,7 +16,11 @@
   rc files `.npmrc`, `.yarnrc`, `.yarnrc.yml` and `.pnpmfile.cjs`, or the pytest
   sections of `pyproject.toml` and `setup.cfg`) is refused and returned
   to the worker as feedback unless a person listed the path in
-  `policy.approvedVerificationConfigPaths`.
+  `policy.approvedVerificationConfigPaths`. Scripts a test script reaches in
+  another workspace package (`--workspace`, `--prefix`, `--filter`, `yarn
+  workspace`) are gated too, option values such as `--script-shell` are
+  skipped when finding the script, and an invocation that cannot be resolved
+  gates every script of the manifests.
   The `pyproject.toml` pytest settings are read as TOML with the key path
   normalised, so spaced, quoted or escaped dotted keys and headers, inline tables and
   multi-line values all count; a `pyproject.toml` that cannot be read
