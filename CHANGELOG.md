@@ -79,8 +79,9 @@
   carried (#247).
 - The verification-config gate no longer counts a `pyproject.toml` that
   respells the same pytest settings (a table header against an inline table or
-  dotted keys) as a change, and it now sees an added empty
-  `[[tool.pytest...]]` entry.
+  dotted keys) as a change, and it now tells the entries of a
+  `[[tool.pytest...]]` array of tables apart, so an added, empty, reordered or
+  changed entry counts.
 - The verification-config gate now reads a `setup.cfg` header with a trailing
   `#` or `;` comment, and where a pytest section ends, the way iniconfig does,
   so `[tool:pytest] ; x]` and a `[metadata#]` line no longer hide a change; it

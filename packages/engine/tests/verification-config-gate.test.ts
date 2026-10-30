@@ -214,6 +214,18 @@ describe("verification configuration gate", () => {
       expect(changed(entry, entry + entry)).toBe(true);
       expect(changed(entry, entry + "[[tool.pytest.hooks]]\n")).toBe(true);
     });
+    it("tells the entries of an array of tables apart", () => {
+      const h = "[[tool.pytest.hooks]]\n";
+      expect(
+        changed(
+          `${h}name='a'\nid=1\n${h}name='b'\nid=2\n`,
+          `${h}name='a'\nid=2\n${h}name='b'\nid=1\n`,
+        ),
+      ).toBe(true);
+      expect(changed(`${h}${h}x=1\n`, `${h}x=1\n${h}`)).toBe(true);
+      const sub = (v: string) => `${h}[tool.pytest.hooks.s]\nv=${v}\n`;
+      expect(changed(sub("1"), sub("2"))).toBe(true);
+    });
     it("leaves ordinary dependency bumps alone, including inline tables", () => {
       const dev = (v: string) =>
         base +
