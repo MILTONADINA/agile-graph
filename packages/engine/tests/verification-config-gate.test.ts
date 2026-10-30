@@ -107,6 +107,84 @@ describe("verification configuration gate", () => {
       ),
     ).toBe(true);
   });
+  describe("pytest options in pyproject.toml, however they are spelled", () => {
+    const changed = (before: string, after: string) =>
+      changedVerificationConfig("pyproject.toml", before, after);
+    const base = "[project]\nname = 'a'\n";
+    it("sees a dotted key with spaces around the dots", () => {
+      expect(
+        changed(
+          base,
+          'tool . pytest . ini_options.addopts = "-k nothing"\n' + base,
+        ),
+      ).toBe(true);
+    });
+    it("sees a quoted or spaced table header", () => {
+      expect(
+        changed(
+          base,
+          base + '[ "tool" . "pytest" . ini_options ]\naddopts = "-k x"\n',
+        ),
+      ).toBe(true);
+      expect(
+        changed(base, base + "[ 'tool'.pytest ]\nini_options = {}\n"),
+      ).toBe(true);
+    });
+    it("sees inline tables at any depth", () => {
+      expect(
+        changed(
+          base,
+          'tool = { pytest = { ini_options = { addopts = "-k x" } } }\n' + base,
+        ),
+      ).toBe(true);
+      expect(
+        changed(
+          base + "[tool]\n",
+          base + '[tool]\npytest = { ini_options = { addopts = "-k x" } }\n',
+        ),
+      ).toBe(true);
+      expect(
+        changed(
+          base + "[tool.pytest]\nini_options = { addopts = '-x' }\n",
+          base + "[tool.pytest]\nini_options = { addopts = '-y' }\n",
+        ),
+      ).toBe(true);
+    });
+    it("sees an edit to a continuation line of a multi-line value", () => {
+      const v = (o: string) =>
+        `tool.pytest.ini_options.addopts = [\n  "${o}",\n  "-q",\n]\n`;
+      expect(changed(v("-x"), v("-k nothing"))).toBe(true);
+      const t = (o: string) =>
+        `tool.pytest.ini_options.addopts = """\n${o}\n"""\n` + base;
+      expect(changed(t("-x"), t("-k nothing"))).toBe(true);
+    });
+    it("treats the same options spelled another way as unchanged", () => {
+      expect(
+        changed(
+          "tool.pytest.ini_options.addopts = '-x'  # note\n" + base,
+          base +
+            "[tool.pytest.ini_options]\naddopts = '-x'\n[tool.other]\nx = 1\n",
+        ),
+      ).toBe(false);
+    });
+    it("leaves ordinary dependency bumps alone, including inline tables", () => {
+      const dev = (v: string) =>
+        base +
+        `[tool.poetry.dev-dependencies]\npytest-cov = { version = "${v}", extras = ["a"] }\npytest = "^${v}"\n`;
+      expect(changed(dev("4"), dev("5"))).toBe(false);
+      const arr = (v: string) =>
+        base +
+        `[project.optional-dependencies]\ntest = [\n "pytest>=${v}",\n]\n`;
+      expect(changed(arr("7"), arr("8"))).toBe(false);
+    });
+    it("fails closed when the file cannot be read", () => {
+      expect(changed(base, base + 'tool.pytest.x = "unterminated\n')).toBe(
+        true,
+      );
+      expect(changed(base, base + "tool.pytest.x = [1, 2\n")).toBe(true);
+      expect(changed(base + "junk\n", base + "junk2\n")).toBe(true);
+    });
+  });
   it("accepts a source-only patch and a non-test package.json edit", async () => {
     const root = await workspace({
       "src/a.ts": "export const a = 1;\n",
