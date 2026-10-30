@@ -29,7 +29,7 @@
   `npm-run-all` or `concurrently "npm:x"` are followed, and a script pattern or
   variable gates every script, as does a backslash, variable or backtick anywhere in a gated
   script's command line or a glob character class or extglob in a `run-s` target.
-  Leading whitespace in `setup.cfg` lines is significant for the comparison.
+  Leading whitespace in `setup.cfg` lines is significant for the comparison. Lines are split like Python (bare CR, form feed, `\x1c`-`\x1e`, NEL, LS and PS count as line breaks) and comment lines are skipped like configparser.
   Not gated, on purpose: a coverage rc file named
   with `--rcfile`, `turbo.json`/`nx.json` task graphs, and `-x test` in a
   Makefile or CI file. A `pyproject.toml` date-time written with a space is now
