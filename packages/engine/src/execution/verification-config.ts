@@ -406,6 +406,9 @@ function pytestIniSections(text: string): string {
   return kept.join("\n");
 }
 
+// A key is a string; an array index is a number, so no quoted key spells one.
+type Path = (string | number)[];
+
 // The pytest and coverage settings of a pyproject.toml as sorted `path = value` lines, with
 // header and key spelling normalised: quotes and spaces around dots, dotted
 // keys, tables and inline tables all give the same path. Returns undefined
@@ -477,16 +480,16 @@ function pytestToml(text: string): string | undefined {
   // The whole tool.coverage table counts: omit, source and exclude_lines
   // weaken coverage as much as fail_under does. A dependency named coverage is
   // not under tool.*, so it is not matched.
-  const watched = (path: string[]) =>
+  const watched = (path: Path) =>
     path[0] === "tool" && (path[1] === "pytest" || path[1] === "coverage");
-  const keep = (path: string[], value?: string) => {
+  const keep = (path: Path, value?: string) => {
     if (!watched(path)) return;
     const depth = value === undefined ? path.length : path.length - 1;
     for (let n = 2; n <= depth; n++)
       tables.add(`${JSON.stringify(path.slice(0, n))} = {}`);
     if (value !== undefined) out.push(`${JSON.stringify(path)} = ${value}`);
   };
-  const value = (path: string[]) => {
+  const value = (path: Path) => {
     blank();
     const c = src[i];
     if (c === '"' || c === "'") keep(path, str());
@@ -496,7 +499,7 @@ function pytestToml(text: string): string | undefined {
       for (; ; n++) {
         skipAll();
         if (src[i] === "]") break;
-        value([...path, `[${n}]`]);
+        value([...path, n]);
         skipAll();
         if (src[i] === ",") i++;
         else if (src[i] !== "]") fail();
@@ -539,7 +542,7 @@ function pytestToml(text: string): string | undefined {
     }
   };
   try {
-    let table: string[] = [];
+    let table: Path = [];
     const entries = new Map<string, number>();
     for (;;) {
       skipAll();
@@ -558,8 +561,8 @@ function pytestToml(text: string): string | undefined {
           if (last && array) {
             const n = entries.get(id) ?? 0;
             entries.set(id, n + 1);
-            table.push(`[${n}]`);
-          } else if (entries.has(id)) table.push(`[${entries.get(id)! - 1}]`);
+            table.push(n);
+          } else if (entries.has(id)) table.push(entries.get(id)! - 1);
         });
         keep(table);
         blank();
