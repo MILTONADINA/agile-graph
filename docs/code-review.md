@@ -77,9 +77,9 @@ are judged by tool, rule and place. There is no fixed count limit: each
 result reserves about 40 output tokens on top of the review's usual budget,
 and a review whose results do not fit `policy.maxOutputTokens` fails before
 the reviewer is called, with a message naming the setting (raise it, which
-changes the policy, or trim the baseline). The rulings are recorded in `review.completed`. A `dropped`
-ruling is the reviewer's opinion only: the security gate still decides on the
-scan and the baseline alone.
+changes the policy, or trim the baseline). The rulings are recorded in
+`review.completed`. A `dropped` ruling is the reviewer's opinion only: the
+security gate still decides on the scan and the baseline alone.
 
 On a retry, when the run's latest AI review asked for changes with blocking
 findings, the next review first checks each of them (at most 20; any more
