@@ -345,7 +345,14 @@ function npmEntries(
     if (key in record) entries.push(`${key}=${JSON.stringify(record[key])}`);
   return entries.sort();
 }
-// Lines of the pytest and coverage sections of an ini file (setup.cfg).
+// Bytes configparser (coverage.py) and iniconfig (pytest) lex differently:
+// VT, FF, \x1c-\x1e, NEL, LS and PS end a line for iniconfig only; \x1f and
+// NEL are Python whitespace but not JS \s; BOM is JS \s but not Python
+// whitespace; NUL collides with the section-end marker; a bare CR is
+// translated by both readers. Input holding any of them counts as changed.
+const ODD_INI_BYTES = /[\0\v\f\x1c-\x1f\x85\u2028\u2029\ufeff]|\r(?!\n)/;
+// Lines of the pytest, coverage and DEFAULT sections of an ini file
+// (setup.cfg). DEFAULT values reach every section.
 function pytestIniSections(text: string): string {
   const kept: string[] = [];
   let inside = false;
@@ -353,10 +360,11 @@ function pytestIniSections(text: string): string {
   // reads a more-indented line after an option as a continuation of its
   // value, even when it looks like a header.
   let optionIndent: number | undefined;
-  // Python splits lines on more than LF and CRLF (bare CR, \v, \f,
-  // \x1c-\x1e, NEL, LS, PS); splitting on the superset only over-gates.
-  const WS = /^[\s\x1c-\x1f\x85]+/;
-  for (const raw of text.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/)) {
+  // Input with bytes the two Python readers lex differently never gets here
+  // (see ODD_INI_BYTES), so on what remains JS whitespace equals Python's and
+  // LF or CRLF are the only line breaks both readers share.
+  const WS = /^\s+/;
+  for (const raw of text.split(/\r?\n/)) {
     const indent = raw.length - raw.replace(WS, "").length;
     // configparser drops blank and comment lines before its indent logic.
     if (raw.trim() === "" || /^\s*[#;]/.test(raw)) {
@@ -367,7 +375,7 @@ function pytestIniSections(text: string): string {
     if (!continuation) {
       // configparser reads any line led by "[" up to the last "]" as a
       // header, even with text after it, so the gate does too.
-      const header = /^[\s\x1c-\x1f\x85]*\[(.+)\]/
+      const header = /^\s*\[(.+)\]/
         .exec(raw)?.[1]
         ?.replace(/^\[+|\]+$/g, "")
         .trim();
@@ -381,7 +389,7 @@ function pytestIniSections(text: string): string {
       if (header !== undefined || iniName !== undefined) {
         const isWatched = (name: string | undefined) =>
           name !== undefined &&
-          /^(tool[.:])?pytest(\.|$)|^coverage:/.test(name);
+          /^(tool[.:])?pytest(\.|$)|^coverage:|^DEFAULT$/.test(name);
         const now = isWatched(header) || isWatched(iniName);
         // A line only one reading takes for a header neither ends nor starts
         // an unwatched section. Mark where a section ends, so removing the
@@ -638,7 +646,11 @@ export function changedVerificationConfig(
     );
   }
   if (base === "setup.cfg")
-    return pytestIniSections(before) !== pytestIniSections(after);
+    return (
+      ODD_INI_BYTES.test(before) ||
+      ODD_INI_BYTES.test(after) ||
+      pytestIniSections(before) !== pytestIniSections(after)
+    );
   if (base === "pyproject.toml") {
     const was = pytestToml(before);
     const now = pytestToml(after);
