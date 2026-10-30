@@ -12,11 +12,124 @@ const RUNNER_CONFIG =
 const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
-const FLAGS = String.raw`(?:\s+-{1,2}[\w-]+(?:=\S*)?)*`;
-const NPM_RUN = new RegExp(
-  String.raw`\b(?:npm${FLAGS}\s+(?:run|run-script)|pnpm${FLAGS}\s+run|yarn\s+run|yarn|pnpm)${FLAGS}\s+([\w:.-]+)|\bnpm\s+(?:test|t)\b`,
-  "g",
-);
+const RUNNERS = new Set(["npm", "pnpm", "yarn"]);
+// Options that take the next word as their value, and options that do not.
+// An option in neither list, spelled without `=`, followed by a word, could
+// be either, so the invocation cannot be resolved and fails closed.
+const VALUE_OPTIONS = new Set([
+  "--script-shell",
+  "--prefix",
+  "--workspace",
+  "-w",
+  "--filter",
+  "-F",
+  "--cwd",
+  "--dir",
+  "-C",
+  "--loglevel",
+  "--userconfig",
+  "--globalconfig",
+  "--cache",
+  "--registry",
+  "--shell",
+  "--config",
+  "--use-yarnrc",
+]);
+const BOOLEAN_OPTIONS = new Set([
+  "-s",
+  "--silent",
+  "-q",
+  "--quiet",
+  "-r",
+  "--recursive",
+  "-ws",
+  "--workspaces",
+  "--include-workspace-root",
+  "--if-present",
+  "--no-bail",
+  "--parallel",
+  "--stream",
+  "--offline",
+  "--verbose",
+  "-v",
+  "-d",
+  "--production",
+  "--ignore-scripts",
+  "--no-color",
+  "--color",
+  "--fail-if-no-match",
+  "--no-sort",
+  "-p",
+  "-t",
+  "--topological",
+  "--if-present",
+]);
+const OTHER_COMMANDS =
+  /^(exec|dlx|install|i|add|remove|rm|update|up|ci|init|publish|pack|link|audit|cache|config|set|get|why|ls|list|info|view|version|dedupe|prune|rebuild|outdated|create|x|node|dev|help)$/;
+
+// Script names a command line runs through npm, pnpm or yarn. `unresolved`
+// is set when an invocation's script cannot be read with confidence.
+function runnerTargets(command: string): {
+  targets: string[];
+  unresolved: boolean;
+} {
+  const targets: string[] = [];
+  let unresolved = false;
+  for (const segment of command.split(/&&|\|\||[;|&\n()`]/)) {
+    const words = (segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((word) =>
+      word.replace(/^(["'])(.*)\1$/, "$2"),
+    );
+    for (let at = 0; at < words.length; at++) {
+      const runner = path.posix.basename(words[at]!);
+      if (!RUNNERS.has(runner)) continue;
+      const positional: string[] = [];
+      let ambiguous = false;
+      for (let k = at + 1; k < words.length; k++) {
+        const word = words[k]!;
+        if (!word.startsWith("-")) {
+          positional.push(word);
+          continue;
+        }
+        if (word.includes("=")) continue;
+        if (VALUE_OPTIONS.has(word)) {
+          // The value is not a script name; skip the word after it.
+          k++;
+        } else if (!BOOLEAN_OPTIONS.has(word)) {
+          const next = words[k + 1];
+          if (next !== undefined && !next.startsWith("-")) {
+            ambiguous = true;
+            break;
+          }
+        }
+      }
+      if (ambiguous) {
+        unresolved = true;
+        continue;
+      }
+      const [first, second] = positional;
+      if (first === "workspace" && runner === "yarn") {
+        // yarn workspace <name> [run] <script>
+        const rest = positional.slice(2);
+        const script = rest[0] === "run" ? rest[1] : rest[0];
+        if (script === undefined) unresolved = true;
+        else targets.push(script);
+        continue;
+      }
+      if (first === undefined) continue;
+      if (["run", "run-script", "rum", "urn"].includes(first)) {
+        if (second === undefined) unresolved = true;
+        else targets.push(second);
+      } else if (first === "workspaces" || first === "foreach") {
+        unresolved = true;
+      } else if (first === "test" || first === "t" || first === "tst") {
+        targets.push("test");
+      } else if (runner !== "npm" && !OTHER_COMMANDS.test(first)) {
+        targets.push(first);
+      }
+    }
+  }
+  return { targets, unresolved };
+}
 
 function parse(text: string): Record<string, unknown> | undefined {
   try {
@@ -35,9 +148,15 @@ function scriptsOf(record: Record<string, unknown> | undefined) {
     : {};
 }
 // Test script names plus every script a gated command runs through `npm run`,
-// followed to a fixpoint over all the given manifests.
-function gatedNames(all: Record<string, unknown>[]): Set<string> {
+// followed to a fixpoint over all the given manifests. `all` is set when a
+// gated command runs a script that cannot be resolved: then every script of
+// every manifest counts.
+function gatedNames(all: Record<string, unknown>[]): {
+  names: Set<string>;
+  all: boolean;
+} {
   const names = new Set<string>();
+  let everything = false;
   for (const scripts of all)
     for (const name of Object.keys(scripts))
       if (TEST_SCRIPT.test(name)) names.add(name);
@@ -47,8 +166,9 @@ function gatedNames(all: Record<string, unknown>[]): Set<string> {
       for (const name of [...names]) {
         const command = scripts[name];
         if (typeof command !== "string") continue;
-        for (const match of command.matchAll(NPM_RUN)) {
-          const target = match[1] ?? "test";
+        const { targets, unresolved } = runnerTargets(command);
+        if (unresolved) everything = true;
+        for (const target of targets) {
           if (target.startsWith("-")) continue;
           // npm also runs the pre and post hooks of every script it reaches.
           for (const hooked of [target, `pre${target}`, `post${target}`])
@@ -59,15 +179,15 @@ function gatedNames(all: Record<string, unknown>[]): Set<string> {
         }
       }
   }
-  return names;
+  return { names, all: everything };
 }
 function npmEntries(
   record: Record<string, unknown>,
-  names: Set<string>,
+  gated: { names: Set<string>; all: boolean },
 ): string[] {
   const scripts = scriptsOf(record);
   const entries: string[] = [];
-  for (const name of names)
+  for (const name of gated.all ? Object.keys(scripts) : gated.names)
     if (name in scripts)
       entries.push(`script ${name}=${JSON.stringify(scripts[name])}`);
   for (const key of NPM_RUNNER_KEYS)
@@ -221,11 +341,18 @@ function pytestToml(text: string): string | undefined {
   return out.sort().join("\n");
 }
 
-/** Whether going from `before` to `after` changes what the checks load. */
+/**
+ * Whether going from `before` to `after` changes what the checks load.
+ * `manifests` holds the text of the other package.json files in the checkout
+ * (both their state before the patch and as patched), so a script a root test
+ * script reaches in another workspace counts. Without them, any script change
+ * in a package.json below the root fails closed.
+ */
 export function changedVerificationConfig(
   file: string,
   before: string,
   after: string,
+  manifests?: string[],
 ): boolean {
   if (before === after) return false;
   const base = path.posix.basename(file).toLowerCase();
@@ -235,7 +362,16 @@ export function changedVerificationConfig(
     const now = parse(after);
     // A manifest npm cannot read now but could before is not a safe edit.
     if (!now) return was !== undefined;
-    const names = gatedNames([scriptsOf(was), scriptsOf(now)]);
+    const names = gatedNames([
+      scriptsOf(was),
+      scriptsOf(now),
+      ...(manifests ?? []).map((text) => scriptsOf(parse(text))),
+    ]);
+    if (manifests === undefined && path.posix.dirname(file) !== ".") {
+      // Whether a root script delegates here is unknown: any script change counts.
+      const scriptsWas = JSON.stringify(scriptsOf(was));
+      if (scriptsWas !== JSON.stringify(scriptsOf(now))) return true;
+    }
     return (
       JSON.stringify(was ? npmEntries(was, names) : []) !==
       JSON.stringify(npmEntries(now, names))
