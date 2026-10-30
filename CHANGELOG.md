@@ -77,6 +77,10 @@
 - Published `@agile-graph/engine` and `@agile-graph/contracts` JavaScript no
   longer ends with `sourceMappingURL` comments naming maps the tarballs never
   carried (#247).
+- The verification-config gate no longer counts a `pyproject.toml` that
+  respells the same pytest settings (a table header against an inline table or
+  dotted keys) or a `setup.cfg` header with different inner spacing as a
+  change, and it now sees an added empty `[[tool.pytest...]]` entry.
 - `npm run preflight` now builds the engine before the script tests when one
   of them needs `packages/engine/dist`, so a fresh checkout no longer fails
   `readme-quickstart.test.mjs` (#228).
@@ -110,6 +114,9 @@
 
 ### Internal
 
+- Seeded property tests for the verification-config scanner (tokenizer,
+  runner targets, pytest ini and TOML readers) and its public gate; replay a
+  failure with `PROPERTY_SEED`.
 - `npm run test:coverage -w @agile-graph/engine` measures engine line coverage
   with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it
   drops below the floor in `scripts/coverage-floor.json` (85%). This replaces
