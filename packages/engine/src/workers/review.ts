@@ -753,6 +753,24 @@ export function reviewRecordExportable(
 }
 
 /**
+ * Whether every earlier model review record of a run may be shown to a
+ * non-local reviewer or worker. A verify-fix record written before records
+ * carried the flag inherits findings with no rulings and no flag, so it reads
+ * exportable on its own; the run's history still holds the record that ruled
+ * on scan results, and that one keeps the answer unsafe.
+ */
+export function reviewHistoryExportable(
+  events: readonly { type: string; data: Record<string, unknown> }[],
+): boolean {
+  return events
+    .filter(
+      (event) =>
+        event.type === "review.completed" && event.data.by !== "person",
+    )
+    .every((event) => reviewRecordExportable(event.data));
+}
+
+/**
  * Earlier `fixed` verdicts this run recorded against this exact snapshot,
  * by finding ID with their stored evidence, so a resumed review does not
  * pay to check the same finding at the same snapshot again. A verdict from

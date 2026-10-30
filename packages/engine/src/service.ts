@@ -112,6 +112,7 @@ import {
   invokeRepeatDecision,
   invokeVerifyFix,
   priorBlockingFindings,
+  reviewHistoryExportable,
   reviewRecordExportable,
   earlierFindingsNotice,
   findingSignature,
@@ -3371,13 +3372,9 @@ export class GraphEngine {
         // worker may not receive, whatever provider raised them. A record
         // that ruled on scan results and lacks the flag counts as unsafe.
         const priorExportable = reviewRecordExportable(latestReview);
-        const historyExportable = this.store
-          .events(run.id)
-          .filter(
-            (event) =>
-              event.type === "review.completed" && event.data.by !== "person",
-          )
-          .every((event) => reviewRecordExportable(event.data));
+        const historyExportable = reviewHistoryExportable(
+          this.store.events(run.id),
+        );
         const priorSawScan =
           latestReview !== undefined &&
           (latestReview.scanExportable !== undefined ||
@@ -3409,7 +3406,7 @@ export class GraphEngine {
               const check: VerifyFixResult =
                 reused !== undefined
                   ? { verdict: "fixed", evidence: reused }
-                  : reviewer.kind !== "local" && !priorExportable
+                  : reviewer.kind !== "local" && !historyExportable
                     ? {
                         verdict: "inconclusive",
                         evidence:
