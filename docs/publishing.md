@@ -117,7 +117,9 @@ the installed CLI does not start.
 ## Versioning and support
 
 Agile Graph ships under semver **0.x**: a minor release may contain breaking changes. Only the
-latest minor of 0.x receives fixes.
+latest minor of 0.x receives fixes. Steps for moving between releases are in
+[upgrading](upgrading.md); when a release is cut, rename its `## Unreleased`
+heading there to the version number.
 
 ### Semver meaning
 
