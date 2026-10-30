@@ -15,14 +15,22 @@
 - A worker patch that edits a file the required checks load as
   configuration (a test runner config, or the test script entries of
   `package.json` and the scripts they reach through `npm run`, the package-manager
-  rc files `.npmrc`, `.yarnrc`, `.yarnrc.yml` and `.pnpmfile.cjs`, or the pytest
-  sections of `pyproject.toml` and `setup.cfg`) is refused and returned
+  rc files `.npmrc`, `.yarnrc`, `.yarnrc.yml` and `.pnpmfile.cjs`,
+  `pnpm-workspace.yaml`, `jest-preset.*`, `.coveragerc`, `.c8rc*`, the pytest
+  and `tool.coverage` sections of `pyproject.toml`, the pytest and `coverage:*`
+  sections of `setup.cfg`, or a Maven or Gradle build file, which is gated whole
+  and never parsed) is refused and returned
   to the worker as feedback unless a person listed the path in
   `policy.approvedVerificationConfigPaths`. Scripts a test script reaches in
   another workspace package (`--workspace`, `--prefix`, `--filter`, `yarn
   workspace`) are gated too, option values such as `--script-shell` are
   skipped when finding the script, and an invocation that cannot be resolved
-  gates every script of the manifests.
+  gates every script of the manifests. Scripts named through `run-s`, `run-p`,
+  `npm-run-all` or `concurrently "npm:x"` are followed, and a script pattern or
+  variable gates every script. Not gated, on purpose: a coverage rc file named
+  with `--rcfile`, `turbo.json`/`nx.json` task graphs, and `-x test` in a
+  Makefile or CI file. A `pyproject.toml` date-time written with a space is now
+  read instead of refused. Closes #246.
   The `pyproject.toml` pytest settings are read as TOML with the key path
   normalised, so spaced, quoted or escaped dotted keys and headers, inline tables and
   multi-line values all count; a `pyproject.toml` that cannot be read

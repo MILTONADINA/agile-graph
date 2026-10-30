@@ -501,4 +501,218 @@ describe("verification configuration gate", () => {
     expect(() => assertProjectPolicy(policy(["a/../b"]))).toThrow();
     expect(() => assertProjectPolicy(policy([1]))).toThrow();
   });
+  describe("issue 246", () => {
+    const gate = (f: string) => changedVerificationConfig(f, "a", "b");
+    it("gates jest-preset, coverage rc, c8 rc and pnpm-workspace files by name", () => {
+      for (const f of [
+        "jest-preset.js",
+        "jest-preset.cjs",
+        "jest-preset.mjs",
+        "jest-preset.json",
+        "JEST-PRESET.JS",
+        "sub/jest-preset.cjs",
+        ".coveragerc",
+        "pkg/.coveragerc",
+        ".c8rc",
+        ".c8rc.json",
+        ".c8rc.yml",
+        "pnpm-workspace.yaml",
+        "pnpm-workspace.yml",
+      ])
+        expect(gate(f), f).toBe(true);
+    });
+    it("gates Maven and Gradle build files whole, without reading them", () => {
+      for (const f of [
+        "pom.xml",
+        "mod/pom.xml",
+        "POM.XML",
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+        "settings.gradle.kts",
+        "gradle/test.gradle",
+        "gradle.properties",
+        ".mvn/maven.config",
+        ".mvn/jvm.config",
+        ".mvn/extensions.xml",
+        ".mvn/wrapper/maven-wrapper.properties",
+        "gradle/wrapper/gradle-wrapper.properties",
+        "mvnw",
+        "mvnw.cmd",
+        "gradlew",
+        "gradlew.bat",
+        "buildSrc/build.gradle.kts",
+        "buildSrc/src/main/kotlin/x.kt",
+      ])
+        expect(gate(f), f).toBe(true);
+      for (const f of [
+        "other/.mvnx/file",
+        "src/buildSrc.txt",
+        "gradle/libs.versions.toml",
+        "docs/gradle/notes.md",
+      ])
+        expect(gate(f), f).toBe(false);
+    });
+    it("refuses a pom.xml edit with the approval message unless approved", async () => {
+      const root = await workspace({ "pom.xml": "<project/>\n" });
+      await expect(
+        edit(root, "pom.xml", "<project/>", "<project><!--x--></project>"),
+      ).rejects.toThrow(/Verification configuration needs approval: pom\.xml/);
+      await edit(root, "pom.xml", "<project/>", "<project><!--x--></project>", {
+        ...DEFAULT_POLICY,
+        approvedVerificationConfigPaths: ["pom.xml"],
+      });
+      expect(await readFile(path.join(root, "pom.xml"), "utf8")).toContain("x");
+    });
+    it("gates tool.coverage in pyproject.toml, however spelled", () => {
+      const rows: [string, string, string, boolean][] = [
+        [
+          "table fail_under",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[tool.coverage.report]\nfail_under = 0\n",
+          true,
+        ],
+        [
+          "dotted key",
+          "[tool]\ncoverage.report.fail_under = 80\n",
+          "[tool]\ncoverage.report.fail_under = 0\n",
+          true,
+        ],
+        [
+          "spaced header",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[ tool . coverage . report ]\nfail_under = 0\n",
+          true,
+        ],
+        [
+          "quoted header",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          '["tool"."coverage".report]\nfail_under = 0\n',
+          true,
+        ],
+        [
+          "inline table",
+          "[tool.coverage]\nreport = { fail_under = 80 }\n",
+          "[tool.coverage]\nreport = { fail_under = 0 }\n",
+          true,
+        ],
+        [
+          "omit edit",
+          "[tool.coverage.run]\nomit = []\n",
+          '[tool.coverage.run]\nomit = ["src/*"]\n',
+          true,
+        ],
+        [
+          "CRLF and BOM",
+          "﻿[tool.coverage.report]\r\nfail_under = 80\r\n",
+          "﻿[tool.coverage.report]\r\nfail_under = 0\r\n",
+          true,
+        ],
+        [
+          "comment-only change",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[tool.coverage.report]\nfail_under = 80 # c\n",
+          false,
+        ],
+        [
+          "header inside a comment",
+          "[project]\nname = 'a'\n",
+          "[project]\nname = 'a'\n# [tool.coverage.report]\n",
+          false,
+        ],
+        [
+          "dependency named coverage",
+          '[tool.poetry.dependencies]\ncoverage = "^7"\n',
+          '[tool.poetry.dependencies]\ncoverage = "^8"\n',
+          false,
+        ],
+        [
+          "date-time with a space and an unrelated edit",
+          "x = 1979-05-27 07:32:00Z\n[project]\nname = 'a'\n",
+          "x = 1979-05-27 07:32:00Z\n[project]\nname = 'b'\n",
+          false,
+        ],
+      ];
+      for (const [label, before, after, want] of rows)
+        expect(
+          changedVerificationConfig("pyproject.toml", before, after),
+          label,
+        ).toBe(want);
+      // Text that cannot be read (a non-ASCII bare key) still gates.
+      expect(
+        changedVerificationConfig(
+          "pyproject.toml",
+          "[project]\nname = 'a'\n",
+          "[project]\nnamé = 'b'\n",
+        ),
+      ).toBe(true);
+    });
+    it("gates coverage sections in setup.cfg, however the header is spelled", () => {
+      const rows: [string, string, boolean][] = [
+        ["[coverage:report]", "[coverage:report]\nfail_under = 0\n", true],
+        ["spaced header", "[ coverage:report ]\nfail_under = 0\n", true],
+        [
+          "[coverage:run] with a comment",
+          "[coverage:run] ; c\nomit = x\n",
+          true,
+        ],
+        ["doubled brackets", "[[coverage:report]]\nfail_under = 0\n", true],
+        ["unrelated [metadata] edit", "[metadata]\nx = 1\n", false],
+      ];
+      const before = "[metadata]\nname = a\n";
+      for (const [label, added, want] of rows)
+        expect(
+          changedVerificationConfig("setup.cfg", before, before + added),
+          label,
+        ).toBe(want);
+    });
+    it("follows scripts reached through run-s, npm-run-all and concurrently npm:x", () => {
+      const manifest = (test: string, unit: string, other = "echo") =>
+        JSON.stringify({ scripts: { test, unit, lint: "eslint .", other } });
+      const weakened = (test: string) =>
+        changedVerificationConfig(
+          "package.json",
+          manifest(test, "vitest run"),
+          manifest(test, "true"),
+        );
+      const unrelated = (test: string) =>
+        changedVerificationConfig(
+          "package.json",
+          manifest(test, "vitest run", "echo a"),
+          manifest(test, "vitest run", "echo b"),
+        );
+      const reaches = [
+        "run-s unit",
+        "run-p lint unit",
+        "npm-run-all -s lint unit",
+        "npm-run-all --npm-path npm unit",
+        "run-s -c -l unit",
+        "npx run-s unit",
+        "./node_modules/.bin/run-s unit",
+        "cross-env CI=1 run-s unit",
+        'run-s "unit -- --bail"',
+        "run-s lint && run-s unit",
+        "concurrently npm:unit",
+        `concurrently "npm:unit" 'yarn:unit' "pnpm:unit"`,
+        'concurrently -n a,b "npm:unit"',
+        'concurrently "npm:unit -- --bail"',
+      ];
+      for (const test of reaches) expect(weakened(test), test).toBe(true);
+      // A word like npm:foo inside an echo also counts: harmless over-gating.
+      for (const test of [
+        "run-s test:*",
+        'concurrently "npm:test:*"',
+        "npm run $T",
+        "run-s --unknown value unit",
+        "run-s -- unit",
+        'run-p "{a,b}"',
+        "run-s ?nit",
+        "npm run /^u/",
+      ])
+        expect(unrelated(test), test).toBe(true);
+      // A resolved target does not gate unrelated scripts.
+      expect(unrelated("run-s unit")).toBe(false);
+      expect(unrelated("concurrently npm:unit")).toBe(false);
+    });
+  });
 });
