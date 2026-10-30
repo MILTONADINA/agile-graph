@@ -13,18 +13,14 @@ const TEST_SCRIPT = /^(pre|post)?(test|check|verify)(:.*)?$/;
 const NPM_RUNNER_KEYS = ["jest", "vitest", "mocha", "ava", "nyc", "c8"];
 
 const RUNNERS = new Set(["npm", "pnpm", "yarn"]);
-// Options that take the next word as their value, and options that do not.
-// An option in neither list, spelled without `=`, followed by a word, could
-// be either, so the invocation cannot be resolved and fails closed.
-const VALUE_OPTIONS = new Set([
+// Options that take the next word as their value, and options that do not,
+// per runner: `-w` is npm's `--workspace` (a value) but pnpm's boolean
+// `--workspace-root`. An option in neither list, spelled without `=`,
+// followed by a word, could be either, so the invocation cannot be resolved
+// and fails closed.
+const COMMON_VALUE_OPTIONS = [
   "--script-shell",
   "--prefix",
-  "--workspace",
-  "-w",
-  "--filter",
-  "-F",
-  "--cwd",
-  "--dir",
   "-C",
   "--loglevel",
   "--userconfig",
@@ -34,7 +30,12 @@ const VALUE_OPTIONS = new Set([
   "--shell",
   "--config",
   "--use-yarnrc",
-]);
+];
+const VALUE_OPTIONS: Record<string, Set<string>> = {
+  npm: new Set([...COMMON_VALUE_OPTIONS, "--workspace", "-w"]),
+  pnpm: new Set([...COMMON_VALUE_OPTIONS, "--filter", "-F", "--dir"]),
+  yarn: new Set([...COMMON_VALUE_OPTIONS, "--cwd"]),
+};
 const BOOLEAN_OPTIONS = new Set([
   "-s",
   "--silent",
@@ -64,37 +65,108 @@ const BOOLEAN_OPTIONS = new Set([
   "--topological",
   "--if-present",
 ]);
+const PNPM_BOOLEAN_OPTIONS = new Set(["-w", "--workspace-root"]);
 const OTHER_COMMANDS =
   /^(exec|dlx|install|i|add|remove|rm|update|up|ci|init|publish|pack|link|audit|cache|config|set|get|why|ls|list|info|view|version|dedupe|prune|rebuild|outdated|create|x|node|dev|help)$/;
 
-// Script names a command line runs through npm, pnpm or yarn. `unresolved`
-// is set when an invocation's script cannot be read with confidence.
+// Splits a command line into segments of words, quote-aware: separators
+// inside quotes do not split, and a quoted word keeps its inner text.
+function tokenize(command: string): { text: string; quoted: boolean }[][] {
+  const segments: { text: string; quoted: boolean }[][] = [[]];
+  let text = "";
+  let quoted = false;
+  let open = false;
+  let quote = "";
+  const endWord = () => {
+    if (open) segments[segments.length - 1]!.push({ text, quoted });
+    text = "";
+    quoted = false;
+    open = false;
+  };
+  for (const ch of command) {
+    if (quote) {
+      if (ch === quote) quote = "";
+      else text += ch;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      quoted = true;
+      open = true;
+    } else if (/[&|;\n()`]/.test(ch)) {
+      endWord();
+      if (segments[segments.length - 1]!.length) segments.push([]);
+    } else if (/\s/.test(ch)) {
+      endWord();
+    } else {
+      text += ch;
+      open = true;
+    }
+  }
+  endWord();
+  return segments;
+}
+
+// Script names a command line runs through npm, pnpm, yarn or `node --run`.
+// `unresolved` is set when an invocation's script cannot be read with
+// confidence. A quoted word with spaces is read as a command line itself, so
+// `concurrently "npm run a"` and `sh -c 'npm run a'` are seen.
 function runnerTargets(command: string): {
   targets: string[];
   unresolved: boolean;
 } {
   const targets: string[] = [];
   let unresolved = false;
-  for (const segment of command.split(/&&|\|\||[;|&\n()`]/)) {
-    const words = (segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((word) =>
-      word.replace(/^(["'])(.*)\1$/, "$2"),
-    );
+  for (const segment of tokenize(command)) {
+    for (const word of segment) {
+      if (!word.quoted || !/\s/.test(word.text)) continue;
+      const inner = runnerTargets(word.text);
+      targets.push(...inner.targets);
+      if (inner.unresolved) unresolved = true;
+    }
+    const words = segment.map((word) => word.text);
     for (let at = 0; at < words.length; at++) {
       const runner = path.posix.basename(words[at]!);
+      if (runner === "node") {
+        for (let k = at + 1; k < words.length; k++) {
+          const word = words[k]!;
+          if (!word.startsWith("-")) break;
+          if (word === "--run") {
+            if (words[k + 1] === undefined) unresolved = true;
+            else targets.push(words[k + 1]!);
+          } else if (word.startsWith("--run=")) {
+            targets.push(word.slice("--run=".length));
+          }
+        }
+        continue;
+      }
       if (!RUNNERS.has(runner)) continue;
+      const values = VALUE_OPTIONS[runner]!;
       const positional: string[] = [];
       let ambiguous = false;
       for (let k = at + 1; k < words.length; k++) {
         const word = words[k]!;
+        if (word === "--") break;
         if (!word.startsWith("-")) {
           positional.push(word);
+          // Once the script is read, what follows are its own arguments.
+          const [first] = positional;
+          const needed = ["run", "run-script", "rum", "urn"].includes(first!)
+            ? 2
+            : runner === "yarn" && first === "workspace"
+              ? positional[2] === "run"
+                ? 4
+                : 3
+              : 1;
+          if (positional.length >= needed) break;
           continue;
         }
         if (word.includes("=")) continue;
-        if (VALUE_OPTIONS.has(word)) {
+        if (values.has(word)) {
           // The value is not a script name; skip the word after it.
           k++;
-        } else if (!BOOLEAN_OPTIONS.has(word)) {
+        } else if (
+          !BOOLEAN_OPTIONS.has(word) &&
+          !(runner === "pnpm" && PNPM_BOOLEAN_OPTIONS.has(word))
+        ) {
           const next = words[k + 1];
           if (next !== undefined && !next.startsWith("-")) {
             ambiguous = true;

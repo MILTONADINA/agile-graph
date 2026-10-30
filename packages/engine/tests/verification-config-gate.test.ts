@@ -420,6 +420,65 @@ describe("verification configuration gate", () => {
       true,
     );
   });
+  it("reads runner invocations inside quoted commands", () => {
+    for (const run of [
+      'concurrently "npm run unit" "npm run lint"',
+      "sh -c 'npm run unit --workspace child'",
+      'concurrently "npm run lint && npm run unit"',
+    ]) {
+      const m = (u: string) =>
+        JSON.stringify({ scripts: { test: run, unit: u, docs: "a" } });
+      expect(
+        changedVerificationConfig("package.json", m("vitest run"), m("true")),
+        run,
+      ).toBe(true);
+    }
+  });
+  it("treats -w as pnpm's boolean workspace-root but npm's workspace value", () => {
+    for (const run of [
+      "pnpm -w unit",
+      "pnpm -w run unit",
+      "npm run -w child unit",
+    ]) {
+      const m = (u: string) =>
+        JSON.stringify({ scripts: { test: run, unit: u, docs: "a" } });
+      expect(
+        changedVerificationConfig("package.json", m("vitest run"), m("true")),
+        run,
+      ).toBe(true);
+      // Resolved, so an unrelated script stays editable.
+      const d = (x: string) =>
+        JSON.stringify({ scripts: { test: run, unit: "vitest run", docs: x } });
+      expect(
+        changedVerificationConfig("package.json", d("a"), d("b")),
+        run,
+      ).toBe(false);
+    }
+  });
+  it("stops reading options at -- and after the script", () => {
+    for (const run of [
+      "npm run unit -- --reporter dot",
+      "npm exec -w child -- vitest",
+      "pnpm unit --reporter dot",
+    ]) {
+      const m = (x: string) =>
+        JSON.stringify({ scripts: { test: run, unit: "vitest run", lint: x } });
+      expect(
+        changedVerificationConfig("package.json", m("a"), m("b")),
+        run,
+      ).toBe(false);
+    }
+  });
+  it("follows node --run to a package.json script", () => {
+    for (const run of ["node --run unit", "node --no-warnings --run unit"]) {
+      const m = (u: string) =>
+        JSON.stringify({ scripts: { test: run, unit: u } });
+      expect(
+        changedVerificationConfig("package.json", m("vitest run"), m("true")),
+        run,
+      ).toBe(true);
+    }
+  });
   it("gates karma.conf.js and .babelrc", () => {
     for (const f of ["karma.conf.js", ".babelrc", ".babelrc.json"])
       expect(changedVerificationConfig(f, "a", "b"), f).toBe(true);
