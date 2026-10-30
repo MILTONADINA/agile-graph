@@ -9,6 +9,7 @@ import {
   invokeReviewWorker,
   invokeVerifyFix,
   priorBlockingFindings,
+  reviewHistoryExportable,
   reviewRecordExportable,
   REVIEW_INSTRUCTIONS,
   reusableFixVerdicts,
@@ -707,5 +708,31 @@ describe("reviewRecordExportable", () => {
       false,
     );
     expect(reviewRecordExportable({ scanExportable: "yes" })).toBe(false);
+  });
+});
+
+describe("reviewHistoryExportable", () => {
+  const ruled = {
+    type: "review.completed",
+    data: { scanRulings: [{ id: "F1", ruling: "raised", reason: "x" }] },
+  };
+  // Written before records carried the flag: inherited findings, no rulings.
+  const legacyVerifyFix = {
+    type: "review.completed",
+    data: { stage: "verify-fix", passed: false, findings: [{ path: "a" }] },
+  };
+  it("stays unsafe when a legacy verify-fix record follows a ruled one", () => {
+    expect(reviewRecordExportable(legacyVerifyFix.data)).toBe(true);
+    expect(reviewHistoryExportable([ruled, legacyVerifyFix])).toBe(false);
+  });
+  it("ignores a person's record and other events", () => {
+    expect(
+      reviewHistoryExportable([
+        { type: "review.started", data: {} },
+        { type: "review.completed", data: { by: "person", scanRulings: [{}] } },
+        legacyVerifyFix,
+      ]),
+    ).toBe(true);
+    expect(reviewHistoryExportable([])).toBe(true);
   });
 });
