@@ -12,6 +12,9 @@
 - Offline tests for the local embedding model loader and downloader: asset and
   checksum verification, vector validation, and the download host, scheme,
   credential and redirect limits.
+- Tests for run publication: its guards, cancellation messages, commit
+  content, push-URL allowlist and draft pull request creation, all against a
+  local repository with `git push` and `gh` replaced.
 - Tests for the Cursor text-proposal runner's input validation, token and
   byte bounds, model pinning and unusable-usage handling.
 - The MCP `memory_propose` tool takes an optional `validFrom` (an ISO 8601
