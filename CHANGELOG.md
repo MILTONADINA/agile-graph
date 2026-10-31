@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Internal
+
+- Offline tests for the local embedding model loader and downloader: asset and
+  checksum verification, vector validation, and the download host, scheme,
+  credential and redirect limits.
+
 ### Changed
 
 - The verification-config gate also covers `pnpm-workspace.yaml`,
