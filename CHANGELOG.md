@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Internal
+
+- Tests for run publication: its guards, cancellation messages, commit
+  content, push-URL allowlist and draft pull request creation, all against a
+  local repository with `git push` and `gh` replaced.
+
 ### Changed
 
 - The verification-config gate also covers `pnpm-workspace.yaml`,
