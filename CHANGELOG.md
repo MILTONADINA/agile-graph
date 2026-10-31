@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The verification-config gate also covers `pnpm-workspace.yaml`,
+  `jest-preset.*`, `.coveragerc`, `.c8rc*`, the `tool.coverage` sections of
+  `pyproject.toml`, the `coverage:*` sections of `setup.cfg`, and Maven or
+  Gradle build files, which are gated whole and never parsed. Scripts named through `run-s`, `run-p`, `npm-run-all` or `concurrently "npm:x"` are followed, and a script pattern or variable gates every script, as does a backslash, variable or backtick anywhere in a gated script's command line or a glob character class or extglob in a `run-s` target. Leading whitespace in `setup.cfg` lines is significant for the comparison. Fail closed on bytes the two Python readers lex differently: a `setup.cfg` that contains a bare CR, VT, FF, `\x1c`-`\x1f`, NEL, LS, PS, BOM or NUL anywhere is treated as a change (configparser and iniconfig split or strip those differently); comment lines are skipped like configparser; a header is read both as configparser does (to the last `]`) and as iniconfig does (cut at the first `#` or `;`); `[DEFAULT]` counts as a gated section. A `pyproject.toml` that contains a bare CR anywhere is treated as a change (pytest and coverage read it in text mode, where a bare CR is a line break). Not gated, on purpose: a coverage rc file named with `--rcfile`, `turbo.json`/`nx.json` task graphs, and `-x test` in a Makefile or CI file. A `pyproject.toml` date-time written with a space is now read instead of refused (#246).
+
+### Fixed
+
+- The verification-config gate no longer counts a `pyproject.toml` that
+  respells the same pytest settings (a table header against an inline table or
+  dotted keys) as a change, and it now tells the entries of a
+  `[[tool.pytest...]]` array of tables apart, so an added, empty, reordered or
+  changed entry counts. A quoted `"[0]"` key no longer reads as an array index.
+- The verification-config gate now reads a `setup.cfg` header with a trailing
+  `#` or `;` comment, and where a pytest section ends, the way iniconfig does,
+  so `[tool:pytest] ; x]` and a `[metadata#]` line no longer hide a change; it
+  also sees a `pyproject.toml` empty array (`testpaths = []`) added or removed.
+
+### Internal
+
+- Seeded property tests for the verification-config scanner (tokenizer,
+  runner targets, pytest ini and TOML readers) and its public gate; replay a
+  failure with `PROPERTY_SEED`.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
@@ -15,25 +40,14 @@
 - A worker patch that edits a file the required checks load as
   configuration (a test runner config, or the test script entries of
   `package.json` and the scripts they reach through `npm run`, the package-manager
-  rc files `.npmrc`, `.yarnrc`, `.yarnrc.yml` and `.pnpmfile.cjs`,
-  `pnpm-workspace.yaml`, `jest-preset.*`, `.coveragerc`, `.c8rc*`, the pytest
-  and `tool.coverage` sections of `pyproject.toml`, the pytest and `coverage:*`
-  sections of `setup.cfg`, or a Maven or Gradle build file, which is gated whole
-  and never parsed) is refused and returned
+  rc files `.npmrc`, `.yarnrc`, `.yarnrc.yml` and `.pnpmfile.cjs`, or the pytest
+  sections of `pyproject.toml` and `setup.cfg`) is refused and returned
   to the worker as feedback unless a person listed the path in
   `policy.approvedVerificationConfigPaths`. Scripts a test script reaches in
   another workspace package (`--workspace`, `--prefix`, `--filter`, `yarn
   workspace`) are gated too, option values such as `--script-shell` are
   skipped when finding the script, and an invocation that cannot be resolved
-  gates every script of the manifests. Scripts named through `run-s`, `run-p`,
-  `npm-run-all` or `concurrently "npm:x"` are followed, and a script pattern or
-  variable gates every script, as does a backslash, variable or backtick anywhere in a gated
-  script's command line or a glob character class or extglob in a `run-s` target.
-  Leading whitespace in `setup.cfg` lines is significant for the comparison. Fail closed on bytes the two Python readers lex differently: a `setup.cfg` that contains a bare CR, VT, FF, `\x1c`-`\x1f`, NEL, LS, PS, BOM or NUL anywhere is treated as a change (configparser and iniconfig split or strip those differently); comment lines are skipped like configparser; a header is read both as configparser does (to the last `]`) and as iniconfig does (cut at the first `#` or `;`); `[DEFAULT]` counts as a gated section. A `pyproject.toml` that contains a bare CR anywhere is treated as a change (pytest and coverage read it in text mode, where a bare CR is a line break).
-  Not gated, on purpose: a coverage rc file named
-  with `--rcfile`, `turbo.json`/`nx.json` task graphs, and `-x test` in a
-  Makefile or CI file. A `pyproject.toml` date-time written with a space is now
-  read instead of refused (#246).
+  gates every script of the manifests.
   The `pyproject.toml` pytest settings are read as TOML with the key path
   normalised, so spaced, quoted or escaped dotted keys and headers, inline tables and
   multi-line values all count; a `pyproject.toml` that cannot be read
@@ -77,15 +91,6 @@
 - Published `@agile-graph/engine` and `@agile-graph/contracts` JavaScript no
   longer ends with `sourceMappingURL` comments naming maps the tarballs never
   carried (#247).
-- The verification-config gate no longer counts a `pyproject.toml` that
-  respells the same pytest settings (a table header against an inline table or
-  dotted keys) as a change, and it now tells the entries of a
-  `[[tool.pytest...]]` array of tables apart, so an added, empty, reordered or
-  changed entry counts. A quoted `"[0]"` key no longer reads as an array index.
-- The verification-config gate now reads a `setup.cfg` header with a trailing
-  `#` or `;` comment, and where a pytest section ends, the way iniconfig does,
-  so `[tool:pytest] ; x]` and a `[metadata#]` line no longer hide a change; it
-  also sees a `pyproject.toml` empty array (`testpaths = []`) added or removed.
 - `npm run preflight` now builds the engine before the script tests when one
   of them needs `packages/engine/dist`, so a fresh checkout no longer fails
   `readme-quickstart.test.mjs` (#228).
@@ -119,9 +124,6 @@
 
 ### Internal
 
-- Seeded property tests for the verification-config scanner (tokenizer,
-  runner targets, pytest ini and TOML readers) and its public gate; replay a
-  failure with `PROPERTY_SEED`.
 - `npm run test:coverage -w @agile-graph/engine` measures engine line coverage
   with `@vitest/coverage-v8`, and the Linux x64 platform job fails when it
   drops below the floor in `scripts/coverage-floor.json` (85%). This replaces
