@@ -111,6 +111,30 @@ describe("verification configuration gate", () => {
     const changed = (before: string, after: string) =>
       changedVerificationConfig("pyproject.toml", before, after);
     const base = "[project]\nname = 'a'\n";
+    it("treats a bare CR as a change, since pytest and coverage read the file in text mode", () => {
+      const p = '[project]\nname = "a"\n# c\n';
+      expect(
+        changed(
+          p,
+          '[project]\nname = "a"\n# c\r[tool.pytest.ini_options]\raddopts = "-k nothing"\n',
+        ),
+      ).toBe(true);
+      expect(
+        changed(
+          p,
+          '[project]\nname = "a"\n# c\r[tool.coverage.report]\rfail_under = 0\n',
+        ),
+      ).toBe(true);
+      const q = '[tool.pytest.ini_options]\naddopts = "-q"\n# c\n';
+      expect(
+        changed(
+          q,
+          '[tool.pytest.ini_options]\naddopts = "-q"\n# c\rtestpaths = ["nowhere"]\n',
+        ),
+      ).toBe(true);
+      const lf = '[tool.pytest.ini_options]\naddopts = "-q"\n';
+      expect(changed(lf, lf.replace(/\n/g, "\r\n"))).toBe(false);
+    });
     it("sees a dotted key with spaces around the dots", () => {
       expect(
         changed(
@@ -182,6 +206,62 @@ describe("verification configuration gate", () => {
             "[tool.pytest.ini_options]\naddopts = '-x'\n[tool.other]\nx = 1\n",
         ),
       ).toBe(false);
+    });
+    it("reads a table header and an inline table as the same settings", () => {
+      expect(
+        changed(
+          '[tool.pytest]\nini_options = { addopts = "-x" }\n',
+          '[tool.pytest.ini_options]\naddopts = "-x"\n',
+        ),
+      ).toBe(false);
+      expect(
+        changed(
+          "[tool.pytest.ini_options]\n",
+          "tool.pytest.ini_options = {}\n",
+        ),
+      ).toBe(false);
+      expect(
+        changed(
+          "tool.pytest = { ini_options = { addopts = '-x' } }\n",
+          "tool.pytest.ini_options.addopts = '-x'\n",
+        ),
+      ).toBe(false);
+      expect(
+        changed(
+          "[tool.pytest]\nini_options = { addopts = '-x' }\n",
+          "[tool.pytest]\nini_options = { addopts = '-y' }\n",
+        ),
+      ).toBe(true);
+    });
+    it("sees an added entry of an array of tables, even an empty one", () => {
+      const entry = "[[tool.pytest.hooks]]\nname = 'a'\n";
+      expect(changed(entry, entry + entry)).toBe(true);
+      expect(changed(entry, entry + "[[tool.pytest.hooks]]\n")).toBe(true);
+    });
+    it("tells the entries of an array of tables apart", () => {
+      const h = "[[tool.pytest.hooks]]\n";
+      expect(
+        changed(
+          `${h}name='a'\nid=1\n${h}name='b'\nid=2\n`,
+          `${h}name='a'\nid=2\n${h}name='b'\nid=1\n`,
+        ),
+      ).toBe(true);
+      expect(changed(`${h}${h}x=1\n`, `${h}x=1\n${h}`)).toBe(true);
+      const sub = (v: string) => `${h}[tool.pytest.hooks.s]\nv=${v}\n`;
+      expect(changed(sub("1"), sub("2"))).toBe(true);
+    });
+    it('does not read a quoted "[0]" key as an array index', () => {
+      const t = "[tool.pytest]\n";
+      expect(changed(`${t}x = [1]\n`, `${t}x."[0]" = 1\n`)).toBe(true);
+      expect(
+        changed("[[tool.pytest.h]]\nx=1\n", '[tool.pytest.h]\n"[0]".x=1\n'),
+      ).toBe(true);
+      expect(
+        changed(
+          "[[tool.pytest.h]]\n[tool.pytest.h.s]\nv=1\n",
+          '[tool.pytest.h."[0]".s]\nv=1\n',
+        ),
+      ).toBe(true);
     });
     it("leaves ordinary dependency bumps alone, including inline tables", () => {
       const dev = (v: string) =>
@@ -483,6 +563,48 @@ describe("verification configuration gate", () => {
     for (const f of ["karma.conf.js", ".babelrc", ".babelrc.json"])
       expect(changedVerificationConfig(f, "a", "b"), f).toBe(true);
   });
+  it("counts a respelled setup.cfg pytest header as a change", () => {
+    const cfg = (header: string) => `${header}\naddopts = -x\n`;
+    const changed = (before: string, after: string) =>
+      changedVerificationConfig("setup.cfg", before, after);
+    expect(changed(cfg("[pytest]"), cfg("[ pytest ]"))).toBe(true);
+    expect(changed(cfg("[tool:pytest]"), cfg("  [  tool:pytest  ]  "))).toBe(
+      true,
+    );
+    expect(changed(cfg("[pytest]"), cfg("[pytest]  ; note"))).toBe(true);
+    expect(changed(cfg("[pytest]"), cfg("[pytest2]"))).toBe(true);
+    expect(changed(cfg("[pytest]"), cfg("[tool:pytest]"))).toBe(true);
+  });
+  it("reads a setup.cfg header the way iniconfig cuts comments", () => {
+    const changed = (before: string, after: string) =>
+      changedVerificationConfig("setup.cfg", before, after);
+    const h = "[tool:pytest] ; x]\n";
+    expect(changed(`${h}addopts = -x\n`, `${h}addopts = -x --no-cov\n`)).toBe(
+      true,
+    );
+    expect(changed(`${h}addopts = -x\n`, `${h}addopts = -x\nk = v\n`)).toBe(
+      true,
+    );
+    const c = "[tool:pytest] # c]\n";
+    expect(
+      changed(`${c}addopts = -x\n`, `${c}addopts = -x\npython_files = a\n`),
+    ).toBe(true);
+    // "[metadata#]" is a continuation line for iniconfig, not a section end.
+    const m = "[tool:pytest]\naddopts = -x\n[metadata#]\n";
+    expect(changed(m, `${m}testpaths = nowhere\n`)).toBe(true);
+    const t = "[tool:pytest]\naddopts = -x\n[tool;x]\n";
+    expect(changed(t, `${t}testpaths = nowhere\n`)).toBe(true);
+  });
+  it("sees an empty array added or removed in pyproject.toml", () => {
+    const t = (body: string) => `[tool.pytest.ini_options]\n${body}\n`;
+    const changed = (a: string, b: string) =>
+      changedVerificationConfig("pyproject.toml", t(a), t(b));
+    expect(changed("testpaths = []", 'testpaths = ["a"]')).toBe(true);
+    expect(changed("addopts = '-x'\ntestpaths = []", "addopts = '-x'")).toBe(
+      true,
+    );
+    expect(changed("testpaths = []", "testpaths=[ ]")).toBe(false);
+  });
   it("reads a setup.cfg section header with a semicolon comment", () => {
     expect(
       changedVerificationConfig(
@@ -500,5 +622,352 @@ describe("verification configuration gate", () => {
     expect(() => assertProjectPolicy(policy(["a/b.config.ts"]))).not.toThrow();
     expect(() => assertProjectPolicy(policy(["a/../b"]))).toThrow();
     expect(() => assertProjectPolicy(policy([1]))).toThrow();
+  });
+  describe("issue 246", () => {
+    const gate = (f: string) => changedVerificationConfig(f, "a", "b");
+    it("gates jest-preset, coverage rc, c8 rc and pnpm-workspace files by name", () => {
+      for (const f of [
+        "jest-preset.js",
+        "jest-preset.cjs",
+        "jest-preset.mjs",
+        "jest-preset.json",
+        "JEST-PRESET.JS",
+        "sub/jest-preset.cjs",
+        ".coveragerc",
+        "pkg/.coveragerc",
+        ".c8rc",
+        ".c8rc.json",
+        ".c8rc.yml",
+        "pnpm-workspace.yaml",
+        "pnpm-workspace.yml",
+      ])
+        expect(gate(f), f).toBe(true);
+    });
+    it("gates Maven and Gradle build files whole, without reading them", () => {
+      for (const f of [
+        "pom.xml",
+        "mod/pom.xml",
+        "POM.XML",
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+        "settings.gradle.kts",
+        "gradle/test.gradle",
+        "gradle.properties",
+        ".mvn/maven.config",
+        ".mvn/jvm.config",
+        ".mvn/extensions.xml",
+        ".mvn/wrapper/maven-wrapper.properties",
+        "gradle/wrapper/gradle-wrapper.properties",
+        "mvnw",
+        "mvnw.cmd",
+        "gradlew",
+        "gradlew.bat",
+        "buildSrc/build.gradle.kts",
+        "buildSrc/src/main/kotlin/x.kt",
+        "sub/.mvn/maven.config",
+        "mod/buildSrc/build.gradle.kts",
+        "mod/buildSrc/src/main/kotlin/X.kt",
+        "sub/gradle/wrapper/gradle-wrapper.properties",
+        ".MVN/maven.config",
+        "BuildSrc/build.gradle.kts",
+      ])
+        expect(gate(f), f).toBe(true);
+      for (const f of [
+        "other/.mvnx/file",
+        "src/buildSrc.txt",
+        "gradle/libs.versions.toml",
+        "docs/gradle/notes.md",
+      ])
+        expect(gate(f), f).toBe(false);
+    });
+    it("refuses a pom.xml edit with the approval message unless approved", async () => {
+      const root = await workspace({ "pom.xml": "<project/>\n" });
+      await expect(
+        edit(root, "pom.xml", "<project/>", "<project><!--x--></project>"),
+      ).rejects.toThrow(/Verification configuration needs approval: pom\.xml/);
+      await edit(root, "pom.xml", "<project/>", "<project><!--x--></project>", {
+        ...DEFAULT_POLICY,
+        approvedVerificationConfigPaths: ["pom.xml"],
+      });
+      expect(await readFile(path.join(root, "pom.xml"), "utf8")).toContain("x");
+    });
+    it("gates tool.coverage in pyproject.toml, however spelled", () => {
+      const rows: [string, string, string, boolean][] = [
+        [
+          "table fail_under",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[tool.coverage.report]\nfail_under = 0\n",
+          true,
+        ],
+        [
+          "dotted key",
+          "[tool]\ncoverage.report.fail_under = 80\n",
+          "[tool]\ncoverage.report.fail_under = 0\n",
+          true,
+        ],
+        [
+          "spaced header",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[ tool . coverage . report ]\nfail_under = 0\n",
+          true,
+        ],
+        [
+          "quoted header",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          '["tool"."coverage".report]\nfail_under = 0\n',
+          true,
+        ],
+        [
+          "inline table",
+          "[tool.coverage]\nreport = { fail_under = 80 }\n",
+          "[tool.coverage]\nreport = { fail_under = 0 }\n",
+          true,
+        ],
+        [
+          "omit edit",
+          "[tool.coverage.run]\nomit = []\n",
+          '[tool.coverage.run]\nomit = ["src/*"]\n',
+          true,
+        ],
+        [
+          "CRLF and BOM",
+          "﻿[tool.coverage.report]\r\nfail_under = 80\r\n",
+          "﻿[tool.coverage.report]\r\nfail_under = 0\r\n",
+          true,
+        ],
+        [
+          "respelled, same settings",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[tool.coverage]\nreport = { fail_under = 80 }\n",
+          false,
+        ],
+        [
+          "comment-only change",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[tool.coverage.report]\nfail_under = 80 # c\n",
+          false,
+        ],
+        [
+          "header inside a comment",
+          "[project]\nname = 'a'\n",
+          "[project]\nname = 'a'\n# [tool.coverage.report]\n",
+          false,
+        ],
+        [
+          "dependency named coverage",
+          '[tool.poetry.dependencies]\ncoverage = "^7"\n',
+          '[tool.poetry.dependencies]\ncoverage = "^8"\n',
+          false,
+        ],
+        [
+          "date-time with a space and an unrelated edit",
+          "x = 1979-05-27 07:32:00Z\n[project]\nname = 'a'\n",
+          "x = 1979-05-27 07:32:00Z\n[project]\nname = 'b'\n",
+          false,
+        ],
+      ];
+      for (const [label, before, after, want] of rows)
+        expect(
+          changedVerificationConfig("pyproject.toml", before, after),
+          label,
+        ).toBe(want);
+      // Text that cannot be read (a non-ASCII bare key) still gates.
+      expect(
+        changedVerificationConfig(
+          "pyproject.toml",
+          "[project]\nname = 'a'\n",
+          "[project]\nnamé = 'b'\n",
+        ),
+      ).toBe(true);
+    });
+    it("gates coverage sections in setup.cfg, however the header is spelled", () => {
+      const rows: [string, string, boolean][] = [
+        ["[coverage:report]", "[coverage:report]\nfail_under = 0\n", true],
+        ["spaced header", "[ coverage:report ]\nfail_under = 0\n", true],
+        [
+          "[coverage:run] with a comment",
+          "[coverage:run] ; c\nomit = x\n",
+          true,
+        ],
+        ["doubled brackets", "[[coverage:report]]\nfail_under = 0\n", true],
+        [
+          "trailing text after header",
+          "[coverage:report]x\nfail_under = 0\n",
+          true,
+        ],
+        ["unrelated [metadata] edit", "[metadata]\nx = 1\n", false],
+      ];
+      const before = "[metadata]\nname = a\n";
+      for (const [label, added, want] of rows)
+        expect(
+          changedVerificationConfig("setup.cfg", before, before + added),
+          label,
+        ).toBe(want);
+      // Leading whitespace is a continuation line in configparser, so
+      // indenting a key folds it into the key above and removes it.
+      for (const [a, b] of [
+        [
+          "[coverage:report]\nexclude_lines = x\nfail_under = 80\n",
+          "[coverage:report]\nexclude_lines = x\n    fail_under = 80\n",
+        ],
+        [
+          "[tool:pytest]\naddopts = -q\nminversion = 6\n",
+          "[tool:pytest]\naddopts = -q\n  minversion = 6\n",
+        ],
+        [
+          "[coverage:report]\nexclude_lines =\n    pragma: no cover\n[flake8]\nmax-line-length = 100\n",
+          "[coverage:report]\nexclude_lines =\n    pragma: no cover\n  [x]\nexclude_also = .\n[flake8]\nmax-line-length = 100\n",
+        ],
+        [
+          "[coverage:run]\nsource = pkg\n[coverage:report]\nfail_under = 90\n",
+          "[coverage:run]\nsource = pkg\n  [x]\nomit = *\n[coverage:report]\nfail_under = 90\n",
+        ],
+        [
+          "[metadata]\nname = a\n[egg_info]\n",
+          "[metadata]\nname = a\n[egg_info]\n  [coverage:report]\nfail_under = 0\n",
+        ],
+        // configparser drops comment lines before its indent logic.
+        ...["#", ";"].map((c) => [
+          "[metadata]\nname = a\n[egg_info]\n",
+          `[metadata]\nname = a\n[egg_info]\n${c} tag\n    [coverage:report]\nfail_under = 0\n`,
+        ]),
+        [
+          "# c\n[flake8]\nx = 1\n",
+          "# c\n    [coverage:report]\nfail_under = 0\n[flake8]\nx = 1\n",
+        ],
+        [
+          "[coverage:run]\nsource = pkg\n",
+          "[coverage:run]\nsource = pkg\n        # c\n  [x]\nomit = *\n",
+        ],
+        // Python splits lines on more than LF and CRLF.
+        ...["\r", "\x1c", "\x0c", "\u2028"].map((sep) => [
+          "[metadata]\nname = a\n",
+          `[metadata]\nname = a${sep}[tool:pytest]${sep}addopts = -q\n`,
+        ]),
+        // Dropping a header that ends a pytest section folds the next
+        // indented header into that section's last value.
+        [
+          "[tool:pytest]\nfail_under = 90\n[flake8]\n    [coverage:report]\n",
+          "[tool:pytest]\nfail_under = 90\n    [coverage:report]\n",
+        ],
+        // Python strips \x1f and \x85 as whitespace; JS does not.
+        ...["\x1f", "\x1c", "\x85"].map((ws) => [
+          "[metadata]\nname = a\n[egg_info]\n",
+          `[metadata]\nname = a\n[egg_info]\n${ws}[coverage:report]\nfail_under = 0\n`,
+        ]),
+      ] as const)
+        expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
+    });
+    it("treats bytes the two Python readers lex differently as a change, and DEFAULT as gated", () => {
+      const rows: [string, string][] = [];
+      const base = "[egg_info]\n    name = a\n[flake8]\nx = 1\n";
+      rows.push([
+        base,
+        "[egg_info]\n    name = a\x1f\n  [coverage:report]\nfail_under = 0\n[flake8]\nx = 1\n",
+      ]);
+      for (const c of ["#", ";"])
+        rows.push([
+          "  [tool:pytest]\naddopts = -q\n",
+          `\x1f${c} c\n  [tool:pytest]\naddopts = -q\n`,
+        ]);
+      for (const b of ["\x85", "\x1c", "\x1e", "\x0b", "\x0c", "\u2028"])
+        rows.push([
+          "[coverage:report]\nfail_under = 90\n",
+          `[egg_info]\nname = a\n${b}[coverage:report]\nfail_under = 90\n`,
+        ]);
+      rows.push([
+        "[tool:pytest]\naddopts = --strict-markers\n",
+        "[egg_info]\nname = a\n\x85[tool:pytest]\naddopts = --strict-markers\n",
+      ]);
+      // A NUL, BOM or bare CR on either side alone is a change.
+      rows.push(["[metadata]\nname = a\n", "[metadata]\nname = a\0\n"]);
+      rows.push(["[metadata]\nname = a\n", "\ufeff[metadata]\nname = a\n"]);
+      rows.push(["[metadata]\nname = a\r", "\n[metadata]\nname = a\n"]);
+      // DEFAULT values reach every section.
+      rows.push([
+        "[coverage:run]\nsource = pkg\n",
+        "[DEFAULT]\nexclude_lines = .\n[coverage:run]\nsource = pkg\n",
+      ]);
+      rows.push([
+        "[DEFAULT]\nexclude_lines = a\n[coverage:report]\nfail_under = 90\n",
+        "[DEFAULT]\nexclude_lines = .\n[coverage:report]\nfail_under = 90\n",
+      ]);
+      rows.push([
+        "[tool:pytest]\naddopts = -q\n",
+        "[DEFAULT]\nx = 1\n[tool:pytest]\naddopts = -q\n",
+      ]);
+      rows.push(["\t[coverage:run]\n", "\t[coverage:run]\n[DEFAULT]\nk: v"]);
+      for (const [a, b] of rows)
+        expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(true);
+      // Plain edits stay allowed.
+      const same: [string, string][] = [
+        ["[metadata]\nname = a\n", "[metadata]\r\nname = a\r\n"],
+        ["[metadata]\nname = a\n", "[metadata]\nname = a  \n"],
+        ["[metadata]\nname = a\n", "[metadata]\nname = b\n"],
+        ["# a\n[metadata]\nname = a\n", "# b\n[metadata]\nname = a\n"],
+        ["[default]\nx = 1\n", "[default]\nx = 2\n"],
+      ];
+      for (const [a, b] of same)
+        expect(changedVerificationConfig("setup.cfg", a, b), b).toBe(false);
+    });
+    it("follows scripts reached through run-s, npm-run-all and concurrently npm:x", () => {
+      const manifest = (test: string, unit: string, other = "echo") =>
+        JSON.stringify({ scripts: { test, unit, lint: "eslint .", other } });
+      const weakened = (test: string) =>
+        changedVerificationConfig(
+          "package.json",
+          manifest(test, "vitest run"),
+          manifest(test, "true"),
+        );
+      const unrelated = (test: string) =>
+        changedVerificationConfig(
+          "package.json",
+          manifest(test, "vitest run", "echo a"),
+          manifest(test, "vitest run", "echo b"),
+        );
+      const reaches = [
+        "run-s unit",
+        "run-p lint unit",
+        "npm-run-all -s lint unit",
+        "npm-run-all --npm-path npm unit",
+        "run-s -c -l unit",
+        "npx run-s unit",
+        "./node_modules/.bin/run-s unit",
+        "cross-env CI=1 run-s unit",
+        'run-s "unit -- --bail"',
+        "run-s lint && run-s unit",
+        "concurrently npm:unit",
+        `concurrently "npm:unit" 'yarn:unit' "pnpm:unit"`,
+        'concurrently -n a,b "npm:unit"',
+        'concurrently "npm:unit -- --bail"',
+      ];
+      for (const test of reaches) expect(weakened(test), test).toBe(true);
+      // A word like npm:foo inside an echo also counts: harmless over-gating.
+      for (const test of [
+        "run-s test:*",
+        'concurrently "npm:test:*"',
+        "npm run $T",
+        "run-s --unknown value unit",
+        "run-s -- unit",
+        'run-p "{a,b}"',
+        "run-s ?nit",
+        "npm run /^u/",
+        "npm run uni\\t",
+        "run-s [u]nit",
+        'run-s "+(unit)"',
+        'run-s "@(unit)"',
+        'run-s "!(lint)"',
+        "run-s un[i]t",
+        "np\\m run unit",
+        "npm r\\un unit",
+        "$npm_execpath run unit",
+        "`echo npm` run unit",
+      ])
+        expect(unrelated(test), test).toBe(true);
+      // A resolved target does not gate unrelated scripts.
+      expect(unrelated("run-s unit")).toBe(false);
+      expect(unrelated("concurrently npm:unit")).toBe(false);
+    });
   });
 });
