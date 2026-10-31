@@ -737,6 +737,12 @@ describe("verification configuration gate", () => {
           true,
         ],
         [
+          "respelled, same settings",
+          "[tool.coverage.report]\nfail_under = 80\n",
+          "[tool.coverage]\nreport = { fail_under = 80 }\n",
+          false,
+        ],
+        [
           "comment-only change",
           "[tool.coverage.report]\nfail_under = 80\n",
           "[tool.coverage.report]\nfail_under = 80 # c\n",
