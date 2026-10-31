@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Internal
+
+- Tests for the Cursor text-proposal runner's input validation, token and
+  byte bounds, model pinning and unusable-usage handling.
+
 ### Changed
 
 - The verification-config gate also covers `pnpm-workspace.yaml`,
