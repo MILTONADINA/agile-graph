@@ -98,6 +98,16 @@ describe("property: package-runner targets", () => {
   };
   // runner, options, run, script, optional `-- junk`
   function command(random: Random, withJunk = true) {
+    // npm-run-all's binaries take the script as a bare positional, with no
+    // `run` word, and read `--` as unresolvable, so they get no junk tail.
+    if (chance(random, 0.25)) {
+      const binary = pick(random, ["run-s", "run-p", "npm-run-all"]);
+      const flags = Array.from({ length: int(random, 3) }, () =>
+        pick(random, ["-s", "-p", "-c", "-l", "--silent", "--race"]),
+      );
+      const script = scriptName(random);
+      return { text: [binary, ...flags, script].join(" "), script };
+    }
     const runner = pick(random, RUNNER_NAMES);
     const booleans = [...internals.BOOLEAN_OPTIONS];
     const values = [...internals.VALUE_OPTIONS[runner]!];
