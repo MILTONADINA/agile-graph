@@ -427,7 +427,10 @@ describe("publishRun draft pull requests", () => {
     expect(await readFile(bodyFile, "utf8")).toBe(
       `Implements: ${"T".repeat(300)}\n\nAcceptance criteria:\n- addition works\n- subtraction still works\n\nAutomated verification completed for this run. Review the changes before merging.\n\nAgile Graph run: edge-run\n`,
     );
-    expect((await stat(bodyFile)).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX permission bits, so the owner-only mode is checked
+    // where it exists.
+    if (process.platform !== "win32")
+      expect((await stat(bodyFile)).mode & 0o777).toBe(0o600);
   });
 
   it("returns an existing open pull request instead of creating another", async () => {
