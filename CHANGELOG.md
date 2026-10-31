@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Internal
+
+- Direct tests for project initialisation and loading, the cloud MCP policy
+  builder, project data directory ids and provider configuration.
+
 ### Changed
 
 - The verification-config gate also covers `pnpm-workspace.yaml`,
