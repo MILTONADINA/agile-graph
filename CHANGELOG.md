@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Internal
+
+- Tests for the promotion trust-anchor schema (pin limits and formats, the
+  Rekor key and issuer cross-checks) and for the anchor reader's refusal of
+  non-file and non-canonical paths.
+
 ### Changed
 
 - The verification-config gate also covers `pnpm-workspace.yaml`,
