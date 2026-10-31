@@ -707,7 +707,7 @@ export function createMcpServer(
     "memory_propose",
     {
       description:
-        "Stores the text as a new private project memory with status proposed and returns JSON with its id, status and any expiry (validUntil). A proposal has no effect on retrieval or project policy until someone accepts it outside this server (graph-engine memory-accept); this server cannot list, accept, share or edit memories. Use it for a durable fact, decision, requirement, constraint or reusable solution that later tasks on this project need. Blank text or text matching a credential pattern is rejected, as is an expiry that has already passed, and a cloud-backed client gets an error while the project policy is offline.",
+        "Stores the text as a new private project memory with status proposed and returns JSON with its id, status and any start (validFrom) and expiry (validUntil). A proposal has no effect on retrieval or project policy until someone accepts it outside this server (graph-engine memory-accept); this server cannot list, accept, share or edit memories. Use it for a durable fact, decision, requirement, constraint or reusable solution that later tasks on this project need. Blank text or text matching a credential pattern is rejected, as is an expiry that has already passed or a start that is not before the expiry, and a cloud-backed client gets an error while the project policy is offline.",
       inputSchema: {
         text: z
           .string()
@@ -734,6 +734,13 @@ export function createMcpServer(
           .describe(
             "Optional proposed expiry, an ISO 8601 date-time with a time zone, for example 2026-12-31T23:59:59Z. Once it passes, context_get leaves the memory out. The person who accepts the proposal may keep or replace it.",
           ),
+        validFrom: z
+          .string()
+          .datetime({ offset: true })
+          .optional()
+          .describe(
+            "Optional proposed start, an ISO 8601 date-time with a time zone, for example 2026-12-01T00:00:00Z. Before it, context_get leaves the memory out. It must be before validUntil. The person who accepts the proposal may keep or replace it, and it is fixed once accepted.",
+          ),
       },
     },
     async (args) => {
@@ -742,6 +749,7 @@ export function createMcpServer(
       return {
         id: memory.id,
         status: memory.status,
+        ...(memory.validFrom ? { validFrom: memory.validFrom } : {}),
         ...(memory.validUntil ? { validUntil: memory.validUntil } : {}),
       };
     },

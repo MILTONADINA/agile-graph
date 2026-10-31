@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- The MCP `memory_propose` tool takes an optional `validFrom` (an ISO 8601
+  date-time with a time zone, before any `validUntil`) and returns it; a
+  person still accepts the proposal, and a cloud client gets nothing it could
+  not get before. The tool's description and input schema changed, so its
+  `mcp.toolHashes` pin must be taken again with
+  `graph-engine mcp-tools --hashes`.
+
 ### Changed
 
 - The verification-config gate also covers `pnpm-workspace.yaml`,
