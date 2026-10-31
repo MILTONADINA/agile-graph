@@ -33,10 +33,14 @@ function pythonName(requirement: string): string | undefined {
   const match = REQUIREMENT_NAME.exec(requirement.trim());
   return match?.[1]?.toLowerCase().replace(/[-_.]+/g, "-");
 }
+// npm strips a leading BOM before parsing, so this reader must as well.
+function parseNpmManifest(text: string): unknown {
+  return JSON.parse(text.replace(/^\uFEFF/, ""));
+}
 function npmNames(text: string): string[] {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = parseNpmManifest(text);
   } catch {
     return [];
   }
@@ -290,6 +294,15 @@ export function newDependencies(
   after: string,
 ): string[] {
   if (!isDependencyManifest(file)) return [];
+  // A package.json this reader cannot parse declares nothing it can see, so
+  // it could hide any name. Fail closed rather than report no additions.
+  if (path.posix.basename(file).toLowerCase() === "package.json") {
+    try {
+      parseNpmManifest(after);
+    } catch {
+      return ["(unparseable package.json)"];
+    }
+  }
   const existing = dependencyNames(file, before);
   return [...dependencyNames(file, after)]
     .filter((name) => !existing.has(name))

@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- The new-dependency gate reads a `package.json` with a leading BOM and treats one it cannot parse as needing approval.
 - The verification-config gate no longer counts a `pyproject.toml` that
   respells the same pytest settings (a table header against an inline table or
   dotted keys) as a change, and it now tells the entries of a

@@ -187,6 +187,19 @@ describe("new dependency gate", () => {
     ).toEqual(["a"]);
     expect(
       newDependencies("package.json", '{"dependencies":{"a":"1"}}', "{bad"),
+    ).toEqual(["(unparseable package.json)"]);
+  });
+  it("reads a manifest with a leading BOM, as npm does", () => {
+    const after = '\uFEFF{"dependencies":{"a":"1","evil":"1"}}';
+    expect(
+      newDependencies("package.json", '{"dependencies":{"a":"1"}}', after),
+    ).toEqual(["evil"]);
+    expect(
+      newDependencies(
+        "package.json",
+        '{"dependencies":{"a":"1"}}',
+        "\uFEFF" + '{"dependencies":{"a":"1"}}',
+      ),
     ).toEqual([]);
   });
 });
