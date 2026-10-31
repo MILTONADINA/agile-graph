@@ -879,6 +879,58 @@ it("memory_propose takes an optional validUntil and refuses a malformed or past 
   }
 }, 20000);
 
+it("memory_propose takes an optional validFrom, refuses a malformed one or one not before validUntil, and the proposal stays proposed", async () => {
+  const clock = { now: Date.parse("2030-01-01T00:00:00.000Z") };
+  const { engine, cleanup } = await exportFixture(
+    "graph-mcp-memory-propose-from-",
+    { now: () => clock.now },
+  );
+  try {
+    const connection = await connect(engine, { client: "cloud" });
+    try {
+      const propose = (extra: Record<string, string>) =>
+        connection.client.callTool({
+          name: "memory_propose",
+          arguments: {
+            text: "Toy release freeze",
+            kind: "constraint",
+            ...extra,
+          },
+        });
+      const proposed = await propose({
+        validFrom: "2030-02-01T02:00:00+02:00",
+      });
+      expect(proposed.isError).not.toBe(true);
+      const body = JSON.parse(
+        (proposed.content as { text: string }[])[0]!.text,
+      );
+      expect(body).toEqual({
+        id: expect.any(String),
+        status: "proposed",
+        validFrom: "2030-02-01T00:00:00.000Z",
+      });
+      expect((await propose({ validFrom: "2030-02-01" })).isError).toBe(true);
+      const backwards = await propose({
+        validFrom: "2030-03-01T00:00:00Z",
+        validUntil: "2030-02-01T00:00:00Z",
+      });
+      expect(backwards.isError).toBe(true);
+      const stored = await engine.context.listMemories();
+      expect(stored).toEqual([
+        expect.objectContaining({
+          id: body.id,
+          status: "proposed",
+          validFrom: "2030-02-01T00:00:00.000Z",
+        }),
+      ]);
+    } finally {
+      await connection.close();
+    }
+  } finally {
+    await cleanup();
+  }
+}, 20000);
+
 it("run_status is withheld from cloud clients unless explicitly allowed", async () => {
   const { engine, cleanup } = await exportFixture("graph-mcp-run-status-");
   try {

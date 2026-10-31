@@ -158,8 +158,14 @@ starts; the local warnings name it by ID. It must be before `validUntil`, is
 fixed once accepted, and a successor's `validFrom` may not precede its
 predecessor's (acceptance is refused). A past `validFrom` is accepted (the
 memory is simply already in force), and a successor without `validFrom` is not
-chronology-checked. Accepting a successor retires its
-predecessor at once, so give the successor no later `validFrom` than you need.
+chronology-checked. The MCP `memory_propose` tool takes an optional `validFrom`
+(an ISO 8601 date-time with a time zone, before any `validUntil`) and returns
+it; only a person accepts the proposal, and a cloud client sees no more than
+before. A predecessor does not stay in force until its successor starts:
+accepting a successor retires its predecessor at once, so give the successor no
+later `validFrom` than you need. The MCP tool cannot name a predecessor, so
+the choice applies only to successors an operator proposes with
+`memory-add --supersedes`.
 
 Memories recorded before expiry existed have no `validUntil` and never expire;
 the field lives in the stored memory record, so no database migration is needed.

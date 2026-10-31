@@ -63,6 +63,12 @@ This heading is renamed to the version number when a release is cut.
   policy allows (the default is 16000). Raise `policy.maxOutputTokens` or trim
   the security baseline.
 
+## Unreleased
+
+- **One MCP tool description changed**: `memory_propose` now takes an optional
+  `validFrom`. Pins in `mcp.toolHashes` must be taken again with
+  `graph-engine mcp-tools --hashes`, as above.
+
 ## Run store
 
 The run store schema is version 5 in 0.2.0 and in the current `main`, so
