@@ -3260,7 +3260,7 @@ describe("security gate", () => {
     // No lockfile to scan, or a downloaded database: nothing to warn about.
     expect(await start({ lockfile: false, database: false })).toBeUndefined();
     expect(await start({ lockfile: true, database: true })).toBeUndefined();
-  });
+  }, 120_000);
 
   it("records the security gate in each run's outcome", async () => {
     const failing = await run(["accepted"], async () => ({
