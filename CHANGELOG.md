@@ -4,6 +4,8 @@
 
 ### Added
 
+- Direct tests for project initialisation and loading, the cloud MCP policy
+  builder, project data directory ids and provider configuration.
 - Offline tests for the local embedding model loader and downloader: asset and
   checksum verification, vector validation, and the download host, scheme,
   credential and redirect limits.
