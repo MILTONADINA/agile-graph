@@ -4,6 +4,9 @@
 
 ### Added
 
+- Offline tests for the local embedding model loader and downloader: asset and
+  checksum verification, vector validation, and the download host, scheme,
+  credential and redirect limits.
 - Tests for the Cursor text-proposal runner's input validation, token and
   byte bounds, model pinning and unusable-usage handling.
 - The MCP `memory_propose` tool takes an optional `validFrom` (an ISO 8601
