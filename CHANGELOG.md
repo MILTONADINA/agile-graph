@@ -4,6 +4,8 @@
 
 ### Added
 
+- Tests for the Cursor text-proposal runner's input validation, token and
+  byte bounds, model pinning and unusable-usage handling.
 - The MCP `memory_propose` tool takes an optional `validFrom` (an ISO 8601
   date-time with a time zone, before any `validUntil`) and returns it; a
   person still accepts the proposal, and a cloud client gets nothing it could
