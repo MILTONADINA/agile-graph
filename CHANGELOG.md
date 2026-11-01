@@ -4,6 +4,9 @@
 
 ### Added
 
+- Tests for the promotion trust-anchor schema (pin limits and formats, the
+  Rekor key and issuer cross-checks) and for the anchor reader's refusal of
+  non-file and non-canonical paths.
 - Direct tests for project initialisation and loading, the cloud MCP policy
   builder, project data directory ids and provider configuration.
 - Offline tests for the local embedding model loader and downloader: asset and
