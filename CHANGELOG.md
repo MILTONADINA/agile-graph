@@ -4,6 +4,16 @@
 
 ### Added
 
+- Tests for the promotion trust-anchor schema (pin limits and formats, the
+  Rekor key and issuer cross-checks) and for the anchor reader's refusal of
+  non-file and non-canonical paths.
+- Direct tests for project initialisation and loading, the cloud MCP policy
+  builder, project data directory ids and provider configuration.
+- Offline tests for the local embedding model loader and downloader: asset and
+  checksum verification, vector validation, and the download host, scheme,
+  credential and redirect limits.
+- Tests for the Cursor text-proposal runner's input validation, token and
+  byte bounds, model pinning and unusable-usage handling.
 - The MCP `memory_propose` tool takes an optional `validFrom` (an ISO 8601
   date-time with a time zone, before any `validUntil`) and returns it; a
   person still accepts the proposal, and a cloud client gets nothing it could
