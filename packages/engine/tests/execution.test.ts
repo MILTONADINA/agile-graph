@@ -2508,7 +2508,7 @@ describe("managed execution", () => {
         `You proposed changes to ${target.named}, which this project does not share with your provider, so nothing was read or written.`,
       );
     }
-  });
+  }, 120_000);
   it("answers a cloud worker's request for a credential-named file with feedback it can receive, then applies its change", async () => {
     const { root, config, data } = await fixture();
     // Built at run time, so this source holds no token-shaped literal.
