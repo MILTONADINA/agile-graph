@@ -33,7 +33,8 @@ are applied:
 3. Only checks that pass on the unmutated code with the new tests count: a
    mutant is killed when one of them fails on it. When none pass, as is
    usual before an implementation exists, nothing can be measured and the
-   round is recorded as `baseline-failed`.
+   round is recorded as `baseline-failed`, or as `time-budget` when the
+   shared deadline cut the baseline short and no check failed (AC10).
 4. Surviving mutants (at most 10) go back to the tester as feedback that
    names each one's `file:line` and the operator change, never source text,
    for one more test-writing round. The tester proposes its complete tests
@@ -87,6 +88,9 @@ tester and the answers are only recorded.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: starts no mutant once the analysis has used the check timeout
   - Test: packages/engine/tests/mutation-feedback.test.ts :: starts no further baseline check once the check timeout is used, and bounds each by the time left
   - Test: packages/engine/tests/mutation-feedback.test.ts :: gives each mutant only the time left before the shared deadline
+- AC10: When the shared deadline passes before the baseline gives a verdict and no baseline check has returned a failing result, the system shall record the round as `time-budget`, with every mutant left out of the score and no feedback; a baseline check that ran and failed still records `baseline-failed`.
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: reports time-budget, not baseline-failed, when the deadline passes before the baseline runs
+  - Test: packages/engine/tests/mutation-feedback.test.ts :: keeps baseline-failed when a baseline check ran and failed before the deadline cut the rest
 
 ## Security considerations
 

@@ -18,7 +18,10 @@ export type MutationOutcome =
       score: null;
     }
   | {
-      /** time-budget: the deadline passed before every mutant ran. */
+      /**
+       * time-budget: the deadline passed before every mutant ran, or before
+       * the baseline gave a verdict.
+       */
       status: "analyzed" | "time-budget";
       mutants: number;
       killed: number;
@@ -100,10 +103,18 @@ export async function analyzeMutants(options: {
         };
   // The sandbox stops at a check's first failure, so each runs on its own.
   const passing: ProjectConfig["verification"] = [];
+  // A baseline check that ran and failed is a real baseline failure. A
+  // deadline that cut the baseline short is not: it gives no verdict.
+  let failed = false,
+    timedOut = false;
   for (const check of options.checks) {
-    if (now() >= deadline) break;
+    if (now() >= deadline) {
+      timedOut = true;
+      break;
+    }
     const [result] = await run([check], [], remaining());
     if (result?.code === 0) passing.push(check);
+    else if (result) failed = true;
   }
   const mutants: Mutant[] = [];
   for (const file of [...options.targets].sort()) {
@@ -126,6 +137,15 @@ export async function analyzeMutants(options: {
     line,
     description,
   });
+  if (!passing.length && timedOut && !failed)
+    return {
+      status: "time-budget",
+      mutants: mutants.length,
+      killed: 0,
+      inconclusive: mutants.length,
+      survivors: [],
+      score: null,
+    };
   if (!passing.length)
     return {
       status: "baseline-failed",
