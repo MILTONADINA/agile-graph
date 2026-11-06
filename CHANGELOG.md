@@ -33,6 +33,10 @@
 
 ### Fixed
 
+- CI now runs five `scripts/` test files it never ran (licence allowlist,
+  local Jev key loader, preflight, SBOM and verification setup), and a test
+  fails when a `scripts/*.test.mjs` file is not named by a workflow step
+  (#323).
 - CI pulls the Docker execution-test image (`node:24-alpine`) by digest and
   tags it locally, like every other workflow image, and a test fails when a
   workflow `docker pull` names an image by tag alone (#291).
