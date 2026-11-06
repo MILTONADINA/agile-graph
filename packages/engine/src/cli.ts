@@ -71,7 +71,6 @@ import {
 import {
   checked,
   command as runCommand,
-  readJson,
   writeJson,
   errorMessage,
   id as newId,
@@ -177,6 +176,39 @@ const nonNegativeNumber = (flag: string) => (value: string) => {
     throw new InvalidArgumentError(`${flag} must be a number of 0 or more`);
   return number;
 };
+
+/**
+ * Reads a JSON file a flag or argument names. Errors name the flag and the
+ * file as typed, never a raw fs code or a parse error without a filename (#280).
+ */
+async function readFlagJson<T>(label: string, file: string): Promise<T> {
+  let text: string;
+  try {
+    text = await readFile(path.resolve(file), "utf8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    const reason =
+      code === "ENOENT"
+        ? "no such file"
+        : code === "EISDIR"
+          ? "it is a directory"
+          : code === "EACCES"
+            ? "permission denied"
+            : "unreadable";
+    throw new Error(`${label}: cannot read ${file} (${reason})`, {
+      cause: error,
+    });
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    const where = /line (\d+) column (\d+)/.exec(errorMessage(error));
+    throw new Error(
+      `${label}: ${file} is not valid JSON${where ? ` (line ${where[1]}, column ${where[2]})` : ""}`,
+      { cause: error },
+    );
+  }
+}
 
 const cli = new Command()
   .name("graph-engine")
@@ -712,8 +744,9 @@ cli
     const project = await loadProject(root());
     if (options.file) {
       const required = project.policy.requirePlanApproval === true;
-      project.policy = await readJson<ProjectPolicy>(
-        path.resolve(options.file),
+      project.policy = await readFlagJson<ProjectPolicy>(
+        "--file",
+        options.file,
       );
       assertProjectConfig(project);
       await writeJson(path.join(root(), PROJECT_FILE), project);
@@ -1499,9 +1532,10 @@ cli
   .action(async (objective, options) =>
     withEngine(async (engine) => {
       const steps = options.steps
-        ? ((await readJson(
-            path.resolve(options.steps),
-          )) as import("@agile-graph/contracts").ExecutionStep[])
+        ? await readFlagJson<import("@agile-graph/contracts").ExecutionStep[]>(
+            "--steps",
+            options.steps,
+          )
         : undefined;
       const common = {
         providerId: options.provider,
@@ -2221,7 +2255,7 @@ cli
     withEngine(async (engine) =>
       engine.context.setMemoryAssertions(
         id,
-        await readJson(path.resolve(file)),
+        await readFlagJson("<file>", file),
       ),
     ),
   );
@@ -2274,8 +2308,9 @@ cli
   )
   .action((mapping, output, options) =>
     withEngine(async (engine) => {
-      const taskIds = await readJson<Record<string, string>>(
-        path.resolve(mapping),
+      const taskIds = await readFlagJson<Record<string, string>>(
+        "<mapping>",
+        mapping,
       );
       const records = engine.store
         .decisions()
@@ -2303,7 +2338,9 @@ cli
     "Join {draft,provenance,labels} for analysis only; unsigned labels confer no promotion authority",
   )
   .action(async (input, output) => {
-    const dataset = importEvaluationLabels(await readJson(path.resolve(input)));
+    const dataset = importEvaluationLabels(
+      await readFlagJson("<input>", input),
+    );
     const { open } = await import("node:fs/promises");
     const file = await open(path.resolve(output), "wx", 0o600);
     try {
@@ -2328,7 +2365,7 @@ cli
   )
   .action(async (file, options) => {
     if (options.promote) throw new Error(PROMOTION_IMPORT_BLOCKED);
-    const rows = await readJson<EvaluationRow[]>(path.resolve(file));
+    const rows = await readFlagJson<EvaluationRow[]>("<file>", file);
     const report = evaluateDecisions(rows);
     print({
       ...report,

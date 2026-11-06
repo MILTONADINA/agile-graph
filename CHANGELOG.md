@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- `plan --steps`, `policy --file` and the other commands that read a JSON file name the flag or argument and the file as typed: "--steps: cannot read missing.json (no such file)" or "--steps: steps.json is not valid JSON (line 1, column 2)". They used to print a raw ENOENT with an absolute path, or a parse error with no filename (#280).
 - A bad flag value names the flag instead of printing a schema error about an internal field. `memory-add --kind` and `provider-add --local-thinking` list their allowed values. `--input-cost` and `--output-cost` need a number of 0 or more, `--keep` and `--max-context` need a positive whole number, and `--local-thinking-budget` a whole number of 0 or more (#279).
 - An unknown run ID now gets "No run named <id>" (was "runs: record not found") in `inspect`, `cancel`, `resume` and `accept`. An unknown memory ID gets "No memory named <id> in this project" (was "Memory is unavailable in this project"). `memory-add ""` says "Memory text is required" instead of calling empty text sensitive (#281).
 - `outcomes <runId>` with an unknown run exits 1 with "No run named <runId>" instead of printing `[]`, and `init --name <other>` on an existing project exits 1 naming both names instead of silently keeping the old one (#275).

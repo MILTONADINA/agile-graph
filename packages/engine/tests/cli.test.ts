@@ -709,6 +709,44 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("names the flag and the file when --steps or policy --file cannot be read or parsed", async () => {
+    const { root, graph } = await project();
+    await graph("init");
+    await writeFile(path.join(root, "broken.json"), "{");
+    const missing = await graph(
+      "plan",
+      "obj",
+      "--accept",
+      "c",
+      "--steps",
+      "missing.json",
+    );
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain(
+      "--steps: cannot read missing.json (no such file)",
+    );
+    expect(missing.stderr).not.toContain("ENOENT");
+    const broken = path.join(root, "broken.json");
+    const malformed = await graph(
+      "plan",
+      "obj",
+      "--accept",
+      "c",
+      "--steps",
+      broken,
+    );
+    expect(malformed.stderr).toContain(
+      `--steps: ${broken} is not valid JSON (line 1, column 2)`,
+    );
+    const policy = await graph("policy", "--file", broken);
+    expect(policy.code).toBe(1);
+    expect(policy.stderr).toContain(`--file: ${broken} is not valid JSON`);
+    const noPolicy = await graph("policy", "--file", "missing.json");
+    expect(noPolicy.stderr).toContain(
+      "--file: cannot read missing.json (no such file)",
+    );
+  }, 120_000);
+
   it("names the flag, not an internal field, for a bad flag value", async () => {
     const { graph } = await project();
     await graph("init");
