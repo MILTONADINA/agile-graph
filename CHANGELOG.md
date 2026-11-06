@@ -33,6 +33,7 @@
 - A Dart `pubspec.yaml` `name` line with spaces or tabs before its colon (`name : toy_counter`) no longer aborts the Dart snapshot. An analyzer reply outside its three expected shapes leaves only its own call unresolved, reported once per file, instead of failing the whole Dart binding pass (#266). The Dart resolver identity advances to `snapshot-dart-analyzer:4`, so Dart snapshots are derived again once.
 - A mutation analysis whose shared deadline passed before its baseline gave a verdict is recorded as `time-budget`, not `baseline-failed`, unless a baseline check ran and failed (#267).
 - The git filter-configuration probe honours the caller's cancellation and timeout, so a cancelled run no longer waits on it (#267).
+- A source request for `.` lists the workspace root for a local worker, and a leading `./` is read as the path it names, under the same export and credential rules; a cloud worker's `.` request is still refused (#267).
 - The new-dependency gate reads a `package.json` with a leading BOM and treats one it cannot parse as needing approval.
 - The verification-config gate no longer counts a `pyproject.toml` that
   respells the same pytest settings (a table header against an inline table or

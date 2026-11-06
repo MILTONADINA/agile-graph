@@ -58,6 +58,11 @@ Workers often need to change large files that do not fit in their context budget
 - AC11: An `exportPaths` entry starting with `!` excludes from the other entries and never widens the list: a path is exportable only when some other entry matches it and no exclusion does, a list of exclusions alone exports nothing, and `!` alone or a `!!` entry is refused when the project loads. Exclusions err toward matching: they compare in Unicode NFC, ignore letter case, and a slash-free exclusion applies at any depth; inclusions stay case-sensitive and a slash-free inclusion means the top level only.
   - Test: packages/engine/tests/policy.test.ts :: treats a negated exportPaths entry as an exclusion, never as everything else
   - Test: packages/engine/tests/policy.test.ts :: errs toward excluding: NFC-equal names, any-depth slash-free and case-blind exclusions
+- AC12: When a worker requests `.`, the system shall list the files under the workspace root that Git tracks or would track, under the filters of AC7, for a local worker; a cloud worker's request for `.` is still refused, as naming no exportable path. When a request starts with `./`, the system shall read it as the path without that prefix, under the same export and credential rules as that path.
+  - Test: packages/engine/tests/requested-sources.test.ts :: lists the workspace root for a '.' request, under the same filters
+  - Test: packages/engine/tests/requested-sources.test.ts :: still refuses a '.' request from a cloud worker, which names no exportable path
+  - Test: packages/engine/tests/requested-sources.test.ts :: reads a './' prefixed request as the path it names, under the same export rules
+  - Test: packages/engine/tests/requested-sources.test.ts :: keeps a '..' path refused behind a './' prefix, for local and cloud workers
 
 ## Security considerations
 

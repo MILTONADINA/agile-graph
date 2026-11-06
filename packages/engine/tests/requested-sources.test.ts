@@ -605,6 +605,107 @@ describe("directory and missing-file requests", () => {
     }
   });
 
+  it("lists the workspace root for a '.' request, under the same filters", async () => {
+    const root = await gitWorkspace();
+    const result = await request(root, ["."]);
+    const listing = result.items.find((item) => item.kind === "outline")!;
+    expect(listing.text).toContain("- src/app.ts");
+    expect(listing.text).toContain("- private/notes.ts");
+    expect(listing.text).not.toContain("build.log");
+    expect(listing.text).not.toContain(".graph/project.json");
+  });
+
+  it("still refuses a '.' request from a cloud worker, which names no exportable path", async () => {
+    const root = await gitWorkspace();
+    const cloud = input(
+      { ...packet([]), mandatorySources: [] },
+      {
+        id: "cloud",
+        kind: "openai",
+        model: "fixture",
+        inputCostPerMillion: 0,
+        outputCostPerMillion: 0,
+      },
+    );
+    cloud.policy = {
+      ...cloud.policy,
+      exportPaths: ["src/**"],
+      allowedHosts: ["api.openai.com"],
+    };
+    const refused = await request(
+      root,
+      ["."],
+      new SuppliedLines(),
+      cloud,
+    ).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(UnexportableRequestError);
+    expect((refused as UnexportableRequestError).paths).toEqual(["."]);
+  });
+
+  it("reads a './' prefixed request as the path it names, under the same export rules", async () => {
+    const root = await gitWorkspace();
+    const listed = await request(root, ["./src"]);
+    expect(
+      listed.items.find((item) => item.kind === "outline")!.text,
+    ).toContain("- src/app.ts");
+    const local = await request(root, ["./src/app.ts#L1-L1"]);
+    expect(local.items.map((item) => item.source?.path)).toEqual([
+      "src/app.ts",
+    ]);
+    const cloud = input(
+      { ...packet([]), mandatorySources: [] },
+      {
+        id: "cloud",
+        kind: "openai",
+        model: "fixture",
+        inputCostPerMillion: 0,
+        outputCostPerMillion: 0,
+      },
+    );
+    cloud.policy = {
+      ...cloud.policy,
+      exportPaths: ["src/**"],
+      allowedHosts: ["api.openai.com"],
+    };
+    const served = await request(
+      root,
+      ["./src/app.ts#L1-L1"],
+      new SuppliedLines(),
+      cloud,
+    );
+    expect(served.items.map((item) => item.source?.path)).toEqual([
+      "src/app.ts",
+    ]);
+    await expect(
+      request(root, ["./private/notes.ts"], new SuppliedLines(), cloud),
+    ).rejects.toBeInstanceOf(UnexportableRequestError);
+  });
+
+  it("keeps a '..' path refused behind a './' prefix, for local and cloud workers", async () => {
+    const root = await gitWorkspace();
+    await expect(request(root, ["./../src/app.ts"])).rejects.toThrow(
+      "outside allowed project scope",
+    );
+    const cloud = input(
+      { ...packet([]), mandatorySources: [] },
+      {
+        id: "cloud",
+        kind: "openai",
+        model: "fixture",
+        inputCostPerMillion: 0,
+        outputCostPerMillion: 0,
+      },
+    );
+    cloud.policy = {
+      ...cloud.policy,
+      exportPaths: ["**"],
+      allowedHosts: ["api.openai.com"],
+    };
+    await expect(
+      request(root, ["./../src/app.ts"], new SuppliedLines(), cloud),
+    ).rejects.toBeInstanceOf(UnexportableRequestError);
+  });
+
   it("gives a cloud worker no file whose name looks like a credential, requested or listed", async () => {
     const root = await gitWorkspace();
     // Built at run time, so this source holds no token-shaped literal.

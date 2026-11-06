@@ -81,17 +81,22 @@ export function recordShown(shown: SuppliedLines, packet: ContextPacket) {
 }
 
 const RANGE = /^(.+)#L(\d+)-L(\d+)$/;
+// "./x" names the same path as "x", and the scope rules match only the bare
+// form, so a leading "./" is dropped before any check. "." is kept: it is the
+// workspace root, which the rules cannot match.
+const bareRequest = (relative: string) =>
+  relative.replace(/^(?:\.\/)+(?=.)/, "");
 function parseRequest(entry: string) {
   const match = RANGE.exec(entry);
   // Models often name a directory with a trailing slash; the scope rules
   // match paths without one, so "src/" would otherwise end the run instead
   // of getting the directory's listing.
-  if (!match) return { path: entry.replace(/(?<=[^/])\/+$/, "") };
+  if (!match) return { path: bareRequest(entry.replace(/(?<=[^/])\/+$/, "")) };
   const start = Number(match[2]);
   const end = Number(match[3]);
   if (!Number.isSafeInteger(start) || start < 1 || end < start)
     throw new Error(`Invalid line range request: ${entry}`);
-  return { path: match[1]!, start, end };
+  return { path: bareRequest(match[1]!), start, end };
 }
 
 async function outlineEntries(
@@ -146,7 +151,8 @@ function outlineItem(
 }
 
 // Reads a worker's requests into the next packet. A request is a path (the
-// whole file) or path#Lstart-Lend (an inclusive range, clamped to the file).
+// whole file) or path#Lstart-Lend (an inclusive range, clamped to the file);
+// a leading "./" is dropped, and "." is the workspace root, which is listed.
 // A range that would not fit, alone with the mandatory text, in the
 // serialized request fitWorkerContext measures, or that exceeds a routed
 // context budget tighter than the default, is cut to its longest prefix that
@@ -203,15 +209,19 @@ export async function requestedSourcePacket(options: {
   for (const entry of entries) {
     const request = parseRequest(entry);
     const relative = request.path;
-    const absolute = await safePath(options.workspace, relative, policy, {
-      forExport: provider.kind !== "local",
-    });
     let content: string | undefined;
     let unreadable: string | undefined;
-    try {
-      content = await readFile(absolute, "utf8");
-    } catch (error) {
-      unreadable = (error as NodeJS.ErrnoException).code ?? "unknown";
+    // The workspace root is a directory: it is listed, never read.
+    if (relative === ".") unreadable = "EISDIR";
+    else {
+      const absolute = await safePath(options.workspace, relative, policy, {
+        forExport: provider.kind !== "local",
+      });
+      try {
+        content = await readFile(absolute, "utf8");
+      } catch (error) {
+        unreadable = (error as NodeJS.ErrnoException).code ?? "unknown";
+      }
     }
     if (content === undefined) {
       // A directory, or a path that does not exist, gets the files of the
@@ -577,7 +587,8 @@ async function directoryListing(
 ): Promise<
   { path: string; text: string; count: number; files: string[] } | undefined
 > {
-  let directory = requested.replace(/\/+$/, "");
+  // "." is the workspace root, which the walk up below also reaches as "".
+  let directory = requested === "." ? "" : requested.replace(/\/+$/, "");
   for (;;) {
     const info = await stat(path.join(workspace, directory)).catch(() => null);
     if (info?.isDirectory()) break;
