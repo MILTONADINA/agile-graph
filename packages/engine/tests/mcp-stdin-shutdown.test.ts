@@ -45,7 +45,6 @@ async function project() {
   ];
   await checked(process.execPath, argv("init"), { cwd: ENGINE, env });
   return {
-    env,
     serve: () =>
       spawn(process.execPath, argv("mcp", "--client", "cloud"), {
         cwd: ENGINE,
@@ -99,7 +98,7 @@ function converse(child: ChildProcessWithoutNullStreams) {
   return { send, reply, initialize, stderr: () => stderr };
 }
 
-// The server's exit as [code, signal], or undefined if it has not exited within `ms`.
+// The server's exit as { code, signal }, or undefined if it has not exited within `ms`.
 async function exitWithin(child: ChildProcessWithoutNullStreams, ms: number) {
   if (child.exitCode !== null || child.signalCode !== null)
     return { code: child.exitCode, signal: child.signalCode };
@@ -147,7 +146,7 @@ it("answers a request its client sent before closing stdin, then exits by itself
       method: "tools/call",
       params: { name: "context_get", arguments: { query: "rule" } },
     });
-    // The client closes stdin before the server has written that reply.
+    // The client closes stdin without waiting for that reply.
     child.stdin.end();
     expect((await client.reply(2)).result).toBeDefined();
     expect(await exitWithin(child, EXIT_WITHIN_MS), client.stderr()).toEqual({
