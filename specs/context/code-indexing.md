@@ -55,6 +55,11 @@ Workers and connected AI clients need accurate, bounded context about a reposito
 - AC12: The Java analyzer is killed for memory when a resident-set reading exceeds its limit, or when three consecutive `ps` samples fail or read empty or zero, so a child whose memory cannot be read never runs uncapped; a single failed sample between good readings (as under load, or as the analyzer exits) does not stop it, and its time cap still bounds the run.
   - Test: packages/engine/tests/context-java.test.ts :: tolerates an isolated failed sample but kills on persistent failure or an over-limit reading
   - Test: packages/engine/tests/context-java.test.ts :: analyze() kills the child when the memory watcher reports over-limit
+- AC13: When `close()` on the context database has started, the system shall reject every request issued after that point with a `Context database is closed` error, and shall settle every request still waiting on the database worker before the worker ends, so no query hangs. If posting a request to the worker throws, then the system shall reject that request and remove its pending entry.
+  - Test: packages/engine/tests/context-database.test.ts :: rejects a query issued while close() is in flight instead of hanging
+  - Test: packages/engine/tests/context-database.test.ts :: rejects every request issued after close() has started, whatever its operation
+  - Test: packages/engine/tests/context-database.test.ts :: settles a request issued before close() with its own result
+  - Test: packages/engine/tests/context-database.test.ts :: removes a request's pending entry when posting it throws
 
 ## Security considerations
 
