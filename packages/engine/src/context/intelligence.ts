@@ -156,6 +156,8 @@ export interface MemoryReview {
   memoryId: string;
   snapshotId: string;
   requiresReview: boolean;
+  /** Which kind of MCP client proposed the memory, when one did (#295). */
+  proposedBy?: "local" | "cloud";
   flags: {
     kind:
       | "source-changed"
@@ -311,6 +313,7 @@ export function reviewMemoryRecords(
       memoryId: memory.id,
       snapshotId,
       requiresReview: flags.length > 0,
+      ...(memory.proposedBy ? { proposedBy: memory.proposedBy } : {}),
       flags,
     };
   });

@@ -1652,6 +1652,7 @@ export class ContextEngine {
     supersedes?: string;
     validUntil?: string;
     validFrom?: string;
+    proposedBy?: "local" | "cloud";
   }): Promise<MemoryRecord> {
     await this.ready;
     const validFrom =
@@ -1675,6 +1676,7 @@ export class ContextEngine {
       ...(input.supersedes ? { supersedes: input.supersedes } : {}),
       ...(validUntil ? { validUntil } : {}),
       ...(validFrom ? { validFrom } : {}),
+      ...(input.proposedBy ? { proposedBy: input.proposedBy } : {}),
     };
     this.validateMemory(record);
     if (record.supersedes) await this.memory(record.supersedes);
