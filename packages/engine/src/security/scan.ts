@@ -13,6 +13,10 @@ import os from "node:os";
 import path from "node:path";
 import { command } from "../util.js";
 import {
+  ContainerRemovalError,
+  removeContainer,
+} from "../execution/container-removal.js";
+import {
   isLockfile,
   selectSecurityTools,
   semgrepRuleSets,
@@ -470,6 +474,8 @@ export async function runSecurityScan(options: {
     databases: options.osvDatabase ? ["osv-scanner"] : [],
   }).selected.filter(({ runnable }) => runnable);
   const work = await mkdtemp(path.join(os.tmpdir(), "graph-security-"));
+  // Set when a scanner container may survive; it still mounts `work`.
+  let keepWork = false;
   const scan = path.join(work, "scan");
   const out = path.join(work, "out");
   const lines = new Map<string, string[]>();
@@ -533,7 +539,8 @@ export async function runSecurityScan(options: {
         );
       };
       signal?.addEventListener("abort", stop, { once: true });
-      let result: Awaited<ReturnType<typeof command>>;
+      let result: Awaited<ReturnType<typeof command>> | undefined;
+      let stepError: { error: unknown } | undefined;
       try {
         result = await command(
           "docker",
@@ -570,13 +577,20 @@ export async function runSecurityScan(options: {
             maxBytes: 64_000_000,
           },
         );
+      } catch (error) {
+        stepError = { error };
       } finally {
         signal?.removeEventListener("abort", stop);
-        await command("docker", ["rm", "-f", name], { timeoutMs: 5000 }).catch(
-          () => {},
-        );
       }
-      if (signal?.aborted) throw new Error("Run cancelled");
+      try {
+        await removeContainer(name, result === undefined, stepError?.error);
+      } catch (error) {
+        keepWork = true;
+        throw error;
+      }
+      if (stepError) throw stepError.error;
+      if (signal?.aborted || result === undefined)
+        throw new Error("Run cancelled");
       if (!(EXIT_OK[tool] ?? [0]).includes(result.code))
         throw new Error(
           /no offline version of the OSV database/.test(result.stderr)
@@ -710,6 +724,8 @@ export async function runSecurityScan(options: {
           );
         }
       } catch (error) {
+        // A scanner that may still run fails the whole scan, by name.
+        if (error instanceof ContainerRemovalError) throw error;
         if (signal?.aborted) throw new Error("Run cancelled", { cause: error });
         // Redacted before it is cut, so the cut cannot leave part of a
         // secret too short to recognise.
@@ -726,7 +742,7 @@ export async function runSecurityScan(options: {
       unscanned,
     };
   } finally {
-    await rm(work, { recursive: true, force: true });
+    if (!keepWork) await rm(work, { recursive: true, force: true });
   }
 }
 
@@ -839,6 +855,7 @@ export async function updateOsvDatabase(options: {
   const directory = path.join(options.dataDir, "security-db", "osv");
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const work = await mkdtemp(path.join(os.tmpdir(), "graph-osv-"));
+  let keepWork = false;
   try {
     const scan = path.join(work, "scan");
     for (const file of lockfiles) {
@@ -857,7 +874,8 @@ export async function updateOsvDatabase(options: {
       );
     };
     options.signal?.addEventListener("abort", stop, { once: true });
-    let result: Awaited<ReturnType<typeof command>>;
+    let result: Awaited<ReturnType<typeof command>> | undefined;
+    let stepError: { error: unknown } | undefined;
     try {
       result = await command(
         "docker",
@@ -905,22 +923,32 @@ export async function updateOsvDatabase(options: {
         },
       );
     } catch (error) {
-      if (options.signal?.aborted)
-        throw new Error("Download cancelled", { cause: error });
-      throw error;
+      stepError = {
+        error: options.signal?.aborted
+          ? new Error("Download cancelled", { cause: error })
+          : error,
+      };
     } finally {
       options.signal?.removeEventListener("abort", stop);
-      await command("docker", ["rm", "-f", name], { timeoutMs: 5000 }).catch(
-        () => {},
-      );
     }
-    if (options.signal?.aborted) throw new Error("Download cancelled");
+    try {
+      await removeContainer(name, result === undefined, stepError?.error);
+    } catch (error) {
+      // A surviving download can still write to the cache: stop treating it
+      // as downloaded until the container is gone and the download reruns.
+      keepWork = true;
+      await rm(path.join(directory, OSV_STAMP), { force: true });
+      throw error;
+    }
+    if (stepError) throw stepError.error;
+    if (options.signal?.aborted || result === undefined)
+      throw new Error("Download cancelled");
     if (![0, 1].includes(result.code))
       throw new Error(
         `osv-scanner could not download its database (exit ${result.code}): ${redactTail(result.stderr, 300)}`,
       );
   } finally {
-    await rm(work, { recursive: true, force: true });
+    if (!keepWork) await rm(work, { recursive: true, force: true });
   }
   const updatedAt = new Date().toISOString();
   await writeFile(

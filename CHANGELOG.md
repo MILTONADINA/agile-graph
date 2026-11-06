@@ -42,6 +42,11 @@
 - `outcomes <runId>` with an unknown run exits 1 with "No run named <runId>" instead of printing `[]`, and `init --name <other>` on an existing project exits 1 naming both names instead of silently keeping the old one (#275).
 - `context --budget` with a value that is not a positive whole number (`abc`, `-5`, `1.5`) says "--budget must be a positive whole number" instead of blaming the project policy. A budget above the policy keeps the policy message (#282).
 - `check-add` refuses `--id` or `--optional` after the image, which it used to store silently as part of the check's command. It says to put the flag before the image, or to start the command with `--` if the command takes that flag itself (#276).
+- A verification check, scanner or OSV database download whose container
+  could not be confirmed removed after a timeout or cancellation now fails
+  with an error that names the container and how to remove it. Its view or
+  work directory is kept while the container may still mount it, and the
+  OSV freshness stamp is dropped (#273).
 - `security-scan` says "Docker is not installed or not on PATH" when it cannot start a `docker` binary, instead of telling you to start a daemon you may not have; a daemon that does not answer still gets "Docker is not running" (#278).
 - `graph-engine --help` describes every command and option; 21 commands and 10 options had no help text, and a test now fails on any new one without it (#283).
 - Both packages declare top-level `main` and `types`, so TypeScript projects using CommonJS or `moduleResolution: node10` resolve their types instead of failing with TS2307 (#284).

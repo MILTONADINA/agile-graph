@@ -59,6 +59,12 @@ malformed question was refused, then corrected; Jev was not called.
 - AC7: The verification image pins its base image by an immutable digest (`FROM node:24-bookworm@sha256:...`, tag kept for readability), and every registry `FROM` in `infra/*.Dockerfile` and `packages/engine/tests/fixtures/*/Dockerfile` carries `@sha256:`.
   - Test: scripts/verification-setup.test.mjs :: every registry base image is pinned by digest
 
+- AC8: When a verification container's `docker run` did not return normally (timeout, cancellation or a transport error), the system shall remove the container and treat it as gone only when `docker rm -f` exits 0 or a successful `docker ps -a` listing does not show its name. Otherwise verification shall fail with an error that names the container and the `docker rm -f` command that removes it, keep the step's own error as its cause, and keep that check's view on disk, because the container may still mount it. A failed `docker kill` is not reported separately: this check is its backstop. When the run returned normally, removal stays best effort. This narrows AC3: an unconfirmed removal is now reported. (#273)
+  - Test: packages/engine/tests/container-removal.test.ts :: a timed-out check names its container and keeps its view when $label
+  - Test: packages/engine/tests/container-removal.test.ts :: a timed-out check whose removal is confirmed rejects as before and removes its view
+  - Test: packages/engine/tests/container-removal.test.ts :: trusts a listing without the name when --rm already removed the container
+  - Test: packages/engine/tests/container-removal.test.ts :: a check that completed does not list containers when rm -f fails
+
 ## Security considerations
 
 This choice can leave a hung check pending until an operator cancels. It is
