@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import {
   mkdir,
   open,
@@ -537,7 +537,14 @@ cli
   .description(
     "Retrieve ranked context for a query from the latest snapshot, within a token budget",
   )
-  .option("--budget <tokens>", "Context token ceiling", (v) => Number(v))
+  .option("--budget <tokens>", "Context token ceiling", (value: string) => {
+    // A malformed value is the flag's fault, not the policy's (#282).
+    if (!/^[1-9]\d*$/.test(value))
+      throw new InvalidArgumentError(
+        "--budget must be a positive whole number",
+      );
+    return Number(value);
+  })
   .action((query, options) =>
     withEngine((engine) =>
       engine.context.getContext({ query, budgetTokens: options.budget }),
