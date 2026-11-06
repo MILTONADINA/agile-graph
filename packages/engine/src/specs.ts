@@ -410,16 +410,31 @@ export async function checkSpecs(
   };
   // CI workflows, when the repository has any, decide whether a test that
   // only runs behind an environment switch counts as proof.
+  // Only a missing directory means "no CI". Any other read error is a
+  // problem: an unreadable directory counts as no workflows and an
+  // unreadable file is left out, so neither verifies a switched test (#274).
   const workflowDir = path.join(root, ".github", "workflows");
-  const workflows = await readdir(workflowDir)
-    .then((names) =>
-      Promise.all(
-        names
-          .filter((name) => /\.ya?ml$/.test(name))
-          .map((name) => readFile(path.join(workflowDir, name), "utf8")),
-      ),
-    )
-    .catch(() => undefined);
+  const unreadable = (where: string, error: unknown) =>
+    errors.push(
+      `${where}: cannot be read (${(error as NodeJS.ErrnoException).code ?? "error"}), so CI cannot be checked for tests behind an environment switch`,
+    );
+  let readable: string[] | undefined;
+  try {
+    const names = await readdir(workflowDir);
+    readable = [];
+    for (const name of names.filter((entry) => /\.ya?ml$/.test(entry)).sort())
+      try {
+        readable.push(await readFile(path.join(workflowDir, name), "utf8"));
+      } catch (error) {
+        unreadable(`.github/workflows/${name}`, error);
+      }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      unreadable(".github/workflows", error);
+      readable = [];
+    }
+  }
+  const workflows = readable;
   for (const file of await specFiles(root)) {
     const spec = parseSpec(file, await readFile(path.join(root, file), "utf8"));
     const problem = (message: string) => errors.push(`${file}: ${message}`);
