@@ -167,6 +167,18 @@ try {
       "utf8",
     ),
   );
+  // Consumers can read each installed package's manifest (#287).
+  for (const name of ["@agile-graph/contracts", "@agile-graph/engine"]) {
+    const read = run(
+      process.execPath,
+      ["-p", `require(${JSON.stringify(`${name}/package.json`)}).version`],
+      app,
+    ).trim();
+    if (read !== version)
+      throw new Error(
+        `${name}/package.json reported ${read}, expected ${version}`,
+      );
+  }
   const printed = run(cli, ["--version"], app).trim();
   if (printed !== version)
     throw new Error(`--version printed ${printed}, expected ${version}`);
