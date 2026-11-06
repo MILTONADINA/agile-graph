@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- A bad flag value names the flag instead of printing a schema error about an internal field. `memory-add --kind` and `provider-add --local-thinking` list their allowed values. `--input-cost` and `--output-cost` need a number of 0 or more, `--keep` and `--max-context` need a positive whole number, and `--local-thinking-budget` a whole number of 0 or more (#279).
 - An unknown run ID now gets "No run named <id>" (was "runs: record not found") in `inspect`, `cancel`, `resume` and `accept`. An unknown memory ID gets "No memory named <id> in this project" (was "Memory is unavailable in this project"). `memory-add ""` says "Memory text is required" instead of calling empty text sensitive (#281).
 - `outcomes <runId>` with an unknown run exits 1 with "No run named <runId>" instead of printing `[]`, and `init --name <other>` on an existing project exits 1 naming both names instead of silently keeping the old one (#275).
 - `context --budget` with a value that is not a positive whole number (`abc`, `-5`, `1.5`) says "--budget must be a positive whole number" instead of blaming the project policy. A budget above the policy keeps the policy message (#282).
