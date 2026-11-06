@@ -1836,6 +1836,13 @@ cli
   )
   .action((runId, options) =>
     withEngine(async (engine) => {
+      // A mistyped run ID is an error, not an empty result (#275).
+      if (runId !== undefined)
+        try {
+          engine.store.run(runId);
+        } catch {
+          throw new Error(`No run named ${runId}`);
+        }
       const outcomes = engine.store
         .outcomes(runId)
         .filter(

@@ -150,9 +150,13 @@ describe("initializeProject and loadProject", () => {
 
   it("returns an existing project unchanged instead of overwriting it", async () => {
     const first = await initializeProject(dir, "First");
-    const again = await initializeProject(dir, "Second");
-    expect(again).toEqual(first);
-    expect(again.name).toBe("First");
+    expect(await initializeProject(dir)).toEqual(first);
+    expect(await initializeProject(dir, "First")).toEqual(first);
+    // A different name is refused rather than ignored (#275).
+    await expect(initializeProject(dir, "Second")).rejects.toThrow(
+      'project "First"; init never renames a project, so --name "Second"',
+    );
+    expect(await loadProject(dir)).toEqual(first);
   });
 
   it("writes the cloud MCP policy only for a new project", async () => {
