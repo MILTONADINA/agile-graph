@@ -709,6 +709,22 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("names --budget for a malformed budget and keeps the policy message for one over the policy", async () => {
+    const { graph } = await project();
+    await graph("init");
+    for (const value of ["abc", "-5", "1.5", "0"]) {
+      const refused = await graph("context", "q", "--budget", value);
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain(
+        "--budget must be a positive whole number",
+      );
+      expect(refused.stderr).not.toContain("project policy");
+    }
+    const over = await graph("context", "q", "--budget", "999999999");
+    expect(over.code).toBe(1);
+    expect(over.stderr).toContain("Context budget is outside project policy");
+  }, 120_000);
+
   it("refuses check-add's own flags after the image unless the command starts with --", async () => {
     const { root, graph } = await project();
     await graph("init");
