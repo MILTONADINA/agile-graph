@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- `symbol_search` and `symbols` match non-ASCII names case-insensitively too: names and queries are NFC-normalized and lowercased before matching, where SQLite folded ASCII only. Folding happens at query time, so existing snapshots need no rebuild (#298).
 - `docs/mcp-clients.md` has a ready installed-package configuration (`"command": "graph-engine"`) for Claude Code, Codex and Cursor beside the source-checkout ones. The platform guide's "installed CLI" example no longer shows a checkout path (#285).
 - `plan --steps`, `policy --file` and the other commands that read a JSON file name the flag or argument and the file as typed: "--steps: cannot read missing.json (no such file)" or "--steps: steps.json is not valid JSON (line 1, column 2)". They used to print a raw ENOENT with an absolute path, or a parse error with no filename (#280).
 - A bad flag value names the flag instead of printing a schema error about an internal field. `memory-add --kind` and `provider-add --local-thinking` list their allowed values. `--input-cost` and `--output-cost` need a number of 0 or more, `--keep` and `--max-context` need a positive whole number, and `--local-thinking-budget` a whole number of 0 or more (#279).
