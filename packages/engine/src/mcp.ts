@@ -3,6 +3,7 @@ import {
   type ToolCallback,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { screenJsonRpcLines } from "./mcp-stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   normalizeObjectSchema,
@@ -1104,12 +1105,17 @@ export async function serveMcp(
   options: McpServerOptions,
 ): Promise<McpServer> {
   const server = createMcpServer(engine, options);
+  // Malformed lines are answered here; only valid messages reach the SDK.
+  const input = screenJsonRpcLines(process.stdin, async (message) => {
+    await transport.send(message);
+  });
   server.server.onclose = () => {
+    input.destroy();
     void engine.close();
   };
-  const transport = new StdioServerTransport();
+  const transport = new StdioServerTransport(input, process.stdout);
   await server.connect(transport);
-  closeWhenInputEnds(server, transport);
+  closeWhenInputEnds(server, transport, input);
   return server;
 }
 
