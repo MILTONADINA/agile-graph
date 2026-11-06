@@ -17,10 +17,11 @@ import { DartLsp } from "./dart-lsp.js";
 import { hash, type ParsedFile } from "./parser.js";
 import type { SemanticResult } from "./semantic.js";
 import {
+  bindDartReplies,
   DART_LIMITS,
   dartPosition,
   prepareDartSnapshot,
-  validateDartDefinition,
+  type DartQuery,
 } from "./dart-snapshot.js";
 
 export {
@@ -30,7 +31,7 @@ export {
   validateDartDefinition,
 } from "./dart-snapshot.js";
 
-export const DART_VERSION = "snapshot-dart-analyzer:3/sdk:3.13.3";
+export const DART_VERSION = "snapshot-dart-analyzer:4/sdk:3.13.3";
 export const DART_ANALYZER_VERSION = "3.13.3-analysis-server-aot";
 export const DART_SOURCE_IMAGE =
   "dart@sha256:4027705fb598ee07b016e17a06786e56c399f95308a54f7171fcc60871eb1738";
@@ -542,7 +543,7 @@ export async function resolveDartBindings(
     // that Docker completed container create and began running the analyzer.
     launchAcknowledged = true;
     client.notify("initialized", {});
-    const updates: SemanticResult["updates"] = [];
+    const replies: { query: DartQuery; result: unknown }[] = [];
     for (let at = 0; at < prepared.files.length; at += 8) {
       const window = prepared.files.slice(at, at + 8);
       client.beginAnalysis();
@@ -567,14 +568,7 @@ export async function resolveDartBindings(
             },
             position: dartPosition(file.text, query.start),
           });
-          const update = validateDartDefinition(
-            result,
-            query,
-            prepared,
-            SOURCE,
-            `${trusted.version}/${trusted.identity}`,
-          );
-          if (update) updates.push(update);
+          replies.push({ query, result });
         }
       for (const file of window)
         client.notify("textDocument/didClose", {
@@ -589,13 +583,21 @@ export async function resolveDartBindings(
     if (hash(await readFile(configFile)) !== hash(configText))
       throw new Error("Changed Dart package config");
     client.check();
+    const bound = bindDartReplies(
+      replies,
+      prepared,
+      SOURCE,
+      `${trusted.version}/${trusted.identity}`,
+    );
     answer = {
-      updates,
+      updates: bound.updates,
       diagnostics: [
         "Dart-analyzer declaration binding uses an isolated Dart-only package snapshot, not repository pubspec, analysis options, plugins, dependencies, or a full compiler/typecheck. Dynamic, instance and extension dispatch are not promoted.",
+        ...bound.diagnostics,
       ],
       analyzedFiles: prepared.files.length,
-      resolvedCalls: updates.filter((edge) => edge.kind === "calls").length,
+      resolvedCalls: bound.updates.filter((edge) => edge.kind === "calls")
+        .length,
       resolvedImports: 0,
     };
   } catch {
