@@ -1232,7 +1232,14 @@ export class RunStore {
     const row = this.db
       .prepare(`SELECT json FROM ${table} WHERE id=? AND project_id=?`)
       .get(id, this.projectId) as { json: string } | undefined;
-    if (!row) throw new Error(`${table}: record not found`);
+    // Echo only an ID-shaped value; an MCP client's oversized input is never
+    // sent back.
+    if (!row)
+      throw new Error(
+        /^[A-Za-z0-9_-]{1,80}$/.test(id)
+          ? `No ${table.replace(/s$/, "")} named ${id}`
+          : `No ${table.replace(/s$/, "")} with that ID`,
+      );
     return JSON.parse(row.json) as T;
   }
   private all(table: string): unknown[] {

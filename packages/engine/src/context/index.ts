@@ -1476,6 +1476,9 @@ export class ContextEngine {
     ).map((row) => json<MemoryRecord>(row));
   }
   private validateMemory(record: MemoryRecord): void {
+    // Empty text is a missing field, not a sensitive one (#281).
+    if (typeof record.text === "string" && !record.text.trim())
+      throw new Error("Memory text is required");
     if (
       record.version !== SCHEMA_VERSION ||
       record.projectId !== this.projectId ||
@@ -1837,7 +1840,12 @@ export class ContextEngine {
       "SELECT payload FROM memories WHERE id=? AND project_id=?",
       [id, this.projectId],
     );
-    if (!row) throw new Error("Memory is unavailable in this project");
+    if (!row)
+      throw new Error(
+        /^[A-Za-z0-9_-]{1,80}$/.test(id)
+          ? `No memory named ${id} in this project`
+          : "No memory with that ID in this project",
+      );
     return row.payload;
   }
   private async memory(id: string): Promise<MemoryRecord> {
