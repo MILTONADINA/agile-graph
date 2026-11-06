@@ -60,7 +60,7 @@ runs it, and plans can be created straight from a ready spec.
 - AC12: When `npm run preflight` sees an added, changed, deleted or renamed-away test file that a spec names on a `- Test:` line, the system shall build the engine and run `spec-check`, so a renamed or removed linked test fails before push instead of in CI. It shall read the links the way `spec-check` does and shall not run `spec-check` for an unlinked script test alone (#330).
   - Test: scripts/preflight.test.mjs :: a changed or deleted test file that a spec links builds the engine and checks the specs
   - Test: scripts/preflight.test.mjs :: linked test files are read the way spec-check reads them
-  - Test: scripts/preflight.test.mjs :: the repository's specs link the release workflow test, so renaming it runs spec-check
+  - Test: scripts/preflight.test.mjs :: a change to scripts/npm-packages.test.mjs runs spec-check, because the repository's specs link it
   - Test: scripts/preflight.test.mjs :: a renamed file counts as its old path deleted and its new path added
 
 ## Security considerations

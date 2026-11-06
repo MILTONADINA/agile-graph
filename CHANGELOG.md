@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- The preflight rename test runs git with an empty global config and signing
+  off, so a developer's `commit.gpgsign` or global hooks cannot fail it.
 - `npm run preflight` now runs `spec-check` when a change touches a test file
   that a spec links, so renaming or deleting a linked test fails locally instead
   of on every CI platform. A rename now counts as its old path deleted and its
