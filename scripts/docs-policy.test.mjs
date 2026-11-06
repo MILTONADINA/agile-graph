@@ -134,3 +134,33 @@ test("README.md and publishing.md link docs/upgrading.md", () => {
   assert.ok(publishingMd.includes("upgrading.md"));
   assert.ok(readText("docs/README.md").includes("upgrading.md"));
 });
+
+// npm users get a ready installed-package MCP configuration for each client,
+// not only source-checkout paths (#285).
+test("docs/mcp-clients.md gives each client an installed graph-engine block", () => {
+  const guide = readFileSync(
+    new URL("../docs/mcp-clients.md", import.meta.url),
+    "utf8",
+  );
+  const section = (heading) => {
+    const start = guide.indexOf(`\n## ${heading}\n`);
+    assert.ok(start !== -1, `docs/mcp-clients.md has a ${heading} section`);
+    const end = guide.indexOf("\n## ", start + 1);
+    return guide.slice(start, end === -1 ? undefined : end);
+  };
+  const args = /"args": \["-C", "[^"]+", "mcp", "--client", "cloud"\]/;
+  for (const heading of ["Claude Code", "Cursor"]) {
+    assert.match(section(heading), /"command": "graph-engine"/, heading);
+    assert.match(section(heading), args, heading);
+  }
+  assert.match(section("Codex"), /^command = "graph-engine"$/m);
+  assert.match(
+    section("Codex"),
+    /^args = \["-C", "[^"]+", "mcp", "--client", "cloud"\]$/m,
+  );
+  const platform = readFileSync(
+    new URL("../docs/platform.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(platform, /"command": "graph-engine"/);
+});

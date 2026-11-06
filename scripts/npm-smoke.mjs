@@ -264,9 +264,10 @@ try {
     app,
   );
   run(cli, ["-C", cloudProject, "index", "--lexical"], app);
+  // The installed form docs/mcp-clients.md gives every client (#285).
   const context = await callTool(
     cloudProject,
-    ["mcp"],
+    ["mcp", "--client", "cloud"],
     "context_get",
     question,
   );
