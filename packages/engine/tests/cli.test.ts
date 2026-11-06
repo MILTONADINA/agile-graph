@@ -709,6 +709,63 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("names the flag, not an internal field, for a bad flag value", async () => {
+    const { graph } = await project();
+    await graph("init");
+    const cases: [string[], string][] = [
+      [["memory-add", "x", "--kind", "bogus"], "--kind"],
+      [
+        ["provider-add", "q", "local", "m", "--local-thinking", "maybe"],
+        "--local-thinking",
+      ],
+      [
+        [
+          "provider-add",
+          "h",
+          "chat",
+          "m",
+          "--endpoint",
+          "https://example.invalid/v1",
+          "--input-cost",
+          "REVIEWED_PRICE",
+          "--output-cost",
+          "0",
+        ],
+        "--input-cost must be a number of 0 or more",
+      ],
+      [
+        ["snapshots-prune", "--keep", "abc"],
+        "--keep must be a positive whole number",
+      ],
+      [
+        ["provider-add", "q", "local", "m", "--local-thinking-budget", "-1"],
+        "--local-thinking-budget must be a whole number of 0 or more",
+      ],
+    ];
+    for (const [args, flag] of cases) {
+      const result = await graph(...args);
+      expect(result.code, args.join(" ")).toBe(1);
+      expect(result.stderr).toContain(flag);
+      expect(result.stderr).not.toMatch(
+        /"code":|invalid_value|inputCostPerMillion|keepLatest/,
+      );
+    }
+    // Zero is a valid thinking budget (the provider schema allows it).
+    const zero = await graph(
+      "provider-add",
+      "q",
+      "local",
+      "m",
+      "--local-thinking-budget",
+      "0",
+    );
+    expect(zero.code, zero.stderr).toBe(0);
+    const kind = await graph("memory-add", "x", "--kind", "bogus");
+    expect(kind.stderr).toContain(
+      "observation, decision, requirement, constraint, solution",
+    );
+  }, 120_000);
+
   it("names an unknown run or memory ID, and says empty memory text is required", async () => {
     const { graph } = await project();
     await graph("init");

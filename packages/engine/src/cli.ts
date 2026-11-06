@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
-import { Command, InvalidArgumentError } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import {
   mkdir,
   open,
@@ -157,6 +157,27 @@ import {
 
 // Program options (-C, --version, --help) are read only before the command,
 // so check-add can store a check's own -C, -V, -h or -- untouched.
+// Flag parsers that name the flag, so a bad value never surfaces as a schema
+// error about an internal field (#279).
+const positiveInteger = (flag: string) => (value: string) => {
+  if (!/^[1-9]\d*$/.test(value))
+    throw new InvalidArgumentError(`${flag} must be a positive whole number`);
+  return Number(value);
+};
+const nonNegativeInteger = (flag: string) => (value: string) => {
+  if (!/^(0|[1-9]\d*)$/.test(value))
+    throw new InvalidArgumentError(
+      `${flag} must be a whole number of 0 or more`,
+    );
+  return Number(value);
+};
+const nonNegativeNumber = (flag: string) => (value: string) => {
+  const number = Number(value);
+  if (value.trim() === "" || !Number.isFinite(number) || number < 0)
+    throw new InvalidArgumentError(`${flag} must be a number of 0 or more`);
+  return number;
+};
+
 const cli = new Command()
   .name("graph-engine")
   .description("Local context, engineering memory, and controlled coding runs")
@@ -586,7 +607,7 @@ cli
   .option(
     "--keep <count>",
     "Newest snapshots to retain, plus protected evidence/worktree snapshots",
-    Number,
+    positiveInteger("--keep"),
     20,
   )
   .option("--apply", "Delete unreferenced snapshots (default previews only)")
@@ -1237,18 +1258,31 @@ cli
     "Comma-separated reasoning efforts the model supports",
   )
   .option("--default-effort <effort>", "Effort used when a plan names none")
-  .option("--input-cost <usdPerMillion>", "Reviewed input-token price", Number)
+  .option(
+    "--input-cost <usdPerMillion>",
+    "Reviewed input-token price",
+    nonNegativeNumber("--input-cost"),
+  )
   .option(
     "--output-cost <usdPerMillion>",
     "Reviewed output-token price",
-    Number,
+    nonNegativeNumber("--output-cost"),
   )
-  .option("--max-context <tokens>", "Worker input ceiling", Number)
-  .option("--local-thinking <mode>", "Local-server thinking: on or off")
+  .option(
+    "--max-context <tokens>",
+    "Worker input ceiling",
+    positiveInteger("--max-context"),
+  )
+  .addOption(
+    new Option("--local-thinking <mode>", "Local-server thinking").choices([
+      "on",
+      "off",
+    ]),
+  )
   .option(
     "--local-thinking-budget <tokens>",
     "Local-server reasoning ceiling",
-    Number,
+    nonNegativeInteger("--local-thinking-budget"),
   )
   .option(
     "--enable",
@@ -2062,10 +2096,16 @@ cli
   .description(
     "Propose a private project memory; a person accepts it with memory-accept. An accepted requirement or constraint reaches a cloud client or worker only when it cites source evidence inside exportPaths (--source) and is shared and authorized for export (memory-share, memory-export-authorize)",
   )
-  .option(
-    "--kind <kind>",
-    "Memory category: observation, decision, requirement, constraint or solution",
-    "observation",
+  .addOption(
+    new Option("--kind <kind>", "Memory category")
+      .choices([
+        "observation",
+        "decision",
+        "requirement",
+        "constraint",
+        "solution",
+      ])
+      .default("observation"),
   )
   .option(
     "--source <path#Lstart-Lend>",
