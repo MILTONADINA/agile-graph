@@ -185,22 +185,28 @@ function toolEntry(tool) {
   );
 }
 
-function git(args) {
-  return execFileSync("git", args, { cwd: root, encoding: "utf8" })
+function git(args, cwd = root) {
+  return execFileSync("git", args, { cwd, encoding: "utf8" })
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 }
 
-/** Files changed since the merge base with `base`, committed or not. */
-export function changedFiles(base = "origin/main") {
-  const mergeBase = git(["merge-base", "HEAD", base])[0];
+/**
+ * Files changed since the merge base with `base`, committed or not, in the
+ * repository at `cwd`. A rename counts as its old path deleted and its new
+ * path added, so a renamed spec-linked test still runs spec-check (#330).
+ */
+export function changedFiles(base = "origin/main", cwd = root) {
+  const mergeBase = git(["merge-base", "HEAD", base], cwd)[0];
+  const diff = (filter) =>
+    git(["diff", "--no-renames", "--name-only", filter, mergeBase], cwd);
   return {
     changed: [
-      ...git(["diff", "--name-only", "--diff-filter=ACMR", mergeBase]),
-      ...git(["ls-files", "--others", "--exclude-standard"]),
+      ...diff("--diff-filter=ACM"),
+      ...git(["ls-files", "--others", "--exclude-standard"], cwd),
     ],
-    deleted: git(["diff", "--name-only", "--diff-filter=D", mergeBase]),
+    deleted: diff("--diff-filter=D"),
   };
 }
 

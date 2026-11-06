@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
+  changedFiles,
   linkedTestFiles,
   planPreflight as planWithLinks,
   preflightNotes,
@@ -195,4 +200,35 @@ test("the repository's specs link the release workflow test, so renaming it runs
       "spec-check",
     ),
   );
+});
+
+test("a renamed file counts as its old path deleted and its new path added", () => {
+  const repo = mkdtempSync(path.join(tmpdir(), "preflight-rename-"));
+  try {
+    const git = (...args) =>
+      execFileSync(
+        "git",
+        ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args],
+        {
+          cwd: repo,
+          stdio: "pipe",
+        },
+      );
+    git("init", "-q", "-b", "main");
+    mkdirSync(path.join(repo, "scripts"));
+    writeFileSync(path.join(repo, "scripts/old.test.mjs"), "export {};\n");
+    git("add", ".");
+    git("commit", "-q", "-m", "base");
+    git("mv", "scripts/old.test.mjs", "scripts/new.test.mjs");
+    git("commit", "-q", "-m", "rename");
+    const { changed, deleted } = changedFiles("HEAD~1", repo);
+    assert.deepEqual(changed, ["scripts/new.test.mjs"]);
+    assert.deepEqual(deleted, ["scripts/old.test.mjs"]);
+    const linked = new Set(["scripts/old.test.mjs"]);
+    assert.ok(
+      names(planWithLinks(changed, deleted, linked)).includes("spec-check"),
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });
