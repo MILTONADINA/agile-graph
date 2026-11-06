@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import type { CodeSymbol } from "@agile-graph/contracts";
 import { hash, parseFile } from "../src/context/parser.js";
 import {
+  bindDartReplies,
   dartPosition,
   prepareDartSnapshot,
   validateDartDefinition,
@@ -338,5 +339,120 @@ describe("Dart analyzer snapshot boundary", () => {
     await expect(
       prepareDartSnapshot(await fixture(), snapshotId, 1),
     ).rejects.toThrow(/Dart AST limit/);
+  });
+
+  it("accepts the spacing YAML allows around the package name colon", async () => {
+    for (const line of [
+      "name : toy_counter",
+      "name\t:\ttoy_counter",
+      "name   :   toy_counter   # synthetic comment",
+    ]) {
+      const prepared = await prepareDartSnapshot(
+        await fixture({ "pubspec.yaml": `${line}\n` }),
+        snapshotId,
+      );
+      expect(prepared.packageName).toBe("toy_counter");
+    }
+    // A second name line stays ambiguous however it is spaced, and a value the
+    // package-name rule refuses is still refused.
+    await expect(
+      prepareDartSnapshot(
+        await fixture({ "pubspec.yaml": "name : toy_counter\nname: other\n" }),
+        snapshotId,
+      ),
+    ).rejects.toThrow(/package name is missing or ambiguous/);
+    await expect(
+      prepareDartSnapshot(
+        await fixture({ "pubspec.yaml": "name :  Toy-Counter\n" }),
+        snapshotId,
+      ),
+    ).rejects.toThrow(/Invalid Dart package name/);
+    // Odd whitespace is not YAML spacing: the line is still counted, then refused.
+    for (const line of ["name\u00a0: toy_counter", "name\u000b: toy_counter"])
+      await expect(
+        prepareDartSnapshot(
+          await fixture({ "pubspec.yaml": `${line}\n` }),
+          snapshotId,
+        ),
+      ).rejects.toThrow(/Invalid Dart package name/);
+  });
+
+  it("treats an analyzer reply outside the three shapes as unresolved, not a throw", async () => {
+    const prepared = await prepareDartSnapshot(await fixture(), snapshotId);
+    const directory = path.resolve("/owned/source");
+    const top = symbolFor(prepared, "top");
+    const query = queryFor(prepared, "top");
+    const valid = location(prepared, top, directory);
+    const bareLink = {
+      originSelectionRange: range(
+        fileFor(prepared, "lib/main.dart").text,
+        query.start,
+        query.end,
+      ),
+      targetUri: valid.uri,
+      targetRange: valid.range,
+      targetSelectionRange: valid.range,
+    };
+    const replies: unknown[] = [
+      undefined,
+      "top",
+      42,
+      { ...valid, extra: true },
+      valid.range,
+      bareLink,
+      [valid, 7],
+      Array.from({ length: 65 }, () => valid),
+    ];
+    for (const reply of replies)
+      expect(
+        validateDartDefinition(reply, query, prepared, directory, "3.13.3"),
+      ).toBeNull();
+  });
+
+  it("keeps the other bindings and reports each file once for a malformed reply", async () => {
+    const prepared = await prepareDartSnapshot(
+      await fixture({
+        "lib/second.dart":
+          "int second() => 3;\nvoid calls() {\n  second();\n}\n",
+      }),
+      snapshotId,
+    );
+    const directory = path.resolve("/owned/source");
+    const top = symbolFor(prepared, "top");
+    const instance = symbolFor(prepared, "instance");
+    const imported = symbolFor(prepared, "other", "lib/other.dart");
+    const second = prepared.queries.find(
+      (query) => query.path === "lib/second.dart",
+    )!;
+    const bound = bindDartReplies(
+      [
+        {
+          query: queryFor(prepared, "top"),
+          result: location(prepared, top, directory),
+        },
+        {
+          query: queryFor(prepared, "Counter.named"),
+          result: "not a location",
+        },
+        // A well-formed location that names no eligible target stays silent.
+        {
+          query: queryFor(prepared, "Counter.parse"),
+          result: location(prepared, instance, directory),
+        },
+        {
+          query: queryFor(prepared, "other.other"),
+          result: [location(prepared, imported, directory), 7],
+        },
+        { query: second, result: 42 },
+      ],
+      prepared,
+      directory,
+      "3.13.3",
+    );
+    expect(bound.updates.map((edge) => edge.to)).toEqual([top.id]);
+    expect(bound.diagnostics).toEqual([
+      "lib/main.dart: unexpected Dart analyzer reply; 2 call(s) left unresolved.",
+      "lib/second.dart: unexpected Dart analyzer reply; 1 call(s) left unresolved.",
+    ]);
   });
 });
