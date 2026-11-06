@@ -16,6 +16,7 @@ import {
 } from "../src/project.js";
 import { checked, hash, writeJson } from "../src/util.js";
 import type { WorkerInput, WorkerResult } from "../src/workers/api.js";
+import { analyzeMutants } from "../src/execution/mutation.js";
 import { generateMutants, notExecutable } from "../src/execution/mutants.js";
 import { runEvidence } from "../src/overview.js";
 
@@ -69,6 +70,91 @@ describe("mutant generation", () => {
       "3: replaced + with -",
       "3: returned a constant 0",
     ]);
+  });
+});
+
+describe("analysis deadline", () => {
+  type Verify = NonNullable<EngineDependencies["verify"]>;
+  const lint = { image: "fixture", argv: ["lint"] };
+  const check = { image: "fixture", argv: ["test"] };
+  // Runs the analysis of the clamp fixture against the given checks, clock
+  // and verifier. The shared deadline is ten seconds after the first reading.
+  async function analyze(
+    checks: ProjectConfig["verification"],
+    now: () => number,
+    verify: Verify,
+  ) {
+    const root = await mkdtemp(path.join(os.tmpdir(), "graph-deadline-"));
+    directories.push(root);
+    await mkdir(path.join(root, "src"));
+    await writeFile(path.join(root, "src", "clamp.js"), CLAMP);
+    return analyzeMutants({
+      workspace: root,
+      tests: new Map([["src/clamp.test.js", "test('x', () => {});\n"]]),
+      targets: ["src/clamp.js"],
+      checks,
+      policy: { ...DEFAULT_POLICY, verificationTimeoutSeconds: 10 },
+      snapshotHash: "snapshot",
+      verify,
+      now,
+    });
+  }
+  const verdict =
+    (code: number): Verify =>
+    async (_workspace, checks, _policy, snapshotHash) =>
+      checks.map((item) => ({
+        ...item,
+        code,
+        stdout: "",
+        stderr: "",
+        snapshotHash,
+      }));
+
+  it("reports time-budget, not baseline-failed, when the deadline passes before the baseline runs", async () => {
+    // The first reading starts the clock; every later one is past the deadline.
+    let readings = 0;
+    let runs = 0;
+    const outcome = await analyze(
+      [check],
+      () => (readings++ === 0 ? 0 : 20_000),
+      async (...args) => {
+        runs++;
+        return verdict(0)(...args);
+      },
+    );
+    expect(runs).toBe(0);
+    expect(outcome.mutants).toBeGreaterThan(0);
+    expect(outcome).toMatchObject({
+      status: "time-budget",
+      killed: 0,
+      inconclusive: outcome.mutants,
+      survivors: [],
+      score: null,
+    });
+  });
+
+  it("keeps baseline-failed when a baseline check ran and failed before the deadline cut the rest", async () => {
+    // The first check fails and moves the clock past the deadline, so the
+    // second check never starts.
+    let clock = 0;
+    let runs = 0;
+    const outcome = await analyze(
+      [check, lint],
+      () => clock,
+      async (_workspace, checks, _policy, snapshotHash) => {
+        runs++;
+        clock = 20_000;
+        return checks.map((item) => ({
+          ...item,
+          code: 1,
+          stdout: "",
+          stderr: "",
+          snapshotHash,
+        }));
+      },
+    );
+    expect(runs).toBe(1);
+    expect(outcome).toMatchObject({ status: "baseline-failed", score: null });
   });
 });
 
