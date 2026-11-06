@@ -100,6 +100,7 @@ import {
   updateOsvDatabase,
   writeBaselineFile,
   scannerBuildHint,
+  assertDockerRunning,
 } from "./security/scan.js";
 import { ENGINE_VERSION } from "./package-layout.js";
 import { runRetro, runsCreatedSince, summarizeRetro } from "./retro.js";
@@ -906,11 +907,7 @@ cli
     "Also write every finding, redacted and marked new or unchanged against the baseline, as SARIF 2.1.0; an incomplete scan is marked unsuccessful",
   )
   .action(async (options) => {
-    try {
-      await checked("docker", ["version", "--format", "{{.Server.Version}}"]);
-    } catch {
-      throw new Error("Docker is not running; start it and retry");
-    }
+    await assertDockerRunning();
     try {
       await checked("docker", ["image", "inspect", options.image]);
     } catch {

@@ -943,18 +943,33 @@ export async function scannerImageId(
   const id = result.stdout.trim();
   if (result.code !== 0 || !/^sha256:[a-f0-9]{64}$/.test(id)) {
     // A stopped daemon fails the inspect too; building the image would not help.
-    const daemon = await command(
-      "docker",
-      ["version", "--format", "{{.Server.Version}}"],
-      { timeoutMs: 10000, signal },
-    );
-    if (daemon.code !== 0)
-      throw new Error("Docker is not running; start it and retry");
+    await assertDockerRunning(signal);
     throw new Error(
       `Security scanner image ${image} is not built; ${scannerBuildHint(image)}`,
     );
   }
   return id;
+}
+
+/**
+ * Refuses unless the Docker daemon answers. A docker binary that cannot be
+ * started (not installed, or not on PATH) gets its own message, so the person
+ * is not told to start a daemon they do not have.
+ */
+export async function assertDockerRunning(signal?: AbortSignal): Promise<void> {
+  const daemon = await command(
+    "docker",
+    ["version", "--format", "{{.Server.Version}}"],
+    { timeoutMs: 10000, signal },
+  ).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT")
+      throw new Error(
+        "Docker is not installed or not on PATH; install it and retry",
+      );
+    throw new Error("Docker is not running; start it and retry");
+  });
+  if (daemon.code !== 0)
+    throw new Error("Docker is not running; start it and retry");
 }
 
 /**
