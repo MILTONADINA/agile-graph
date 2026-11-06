@@ -341,17 +341,93 @@ function switchOf(kind: string, negated: string, variable: string, op: string) {
  * (`it.runIf(process.env.NAME === "1")("name", ...)`, or `test.`, or the
  * `skipIf` forms), or on a `describe` block that contains it.
  */
-export function testSwitch(text: string, name: string): string | undefined {
+/**
+ * Marks every offset inside a comment or a string, template or regex literal
+ * (delimiters included), in one left-to-right pass, so text written there is
+ * never read as structure and a `/*` inside a regex is not a comment (#319).
+ */
+function literalOffsets(code: string): Uint8Array {
+  const inside = new Uint8Array(code.length + 1);
+  let index = 0;
+  while (index < code.length) {
+    const char = code[index]!;
+    if (char === '"' || char === "'" || char === "`") {
+      let end = index + 1;
+      while (end < code.length && code[end] !== char) {
+        if (code[end] === "\\") end++;
+        else if (char !== "`" && code[end] === "\n") break;
+        end++;
+      }
+      inside.fill(1, index, Math.min(end + 1, code.length));
+      index = end + 1;
+    } else if (char === "/" && code[index + 1] === "/") {
+      const end = code.indexOf("\n", index);
+      const stop = end === -1 ? code.length : end;
+      inside.fill(1, index, stop);
+      index = stop;
+    } else if (char === "/" && code[index + 1] === "*") {
+      const end = code.indexOf("*/", index + 2);
+      const stop = end === -1 ? code.length : end + 2;
+      inside.fill(1, index, stop);
+      index = stop;
+    } else if (char === "/" && regexMayStart(code, index)) {
+      // A regex literal: up to the next unescaped `/` outside a class.
+      let end = index + 1;
+      let inClass = false;
+      while (end < code.length && code[end] !== "\n") {
+        if (code[end] === "\\") end++;
+        else if (code[end] === "[") inClass = true;
+        else if (code[end] === "]") inClass = false;
+        else if (code[end] === "/" && !inClass) break;
+        end++;
+      }
+      if (code[end] === "/") {
+        inside.fill(1, index, end + 1);
+        index = end + 1;
+      } else index++;
+    } else if (char === "\\") index += 2;
+    else index++;
+  }
+  return inside;
+}
+
+/** Whether a `/` here starts a regex: nothing before it ends a value. */
+function regexMayStart(code: string, at: number): boolean {
+  const before = code.slice(Math.max(0, at - 16), at).trimEnd();
+  // `x++ / 2`: a postfix increment or decrement ends a value.
+  if (/[\w$)\]]\s*(?:\+\+|--)$/.test(before)) return false;
+  return (
+    before === "" ||
+    /[(,=:[!&|?{};+\-*%<>~^]$/.test(before) ||
+    /(?:^|[^\w$])(?:return|typeof|case|in|of|delete|void|yield|await)$/.test(
+      before,
+    )
+  );
+}
+
+export function testSwitch(source: string, name: string): string | undefined {
+  // Comments and code inside literals neither define nor gate a test.
+  const text = source;
+  const literal = literalOffsets(text);
   const quoted = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const own = new RegExp(
-    `(?:^|[^.\\w])(?:it|test)${GATE}\\(\\s*(["'\`])${quoted}\\5`,
-    "m",
-  ).exec(text);
+  // The first match whose `it` or `test` is code, not text inside a string.
+  const outside = (pattern: RegExp) =>
+    [...text.matchAll(pattern)].find(
+      (match) => !literal[match.index + match[0].search(/(?:it|test)\b/)],
+    );
+  const own = outside(
+    new RegExp(
+      `(?:^|[^.\\w])(?:it|test)${GATE}\\(\\s*(["'\`])${quoted}\\5`,
+      "gm",
+    ),
+  );
   if (own) return switchOf(own[1]!, own[2]!, own[3]!, own[4]!);
-  const at = new RegExp(
-    `(?:^|[^.\\w])(?:it|test)(?:\\.\\w+(?:\\([^)]*\\))?)?\\(\\s*(["'\`])${quoted}\\1`,
-    "m",
-  ).exec(text)?.index;
+  const at = outside(
+    new RegExp(
+      `(?:^|[^.\\w])(?:it|test)(?:\\.\\w+(?:\\([^)]*\\))?)?\\(\\s*(["'\`])${quoted}\\1`,
+      "gm",
+    ),
+  )?.index;
   if (at === undefined) return undefined;
   // The innermost gated describe block whose braces enclose the test.
   const blocks = new RegExp(`(?:^|[^.\\w])describe${GATE}\\(`, "gm");
@@ -361,13 +437,17 @@ export function testSwitch(text: string, name: string): string | undefined {
   const nextOpen = new Int32Array(text.length + 1).fill(-1);
   const stack: number[] = [];
   for (let index = 0; index < text.length; index++) {
+    if (literal[index]) continue;
     if (text[index] === "{") stack.push(index);
     else if (text[index] === "}" && stack.length) closeOf[stack.pop()!] = index;
   }
   for (let index = text.length - 1; index >= 0; index--)
-    nextOpen[index] = text[index] === "{" ? index : nextOpen[index + 1]!;
+    nextOpen[index] =
+      text[index] === "{" && !literal[index] ? index : nextOpen[index + 1]!;
   let found: string | undefined;
   for (const match of text.matchAll(blocks)) {
+    // A match may begin with the character before `describe`.
+    if (literal[match.index + match[0].indexOf("describe")]) continue;
     const open = nextOpen[match.index + match[0].length]!;
     if (open < 0 || open > at) continue;
     const close = closeOf[open]!;
