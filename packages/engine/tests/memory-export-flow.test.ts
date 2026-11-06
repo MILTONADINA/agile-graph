@@ -47,7 +47,12 @@ async function project() {
     ...args,
   ];
   const graph = (...args: string[]) =>
-    new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+    new Promise<{
+      code: number;
+      stdout: string;
+      stderr: string;
+      args: string[];
+    }>((resolve) => {
       execFile(
         process.execPath,
         argv(args),
@@ -63,12 +68,17 @@ async function project() {
             code: error ? Number((error as { code?: number }).code ?? 1) : 0,
             stdout,
             stderr,
+            args,
           }),
       );
     });
   const json = async <T>(pending: ReturnType<typeof graph>): Promise<T> => {
     const result = await pending;
-    expect(result.code, result.stderr).toBe(0);
+    // A Windows crash exits with an NTSTATUS code, readable only in hex (#251).
+    expect(
+      result.code,
+      `graph ${result.args.join(" ")} exited ${result.code} (0x${(result.code >>> 0).toString(16)}): ${result.stderr}`,
+    ).toBe(0);
     return JSON.parse(result.stdout) as T;
   };
   // A cloud-backed MCP client of `graph-engine mcp`, the command's default.
