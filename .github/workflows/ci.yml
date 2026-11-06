@@ -71,6 +71,15 @@ jobs:
         run: node --test scripts/dist-freshness.test.mjs
       - name: README quick start matches the built CLI
         run: node --test scripts/readme-quickstart.test.mjs
+      - name: Release, licence, SBOM and preflight helpers
+        # The Jev key loader and verification setup tests assume POSIX file
+        # modes and paths; the helpers they cover run on macOS and Linux.
+        if: runner.os != 'Windows'
+        run: >-
+          node --test scripts/ci-script-tests.test.mjs
+          scripts/license-allowlist.test.mjs scripts/local-engine-jev.test.mjs
+          scripts/preflight.test.mjs scripts/sbom.test.mjs
+          scripts/verification-setup.test.mjs
       - name: Engine line coverage floor
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
