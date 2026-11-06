@@ -54,6 +54,8 @@ test("both packages are public, MIT-licensed and point at this repository", asyn
     assert.deepEqual(value.engines, { node: "^22.18.0 || >=24 <27" });
     assert.deepEqual(value.publishConfig, { access: "public" });
     assert.ok(value.description && value.files?.length);
+    // Tools read a dependency's version from its manifest (#287).
+    assert.equal(value.exports["./package.json"], "./package.json", directory);
   }
   assert.equal(contracts.version, engine.version);
   assert.equal(
