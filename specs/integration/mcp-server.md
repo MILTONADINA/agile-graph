@@ -73,6 +73,11 @@ Developers use AI clients such as Claude Code, Codex and Cursor, which should be
   - Test: packages/engine/tests/mcp-stdin-shutdown.test.ts :: exits by itself when its client closes stdin, without waiting for a signal
   - Test: packages/engine/tests/mcp-stdin-shutdown.test.ts :: answers a request its client sent before closing stdin, then exits by itself
   - Test: packages/engine/tests/mcp-stdin-shutdown.test.ts :: exits by itself after its client cancels a request and closes stdin
+- AC17: When a tool call from a cloud-backed client fails because the project policy denies an enabled provider's endpoint, the error shall say the endpoint is denied without naming its host. A local client still sees the host, and the refusal of a provider the policy does not allow is unchanged. (#294)
+  - Test: packages/engine/tests/mcp-cloud-endpoint-host.test.ts :: a cloud plan_decompose does not name the denied host
+  - Test: packages/engine/tests/mcp-cloud-endpoint-host.test.ts :: a cloud plan_create does not name the denied host
+  - Test: packages/engine/tests/mcp-cloud-endpoint-host.test.ts :: a local client still sees the denied host
+  - Test: packages/engine/tests/mcp-cloud-endpoint-host.test.ts :: a provider the policy does not allow is refused as before, for both clients
 
 ## Security considerations
 
