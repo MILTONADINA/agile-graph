@@ -1109,7 +1109,17 @@ function closeWhenInputEnds(
   const receive = transport.onmessage;
   transport.onmessage = (message) => {
     if ("method" in message && "id" in message) owed.add(message.id);
+    else if (
+      "method" in message &&
+      message.method === "notifications/cancelled"
+    ) {
+      // The SDK sends no reply for a request its client cancelled.
+      const id = (message.params as { requestId?: string | number } | undefined)
+        ?.requestId;
+      if (id !== undefined) owed.delete(id);
+    }
     receive?.(message);
+    settle();
   };
   const send = transport.send.bind(transport);
   transport.send = async (message) => {
