@@ -41,6 +41,11 @@ runs it, and plans can be created straight from a ready spec.
   - Test: scripts/preflight.test.mjs :: the engine build runs before script tests that need the built engine
   - Test: scripts/preflight.test.mjs :: no engine build is added for script tests that do not need it
   - Test: scripts/preflight.test.mjs :: a spec change with a dist-dependent script test builds once, before the script tests and spec-check
+- AC9: When `.github/workflows` is missing, the system shall treat the repository as having no CI to check switched tests against. When the directory or a `*.yml`/`*.yaml` entry in it exists but cannot be read (not a directory, permission denied, a dangling link, a directory named like a workflow), `spec-check` shall report a problem naming that path and the error code, and shall not let the unreadable entry verify a test behind an environment switch. (#274)
+  - Test: packages/engine/tests/specs-workflows.test.ts :: reports a workflows path that is a regular file and does not count the switched test
+  - Test: packages/engine/tests/specs-workflows.test.ts :: reports a dangling workflow link and does not count the switched test
+  - Test: packages/engine/tests/specs-workflows.test.ts :: reports an unreadable workflow entry but still counts a readable one that runs the switch
+  - Test: packages/engine/tests/specs-workflows.test.ts :: still treats a repository without .github as having no CI to check
 
 ## Security considerations
 
