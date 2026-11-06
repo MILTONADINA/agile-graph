@@ -19,7 +19,7 @@ export async function managedGit(
       "--get-regexp",
       "^filter\\..*\\.(clean|smudge|process|required)$",
     ],
-    { cwd },
+    { cwd, signal: options.signal, timeoutMs: options.timeoutMs },
   );
   if (configured.code !== 0 && configured.code !== 1)
     throw new Error("Cannot inspect Git filter configuration");
