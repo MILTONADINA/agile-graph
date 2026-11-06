@@ -709,6 +709,23 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("refuses outcomes for an unknown run and init --name that would rename a project", async () => {
+    const { graph } = await project();
+    expect((await graph("init", "--name", "toy")).code).toBe(0);
+    const unknown = await graph("outcomes", "NOPE");
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toContain("No run named NOPE");
+    expect((await graph("outcomes")).code).toBe(0);
+    const renamed = await graph("init", "--name", "other");
+    expect(renamed.code).toBe(1);
+    expect(renamed.stderr).toContain('project "toy"');
+    expect(renamed.stderr).toContain('--name "other"');
+    const same = await graph("init", "--name", "toy");
+    expect(same.code).toBe(0);
+    expect(JSON.parse(same.stdout).name).toBe("toy");
+    expect((await graph("init")).code).toBe(0);
+  }, 120_000);
+
   it("names --budget for a malformed budget and keeps the policy message for one over the policy", async () => {
     const { graph } = await project();
     await graph("init");

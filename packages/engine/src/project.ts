@@ -92,6 +92,10 @@ export async function initializeProject(
       : cloudMcpPolicy(options.cloudMcpExportPaths);
   try {
     const existing = await loadProject(absolute);
+    if (name !== undefined && name !== existing.name)
+      throw new Error(
+        `${PROJECT_FILE} already exists for project "${existing.name}"; init never renames a project, so --name "${name}" was not applied. Edit name there yourself.`,
+      );
     if (options.cloudMcpExportPaths !== undefined)
       throw new Error(
         `${PROJECT_FILE} already exists; --cloud-mcp only sets up a new project and never changes an existing policy. Edit policy.inference, policy.network and policy.exportPaths there yourself.`,
