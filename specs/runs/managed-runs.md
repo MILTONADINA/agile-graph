@@ -132,6 +132,8 @@ An operator wants a worker model to implement a planned change without touching 
   - Test: packages/engine/tests/new-dependency-gate.test.ts :: allows a version bump of an existing name
   - Test: packages/engine/tests/new-dependency-gate.test.ts :: allows removing a dependency
   - Test: packages/engine/tests/new-dependency-gate.test.ts :: leaves a patch to an unrelated file alone
+- AC34: When a caller of the managed Git wrapper passes a cancellation signal or a timeout, the system shall give both Git commands it runs for that call, including the filter-configuration probe that runs first, that signal and timeout, so the probe stops when the run is cancelled.
+  - Test: packages/engine/tests/managed-git.test.ts :: gives the filter-configuration probe the caller's cancellation and timeout
 
 ## Security considerations
 
