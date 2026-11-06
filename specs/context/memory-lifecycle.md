@@ -77,6 +77,11 @@ A team wants durable project knowledge (requirements, constraints, observations)
   - Test: packages/engine/tests/memory-valid-from.test.ts :: hides a memory only by its own validFrom, never by a reviewed claim's window
   - Test: packages/engine/tests/mcp.test.ts :: cloud context_get leaves out mandatory memory before its validFrom and changes nothing else
   - Test: packages/engine/tests/mcp.test.ts :: memory_propose takes an optional validFrom, refuses a malformed one or one not before validUntil, and the proposal stays proposed
+- AC18: When `memory_propose` creates a memory, the system shall store `proposedBy` (`cloud` or `local`, the kind of the MCP client that proposed it) on the record. The record returned by `memory-accept` and the entry `memory-review` prints for it carry the same field, and the call log entry for that call carries its `memoryId`. A memory a person adds with `memory-add` has no `proposedBy`. The `memory_id` column is added to an existing call log in place (`ALTER TABLE`, still schema version 5, nullable), so older entries and an older engine still read it. (#295)
+  - Test: packages/engine/tests/mcp-memory-origin.test.ts :: a cloud requirement proposal records proposedBy cloud through review and acceptance, and the call log names it
+  - Test: packages/engine/tests/mcp-memory-origin.test.ts :: a local client's proposal records proposedBy local
+  - Test: packages/engine/tests/mcp-memory-origin.test.ts :: a memory a person adds directly has no proposedBy
+  - Test: packages/engine/tests/mcp-call-definition.test.ts :: adds the memory ID column to an existing call log in place and keeps older entries readable (#295)
 
 ## Security considerations
 

@@ -75,6 +75,8 @@ export interface McpCallRecord {
   outcome: McpCallOutcome | null;
   planId?: string;
   runId?: string;
+  /** The memory a `memory_propose` call created (#295). */
+  memoryId?: string;
 }
 interface McpCallRow {
   id: string;
@@ -86,6 +88,7 @@ interface McpCallRow {
   outcome: McpCallOutcome | null;
   plan_id: string | null;
   run_id: string | null;
+  memory_id?: string | null;
 }
 const mcpCallRecord = (row: McpCallRow): McpCallRecord => ({
   id: row.id,
@@ -97,6 +100,7 @@ const mcpCallRecord = (row: McpCallRow): McpCallRecord => ({
   outcome: row.outcome,
   ...(row.plan_id ? { planId: row.plan_id } : {}),
   ...(row.run_id ? { runId: row.run_id } : {}),
+  ...(row.memory_id ? { memoryId: row.memory_id } : {}),
 });
 function selectMcpCalls(
   db: Database.Database,
@@ -105,9 +109,11 @@ function selectMcpCalls(
 ): McpCallRecord[] {
   // A log written before def_sha256 was added has no such column.
   const definition = hasDefinitionColumn(db) ? ",def_sha256" : "";
+  // Nor does one written before memory_id was added (#295).
+  const memory = hasMcpColumn(db, "memory_id") ? ",memory_id" : "";
   const rows = db
     .prepare(
-      `SELECT id,at,tool,client_kind,args_sha256${definition},outcome,plan_id,run_id FROM mcp_calls WHERE project_id=?${options.tool === undefined ? "" : " AND tool=?"} ORDER BY seq DESC LIMIT ?`,
+      `SELECT id,at,tool,client_kind,args_sha256${definition},outcome,plan_id,run_id${memory} FROM mcp_calls WHERE project_id=?${options.tool === undefined ? "" : " AND tool=?"} ORDER BY seq DESC LIMIT ?`,
     )
     .all(
       ...(options.tool === undefined
@@ -118,9 +124,13 @@ function selectMcpCalls(
 }
 
 function hasDefinitionColumn(db: Database.Database): boolean {
+  return hasMcpColumn(db, "def_sha256");
+}
+
+function hasMcpColumn(db: Database.Database, name: string): boolean {
   return (
     db.prepare("PRAGMA table_info(mcp_calls)").all() as { name: string }[]
-  ).some((column) => column.name === "def_sha256");
+  ).some((column) => column.name === name);
 }
 
 /**
@@ -437,6 +447,9 @@ export class RunStore {
         // still opens and writes the same database.
         if (!hasDefinitionColumn(this.db))
           this.db.exec("ALTER TABLE mcp_calls ADD COLUMN def_sha256 TEXT");
+        // memory_id was added the same way (#295).
+        if (!hasMcpColumn(this.db, "memory_id"))
+          this.db.exec("ALTER TABLE mcp_calls ADD COLUMN memory_id TEXT");
       })
       .immediate();
     localProcessOwner();
@@ -1277,16 +1290,22 @@ export class RunStore {
   /** Records how an MCP call ended and the plan or run it concerned. */
   finishMcpCall(
     callId: string,
-    result: { outcome: McpCallOutcome; planId?: string; runId?: string },
+    result: {
+      outcome: McpCallOutcome;
+      planId?: string;
+      runId?: string;
+      memoryId?: string;
+    },
   ): void {
     this.db
       .prepare(
-        "UPDATE mcp_calls SET outcome=?,plan_id=?,run_id=? WHERE id=? AND project_id=?",
+        "UPDATE mcp_calls SET outcome=?,plan_id=?,run_id=?,memory_id=? WHERE id=? AND project_id=?",
       )
       .run(
         result.outcome,
         result.planId ?? null,
         result.runId ?? null,
+        result.memoryId ?? null,
         callId,
         this.projectId,
       );

@@ -489,6 +489,11 @@ export interface MemoryRecord {
   validFrom?: string;
   /** Why a person rejected this proposal (status "rejected" only). */
   rejectionReason?: string;
+  /**
+   * Which kind of MCP client proposed it, for a proposal made through
+   * `memory_propose`; absent for a memory a person added locally (#295).
+   */
+  proposedBy?: "local" | "cloud";
 }
 export interface ExecutionStep {
   id: string;

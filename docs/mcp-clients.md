@@ -120,8 +120,10 @@ approval. The approval a run started under is recorded as its
 The server records every tool call it handles in the project's run database:
 when, which tool, whether the client is local or cloud, the SHA-256 of the
 call's arguments as canonical JSON (sorted keys), its outcome (`ok`,
-`refused` by a rule such as a missing approval, or `error`) and the plan or
-run it concerned. It never stores the arguments themselves or error text, and
+`refused` by a rule such as a missing approval, or `error`) and the plan,
+run or proposed memory it concerned. A memory proposed with `memory_propose`
+also records `proposedBy` (`cloud` or `local`), which `memory-accept` and
+`memory-review` show. It never stores the arguments themselves or error text, and
 it keeps a plan or run ID only when it names one of the project's own. A call
 whose arguments fail the tool's input schema is turned down by the MCP
 library before the tool runs, so it does no work and is not logged.

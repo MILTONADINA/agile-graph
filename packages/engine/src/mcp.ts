@@ -384,12 +384,21 @@ export function createMcpServer(
   };
   // The plan or run a call concerned, kept only when it names one of this
   // project's: an ID a client sent is otherwise its raw input.
-  const known = (ids: { planId?: unknown; runId?: unknown }) => ({
+  const known = (ids: {
+    planId?: unknown;
+    runId?: unknown;
+    memoryId?: unknown;
+  }) => ({
     ...(typeof ids.planId === "string" && engine.store.hasPlan(ids.planId)
       ? { planId: ids.planId }
       : {}),
     ...(typeof ids.runId === "string" && engine.store.hasRun(ids.runId)
       ? { runId: ids.runId }
+      : {}),
+    // Only the ID this server's own memory_propose returned (#295).
+    ...(typeof ids.memoryId === "string" &&
+    /^[a-zA-Z0-9_-]{8,80}$/.test(ids.memoryId)
+      ? { memoryId: ids.memoryId }
       : {}),
   });
   // A failure to write the call log is reported on this server's standard
@@ -413,7 +422,7 @@ export function createMcpServer(
     ids?: (
       args: ShapeOutput<Shape>,
       value: unknown,
-    ) => { planId?: unknown; runId?: unknown },
+    ) => { planId?: unknown; runId?: unknown; memoryId?: unknown },
   ) => {
     const definitionSha256 = mcpToolDefinitionSha256(
       tool,
@@ -783,7 +792,10 @@ export function createMcpServer(
     },
     async (args) => {
       await allowed();
-      const memory = await engine.context.createMemory(args);
+      const memory = await engine.context.createMemory({
+        ...args,
+        proposedBy: options.client,
+      });
       return {
         id: memory.id,
         status: memory.status,
@@ -791,6 +803,9 @@ export function createMcpServer(
         ...(memory.validUntil ? { validUntil: memory.validUntil } : {}),
       };
     },
+    (_args, value) => ({
+      memoryId: (value as { id?: unknown } | undefined)?.id,
+    }),
   );
   if (enabled.has("run_status"))
     register(

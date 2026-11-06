@@ -33,6 +33,10 @@
 
 ### Fixed
 
+- A memory proposed through MCP records `proposedBy` (`cloud` or `local`),
+  which `memory-accept` and `memory-review` show, and the call log entry for
+  `memory_propose` carries the new memory's ID, so a person accepting a
+  requirement can see that a cloud client wrote it (#295).
 - The stdio MCP server answers a malformed line instead of dropping it, so a client no longer waits until its own timeout. An unparseable line gets -32700 with id null, an invalid envelope or a batch array gets -32600, and `tools/call` with non-object `arguments` gets -32602. A line over 10 MB gets -32600 and the server keeps serving, where the transport used to close. The messages are fixed and never include validator output (#297).
 - `symbol_search` and `symbols` match non-ASCII names case-insensitively too: names and queries are NFC-normalized and lowercased before matching, where SQLite folded ASCII only. Folding happens at query time, so existing snapshots need no rebuild (#298).
 - `docs/mcp-clients.md` has a ready installed-package configuration (`"command": "graph-engine"`) for Claude Code, Codex and Cursor beside the source-checkout ones. The platform guide's "installed CLI" example no longer shows a checkout path (#285).
