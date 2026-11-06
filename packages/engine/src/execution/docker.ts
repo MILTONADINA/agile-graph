@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { gitFiles } from "./workspace.js";
+import { removeContainer } from "./container-removal.js";
 import { isAllowedPath, safePath, wholeRepository } from "../policy.js";
 
 export async function dockerAvailable(
@@ -200,6 +201,8 @@ export async function verifyInContainer(
         );
       };
       signal?.addEventListener("abort", stop, { once: true });
+      let mayBeRunning = true;
+      let stepError: { error: unknown } | undefined;
       try {
         const result = await command(
           "docker",
@@ -238,6 +241,7 @@ export async function verifyInContainer(
             timeoutMs,
           },
         );
+        mayBeRunning = false;
         results.push({
           ...result,
           ...(check.id !== undefined ? { checkId: check.id } : {}),
@@ -247,12 +251,17 @@ export async function verifyInContainer(
           snapshotHash,
         });
         failed = result.code !== 0;
+      } catch (error) {
+        stepError = { error };
       } finally {
         signal?.removeEventListener("abort", stop);
-        await command("docker", ["rm", "-f", name], { timeoutMs: 5000 }).catch(
-          () => {},
-        );
       }
+      // A container that may still run keeps this view mounted: leave the
+      // view in place unless its removal is confirmed.
+      views.splice(views.indexOf(view), 1);
+      await removeContainer(name, mayBeRunning, stepError?.error);
+      views.push(view);
+      if (stepError) throw stepError.error;
       for (const [relative, digest] of inputs) {
         try {
           const file = await safePath(view, relative, policy);
