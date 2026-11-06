@@ -709,6 +709,35 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("names an unknown run or memory ID, and says empty memory text is required", async () => {
+    const { graph } = await project();
+    await graph("init");
+    for (const args of [
+      ["inspect", "NOPE"],
+      ["cancel", "NOPE"],
+    ]) {
+      const result = await graph(...args);
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("No run named NOPE");
+      expect(result.stderr).not.toContain("record not found");
+    }
+    // An oversized or odd ID is not echoed back.
+    const long = await graph("inspect", "x".repeat(500));
+    expect(long.stderr).toContain("No run with that ID");
+    expect(long.stderr).not.toContain("x".repeat(100));
+    const memory = await graph("memory-accept", "NOPE");
+    expect(memory.code).toBe(1);
+    expect(memory.stderr).toContain("No memory named NOPE");
+    expect(memory.stderr).not.toContain("unavailable");
+    const empty = await graph("memory-add", "");
+    expect(empty.code).toBe(1);
+    expect(empty.stderr).toContain("Memory text is required");
+    // A credential-like text keeps the sensitive-text refusal.
+    const secret = await graph("memory-add", `token ghp_${"a".repeat(36)}`);
+    expect(secret.code).toBe(1);
+    expect(secret.stderr).toContain("Invalid or sensitive memory record");
+  }, 120_000);
+
   it("refuses outcomes for an unknown run and init --name that would rename a project", async () => {
     const { graph } = await project();
     expect((await graph("init", "--name", "toy")).code).toBe(0);

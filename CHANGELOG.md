@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- An unknown run ID now gets "No run named <id>" (was "runs: record not found") in `inspect`, `cancel`, `resume` and `accept`. An unknown memory ID gets "No memory named <id> in this project" (was "Memory is unavailable in this project"). `memory-add ""` says "Memory text is required" instead of calling empty text sensitive (#281).
 - `outcomes <runId>` with an unknown run exits 1 with "No run named <runId>" instead of printing `[]`, and `init --name <other>` on an existing project exits 1 naming both names instead of silently keeping the old one (#275).
 - `context --budget` with a value that is not a positive whole number (`abc`, `-5`, `1.5`) says "--budget must be a positive whole number" instead of blaming the project policy. A budget above the policy keeps the policy message (#282).
 - `check-add` refuses `--id` or `--optional` after the image, which it used to store silently as part of the check's command. It says to put the flag before the image, or to start the command with `--` if the command takes that flag itself (#276).
