@@ -45,6 +45,12 @@
   `Context database is closed` error instead of never settling, and a request
   whose post to the database worker throws no longer stays in the pending map
   (#264).
+- A Tree-sitter parser or grammar that fails to load (for example after a
+  transient read error) is no longer cached for the life of the process. The
+  next parse retries it, parses that start while the load is in flight still
+  share it, and a failed runtime init is reported as `parser unavailable`
+  instead of rejecting `parseFile`. The Dart and Rust snapshot grammars retry
+  the same way (#265).
 
 ### Internal
 

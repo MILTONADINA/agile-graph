@@ -1,10 +1,9 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
-import { Parser, Language, type Node } from "web-tree-sitter";
+import { Parser, type Node } from "web-tree-sitter";
 import { z } from "zod";
 import type { GraphEdge } from "@agile-graph/contracts";
-import { hash, type ParsedFile } from "./parser.js";
+import { hash, loadGrammar, type ParsedFile } from "./parser.js";
 
 export const RUST_LIMITS = {
   files: 64,
@@ -26,19 +25,6 @@ export interface PreparedRustSnapshot {
   queries: RustQuery[];
   targets: string[];
   snapshotId: string;
-}
-let grammar: Promise<Language> | undefined;
-async function rustGrammar() {
-  return (grammar ??= (async () => {
-    await Parser.init();
-    const require = createRequire(import.meta.url);
-    return Language.load(
-      path.join(
-        path.dirname(require.resolve("tree-sitter-wasms/package.json")),
-        "out/tree-sitter-rust.wasm",
-      ),
-    );
-  })());
 }
 const forbidden = new Set([
   // The pinned grammar represents a leading #![...] as a shebang; neither
@@ -108,8 +94,9 @@ export async function prepareRustSnapshot(
       )
     )
       throw new Error("Unverifiable Rust snapshot identity");
+    const grammar = await loadGrammar("rust");
     const parser = new Parser();
-    parser.setLanguage(await rustGrammar());
+    parser.setLanguage(grammar);
     const tree = parser.parse(file.text);
     if (!tree) {
       parser.delete();

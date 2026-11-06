@@ -1,14 +1,18 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
-import { Parser, Language, type Node } from "web-tree-sitter";
+import { Parser, type Node } from "web-tree-sitter";
 import { z } from "zod";
 import type {
   CodeSymbol,
   GraphEdge,
   SourceReference,
 } from "@agile-graph/contracts";
-import { hash, parserVersionFor, type ParsedFile } from "./parser.js";
+import {
+  hash,
+  loadGrammar,
+  parserVersionFor,
+  type ParsedFile,
+} from "./parser.js";
 
 export const DART_LIMITS = {
   files: 250,
@@ -74,20 +78,6 @@ const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
 const named = (node: Node): Node[] =>
   node.namedChildren.filter((child): child is Node => child !== null);
-
-let grammar: Promise<Language> | undefined;
-async function dartGrammar() {
-  return (grammar ??= (async () => {
-    await Parser.init();
-    const require = createRequire(import.meta.url);
-    return Language.load(
-      path.join(
-        path.dirname(require.resolve("tree-sitter-wasms/package.json")),
-        "out/tree-sitter-dart.wasm",
-      ),
-    );
-  })());
-}
 
 function ownPackage(
   files: ParsedFile[],
@@ -296,8 +286,9 @@ export async function prepareDartSnapshot(
   let nodeCount = 0;
   for (const file of selected) {
     verifyFile(file, snapshotId);
+    const grammar = await loadGrammar("dart");
     const parser = new Parser();
-    parser.setLanguage(await dartGrammar());
+    parser.setLanguage(grammar);
     const tree = parser.parse(file.text);
     if (!tree) {
       parser.delete();

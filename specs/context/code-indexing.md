@@ -60,6 +60,15 @@ Workers and connected AI clients need accurate, bounded context about a reposito
   - Test: packages/engine/tests/context-database.test.ts :: rejects every request issued after close() has started, whatever its operation
   - Test: packages/engine/tests/context-database.test.ts :: settles a request issued before close() with its own result
   - Test: packages/engine/tests/context-database.test.ts :: removes a request's pending entry when posting it throws
+- AC14: When a Tree-sitter runtime or grammar load fails, the system shall report each file that needed it as unparsed with a `parser unavailable` diagnostic instead of rejecting, and the next parse shall retry that load rather than reuse the failure; parses that start while a load is in flight shall share it.
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: retries a grammar load that failed once instead of reusing the rejection
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: reports a failed runtime init as unavailable instead of rejecting, then retries it
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: shares one in-flight runtime init and grammar load between concurrent parses
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: fails concurrent parses together on a failed init, and the next parse retries it
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: reports syntax errors from a parse that recovered from a failed load
+- AC15: When a Dart or Rust snapshot's grammar load fails, the system shall reject that preparation with the load's error, and the next preparation shall retry the load rather than reuse the failure.
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: retries the Rust snapshot grammar after a failed load
+  - Test: packages/engine/tests/context-grammar-retry.test.ts :: retries the Dart snapshot grammar after a failed load
 
 ## Security considerations
 

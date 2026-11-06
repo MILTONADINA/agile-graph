@@ -98,6 +98,35 @@ export interface ParsedFile {
   };
 }
 
+// A rejected runtime or grammar load is dropped from its cache before its
+// callers resume, so the next call retries it. Only one load per key is in
+// flight at a time, so the removal can only drop the rejected promise itself.
+// Parses that start while a load is pending share that one load.
+function initRuntime(): Promise<void> {
+  initialized ??= Parser.init().catch((error: unknown) => {
+    initialized = undefined;
+    throw error;
+  });
+  return initialized;
+}
+
+/** Loads a bundled grammar once after the shared runtime init, and retries it
+ * after a failure. */
+export function loadGrammar(name: string): Promise<Grammar> {
+  let grammar = grammars.get(name);
+  if (!grammar) {
+    grammar = (async () => {
+      await initRuntime();
+      return Grammar.load(join(grammarRoot, "out", `tree-sitter-${name}.wasm`));
+    })().catch((error: unknown) => {
+      grammars.delete(name);
+      throw error;
+    });
+    grammars.set(name, grammar);
+  }
+  return grammar;
+}
+
 export async function parseFile(
   path: string,
   text: string,
@@ -135,18 +164,11 @@ export async function parseFile(
     spans: { symbols: {}, edges: {} },
   };
   if (!language) return result;
-  initialized ??= Parser.init();
-  await initialized;
-  let grammar = grammars.get(language[1]);
-  if (!grammar) {
-    grammar = Grammar.load(
-      join(grammarRoot, "out", `tree-sitter-${language[1]}.wasm`),
-    );
-    grammars.set(language[1], grammar);
-  }
-  const parser = new Parser();
+  let parser: Parser | undefined;
   try {
-    parser.setLanguage(await grammar);
+    const grammar = await loadGrammar(language[1]);
+    parser = new Parser();
+    parser.setLanguage(grammar);
     const tree = parser.parse(text);
     if (!tree) throw new Error("Parser returned no syntax tree");
     try {
@@ -341,7 +363,7 @@ export async function parseFile(
       `${path}: parser unavailable (${error instanceof Error ? error.message : String(error)})`,
     );
   } finally {
-    parser.delete();
+    parser?.delete();
   }
   return result;
 }
