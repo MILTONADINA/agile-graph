@@ -40,6 +40,10 @@
   `#` or `;` comment, and where a pytest section ends, the way iniconfig does,
   so `[tool:pytest] ; x]` and a `[metadata#]` line no longer hide a change; it
   also sees a `pyproject.toml` empty array (`testpaths = []`) added or removed.
+- A query issued while the context database is closing is refused with a
+  `Context database is closed` error instead of never settling, and a request
+  whose post to the database worker throws no longer stays in the pending map
+  (#264).
 
 ### Internal
 

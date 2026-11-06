@@ -152,12 +152,22 @@ export class ContextDatabase {
     this.closed = true;
   }
   private request(operation: string, payload: object = {}): Promise<any> {
-    if (this.closed)
+    // Once close() has started, the worker stops listening after it answers
+    // the close message, so a request posted now would never settle.
+    if (this.closed || this.closing !== undefined)
       return Promise.reject(new Error("Context database is closed"));
+    return this.send(operation, payload);
+  }
+  private send(operation: string, payload: object = {}): Promise<any> {
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.worker.postMessage({ id, operation, ...payload });
+      try {
+        this.worker.postMessage({ id, operation, ...payload });
+      } catch (error) {
+        this.pending.delete(id);
+        reject(error);
+      }
     });
   }
   exec(sql: string): Promise<void> {
@@ -206,13 +216,14 @@ export class ContextDatabase {
   // Resolves only once the worker thread has ended, so the database file and
   // its -wal and -shm files are released (Windows refuses to remove or rename
   // them until then). Concurrent calls share one close, and a failed close
-  // still ends the worker.
+  // still ends the worker. From the first call on, new requests are refused.
   close(): Promise<void> {
     return (this.closing ??= (async () => {
       try {
-        if (!this.closed) await this.request("close");
+        if (!this.closed) await this.send("close");
       } finally {
-        this.closed = true;
+        // Settle any request the worker never answered before it is ended.
+        this.fail(new Error("Context database is closed"));
         await this.worker.terminate();
       }
     })());
