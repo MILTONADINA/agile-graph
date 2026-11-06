@@ -1,7 +1,7 @@
 import { it, expect, vi } from "vitest";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { once } from "node:events";
+import { EventEmitter, once } from "node:events";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -12,7 +12,7 @@ import type { ExecutionPlan, RunRecord } from "@agile-graph/contracts";
 import { GraphEngine } from "../src/service.js";
 import { viewing } from "./worker-view.js";
 import { initializeProject, projectDataDir } from "../src/project.js";
-import { createMcpServer } from "../src/mcp.js";
+import { closeWhenInputEnds, createMcpServer } from "../src/mcp.js";
 import { estimateTokens } from "../src/tokens.js";
 
 it("serves real indexed context through MCP and refuses cloud export for offline projects", async () => {
@@ -2030,5 +2030,62 @@ it("reports a run whose owning process died as stopped instead of polling foreve
     await engine.close();
     await rm(root, { recursive: true, force: true });
     await rm(data, { recursive: true, force: true });
+  }
+});
+
+it("closes after stdin ends only once a cancelled tool handler has returned", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "graph-mcp-cancel-"));
+  const config = await initializeProject(root);
+  const engine = await GraphEngine.open(root);
+  // context_get's handler blocks until the test lets it finish.
+  let finish!: () => void;
+  const started = new Promise<void>((resolveStarted) => {
+    vi.spyOn(engine.context, "getContext").mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          resolveStarted();
+          finish = () => reject(new Error("toy handler finished"));
+        }),
+    );
+  });
+  const server = createMcpServer(engine, { client: "local" });
+  let closed = false;
+  server.server.onclose = () => {
+    closed = true;
+  };
+  const client = new Client({ name: "integration-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  const input = new EventEmitter();
+  closeWhenInputEnds(server, serverTransport, input);
+  try {
+    const cancel = new AbortController();
+    const call = client
+      .callTool(
+        { name: "context_get", arguments: { query: "add" } },
+        undefined,
+        { signal: cancel.signal },
+      )
+      .catch(() => undefined);
+    await started;
+    // The client cancels the call, so no reply is owed, then ends its input.
+    cancel.abort("user cancelled");
+    await call;
+    input.emit("end");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(closed).toBe(false);
+    finish();
+    await vi.waitFor(() => expect(closed).toBe(true));
+  } finally {
+    await client.close();
+    await server.close();
+    await engine.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(projectDataDir(config.projectId), {
+      recursive: true,
+      force: true,
+    });
   }
 });

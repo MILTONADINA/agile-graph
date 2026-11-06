@@ -3,6 +3,7 @@ import {
   type ToolCallback,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   normalizeObjectSchema,
   objectFromShape,
@@ -183,6 +184,16 @@ export function mcpToolHashDrift(
   };
 }
 const toolHashesByServer = new WeakMap<McpServer, Record<string, string>>();
+/**
+ * How many tool handlers each server created here is still running. A cancelled
+ * request owes no reply, but its handler keeps using the engine's stores until
+ * it returns, so the stdin shutdown waits for this count to reach zero too.
+ */
+interface RunningHandlers {
+  count: number;
+  onIdle: () => void;
+}
+const runningHandlersByServer = new WeakMap<McpServer, RunningHandlers>();
 /** The definition hash of every tool a server created here exposes. */
 export function mcpToolHashes(server: McpServer): Record<string, string> {
   const hashes = toolHashesByServer.get(server);
@@ -253,6 +264,8 @@ export function createMcpServer(
   const enabled = enabledMcpTools(options);
   const toolHashes: Record<string, string> = {};
   toolHashesByServer.set(server, toolHashes);
+  const running: RunningHandlers = { count: 0, onIdle: () => {} };
+  runningHandlersByServer.set(server, running);
   const cloud = options.client === "cloud";
   /**
    * Builds a result's limitations. A cloud client gets fixed sentences and
@@ -394,9 +407,7 @@ export function createMcpServer(
       config.inputSchema,
     );
     toolHashes[tool] = definitionSha256;
-    return server.registerTool(tool, config, (async (
-      args: ShapeOutput<Shape>,
-    ) => {
+    const call = async (args: ShapeOutput<Shape>) => {
       let callId: string | undefined;
       try {
         callId = engine.store.beginMcpCall({
@@ -431,6 +442,17 @@ export function createMcpServer(
           } catch (error) {
             logFailure(tool, error);
           }
+      }
+    };
+    return server.registerTool(tool, config, (async (
+      args: ShapeOutput<Shape>,
+    ) => {
+      running.count++;
+      try {
+        return await call(args);
+      } finally {
+        running.count--;
+        if (running.count === 0) running.onIdle();
       }
     }) as unknown as ToolCallback<Shape>);
   };
@@ -1093,19 +1115,28 @@ export async function serveMcp(
 
 // The MCP stdio shutdown begins with the client closing this process's input,
 // and the server then exits by itself. It closes once every reply it still owes
-// has been written, so a client that ends its input right after a request still
-// gets that reply. Without this the server runs until the client's SIGTERM after
+// has been written and every tool handler has returned, so a client that ends
+// its input right after a request still gets that reply, and a handler whose
+// request was cancelled finishes its call log and worker release before the
+// stores close. Without this the server runs until the client's SIGTERM after
 // a grace period, and Windows delivers SIGTERM as a forced kill that skips the
 // close of the context database and the run store.
-function closeWhenInputEnds(
+export function closeWhenInputEnds(
   server: McpServer,
-  transport: StdioServerTransport,
+  transport: Pick<Transport, "onmessage" | "send">,
+  input: Pick<NodeJS.ReadableStream, "once"> = process.stdin,
 ): void {
   const owed = new Set<string | number>();
+  const running = runningHandlersByServer.get(server);
   let inputEnded = false;
+  let closing = false;
   const settle = () => {
-    if (inputEnded && owed.size === 0) void server.close();
+    if (closing || !inputEnded || owed.size > 0 || (running?.count ?? 0) > 0)
+      return;
+    closing = true;
+    void server.close();
   };
+  if (running) running.onIdle = settle;
   const receive = transport.onmessage;
   transport.onmessage = (message) => {
     if ("method" in message && "id" in message) owed.add(message.id);
@@ -1128,7 +1159,7 @@ function closeWhenInputEnds(
     await send(message);
     settle();
   };
-  process.stdin.once("end", () => {
+  input.once("end", () => {
     inputEnded = true;
     settle();
   });
