@@ -173,7 +173,11 @@ test("the release workflow publishes only commits from main, without a stored to
 // dependency version cannot request that token during a release.
 function releaseJobs(workflow) {
   const jobs = {};
-  const body = workflow.slice(workflow.indexOf("\njobs:\n") + 7);
+  // Comments are dropped first, so a comment that mentions id-token or a
+  // command neither fails nor satisfies a check.
+  const body = workflow
+    .slice(workflow.indexOf("\njobs:\n") + 7)
+    .replace(/^\s*#.*\n/gm, "");
   for (const block of body.split(/\n(?= {2}[a-z][\w-]*:\n)/)) {
     const name = /^ {2}([a-z][\w-]*):/.exec(block.replace(/^\n+/, ""))?.[1];
     if (name) jobs[name] = block;
@@ -202,6 +206,13 @@ test("only the release publish job can mint an npm credential, and it runs no de
     /actions\/checkout@/,
   ])
     assert.doesNotMatch(publish, forbidden, `publish job runs ${forbidden}`);
+  // Only these actions may run in the publishing job; any other action is
+  // code that could request the token.
+  for (const [, action] of publish.matchAll(/^\s*(?:- )?uses: ([^@\s]+)@/gm))
+    assert.ok(
+      ["actions/setup-node", "actions/download-artifact"].includes(action),
+      `publish job uses ${action}`,
+    );
   assert.doesNotMatch(verify, /id-token/);
   assert.doesNotMatch(verify, /environment:/);
   for (const step of [
