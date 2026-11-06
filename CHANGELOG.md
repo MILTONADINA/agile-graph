@@ -51,6 +51,9 @@
   cannot read, naming the path and error code, instead of treating every
   workflow as absent and counting tests behind an environment switch as
   verified. Only a missing directory still means "no CI" (#274).
+- A cloud-backed MCP client whose call fails because policy denies an enabled
+  provider's endpoint no longer receives that endpoint's host. Local clients
+  still see it (#294).
 - `security-scan` says "Docker is not installed or not on PATH" when it cannot start a `docker` binary, instead of telling you to start a daemon you may not have; a daemon that does not answer still gets "Docker is not running" (#278).
 - `graph-engine --help` describes every command and option; 21 commands and 10 options had no help text, and a test now fails on any new one without it (#283).
 - Both packages declare top-level `main` and `types`, so TypeScript projects using CommonJS or `moduleResolution: node10` resolve their types instead of failing with TS2307 (#284).

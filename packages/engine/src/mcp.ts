@@ -242,6 +242,19 @@ export function enabledMcpTools(
     for (const tool of MCP_RUN_STATUS_TOOLS) enabled.add(tool);
   return enabled;
 }
+/**
+ * The error text a cloud client receives: a provider endpoint the project
+ * policy denies is described without its host, which is operator detail a
+ * cloud model does not need (#294). Local clients see the full text.
+ */
+export function cloudErrorText(message: string): string {
+  return message.replace(
+    // The whole host, whatever characters it holds (underscores included),
+    // up to the space or end that follows it, less a closing "." or ":".
+    /Project policy denies endpoint \S+?(?=[.:;,]?(?:\s|$))/g,
+    "Project policy denies this provider's endpoint (its host is not shown to cloud clients)",
+  );
+}
 /** SHA-256 of a call's arguments as canonical JSON (keys sorted). */
 export function mcpArgsSha256(args: unknown): string {
   return hash(canonicalJson(JSON.parse(JSON.stringify(args ?? {}))));
@@ -432,6 +445,8 @@ export function createMcpServer(
         return result(value);
       } catch (error) {
         if (error instanceof RefusalError) outcome = "refused";
+        if (cloud && error instanceof Error)
+          error.message = cloudErrorText(error.message);
         throw error;
       } finally {
         if (callId)
