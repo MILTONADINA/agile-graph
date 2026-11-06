@@ -118,12 +118,17 @@ function ownPackage(
     symbol.source.contentHash !== manifest.hash
   )
     throw new Error("Changed Dart package context");
+  // Every line that could be a name key is counted, odd whitespace included,
+  // so such a line refuses the snapshot instead of being skipped. The value
+  // takes the spacing YAML allows: spaces or tabs around the colon.
   const names = manifest.text
     .split(/\r?\n/)
     .filter((line) => /^name\s*:/.test(line));
   if (names.length !== 1)
     throw new Error("Dart package name is missing or ambiguous");
-  const match = /^name:[ \t]*([a-z][a-z0-9_]*)[ \t]*(?:#.*)?$/.exec(names[0]!);
+  const match = /^name[ \t]*:[ \t]*([a-z][a-z0-9_]*)[ \t]*(?:#.*)?$/.exec(
+    names[0]!,
+  );
   if (!match || !packageName.test(match[1]!))
     throw new Error("Invalid Dart package name");
   return { name: match[1]!, source: { ...symbol.source } };
@@ -480,8 +485,10 @@ export function validateDartDefinition(
     )
   )
     return null;
-  const parsed = answer.parse(value);
-  const items = Array.isArray(parsed) ? parsed : [parsed];
+  // An unexpected reply is not an exception: it leaves this call unresolved.
+  const reply = answer.safeParse(value);
+  if (!reply.success) return null;
+  const items = Array.isArray(reply.data) ? reply.data : [reply.data];
   if (items.length !== 1) return null;
   const item = items[0]!;
   const from = prepared.files.find((file) => file.path === query.path);
@@ -560,5 +567,40 @@ export function validateDartDefinition(
         ),
       ],
     },
+  };
+}
+
+const wellFormedReply = (value: unknown) =>
+  value === null || answer.safeParse(value).success;
+
+/** Binds each reply on its own. A reply outside the three analyzer shapes
+ * leaves only its call unresolved; each file with such a call is reported
+ * once, and the rest of the pass keeps its bindings. */
+export function bindDartReplies(
+  replies: { query: DartQuery; result: unknown }[],
+  prepared: PreparedDartSnapshot,
+  directory: string,
+  version: string,
+): { updates: GraphEdge[]; diagnostics: string[] } {
+  const updates: GraphEdge[] = [];
+  const malformed = new Map<string, number>();
+  for (const { query, result } of replies) {
+    const update = validateDartDefinition(
+      result,
+      query,
+      prepared,
+      directory,
+      version,
+    );
+    if (update) updates.push(update);
+    else if (!wellFormedReply(result))
+      malformed.set(query.path, (malformed.get(query.path) ?? 0) + 1);
+  }
+  return {
+    updates,
+    diagnostics: [...malformed].map(
+      ([file, count]) =>
+        `${file}: unexpected Dart analyzer reply; ${count} call(s) left unresolved.`,
+    ),
   };
 }

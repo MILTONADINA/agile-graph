@@ -172,11 +172,12 @@ prove only an exact target name range; `LocationLink` responses must also
 match the query origin and an eligible target range. Neither proves runtime
 dispatch. Limits are 250 Dart files, 4 MiB text, 100,000 syntax nodes, 2,000
 queries, 2 MiB protocol output, a 15-second deadline and a 768-MiB container
-limit with sampled RSS. Unavailable/untrusted runtimes, malformed answers,
-timeouts and incomplete cleanup promote no native bindings and emit coverage
-diagnostics. This branch's mock and pure tests do not replace its opt-in
-native Docker CI test; until that passes on the exact PR head, native binding
-is not verified.
+limit with sampled RSS. Unavailable/untrusted runtimes, malformed protocol
+output, timeouts and incomplete cleanup promote no native bindings. An answer
+outside the three analyzer shapes leaves only its own call unresolved. Every
+case emits a coverage diagnostic. This branch's mock and pure tests do not
+replace its opt-in native Docker CI test; until that passes on the exact PR
+head, native binding is not verified.
 
 ## Watch, migrations, retention, and backups
 
