@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- The verification-config gate reads `run-s`, `run-p` and `npm-run-all` command lines the way
+  npm-run-all does: a `--<pkg>:<key> <value>` overwrite option takes the next word, and any other
+  unknown option followed by a word leaves the invocation unresolved, so the gate still fires.
 - The preflight rename test runs git with an empty global config and signing
   off, so a developer's `commit.gpgsign` or global hooks cannot fail it.
 - `npm run preflight` now runs `spec-check` when a change touches a test file

@@ -186,13 +186,21 @@ function runnerTargets(command: string): {
             continue;
           }
           if (word.includes("=")) continue;
-          if (NPM_RUN_ALL_VALUE_OPTIONS.has(word)) k++;
-          else if (!NPM_RUN_ALL_BOOLEAN_OPTIONS.has(word)) {
-            const next = words[k + 1];
-            if (next !== undefined && !next.startsWith("-")) {
-              unresolved = true;
-              break;
-            }
+          // `--<pkg>:<key> <value>` (npm-run-all's overwrite option) and the
+          // listed value options always take the next word, whatever it
+          // looks like. npm-run-all refuses every other unknown option, so
+          // one that is followed by anything cannot be read with confidence.
+          if (
+            NPM_RUN_ALL_VALUE_OPTIONS.has(word) ||
+            /^--[^:=]+:[^=]+$/.test(word)
+          )
+            k++;
+          else if (
+            !NPM_RUN_ALL_BOOLEAN_OPTIONS.has(word) &&
+            words[k + 1] !== undefined
+          ) {
+            unresolved = true;
+            break;
           }
         }
         continue;

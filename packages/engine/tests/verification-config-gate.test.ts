@@ -941,6 +941,11 @@ describe("verification configuration gate", () => {
         `concurrently "npm:unit" 'yarn:unit' "pnpm:unit"`,
         'concurrently -n a,b "npm:unit"',
         'concurrently "npm:unit -- --bail"',
+        // npm-run-all's overwrite option takes the next word, so `unit` here
+        // is a script, not the option's value.
+        "run-s --a:b --npm-path unit lint",
+        "run-s --a:b --max-parallel unit lint",
+        "run-s --npm-path --a:b unit",
       ];
       for (const test of reaches) expect(weakened(test), test).toBe(true);
       // A word like npm:foo inside an echo also counts: harmless over-gating.
@@ -949,6 +954,8 @@ describe("verification configuration gate", () => {
         'concurrently "npm:test:*"',
         "npm run $T",
         "run-s --unknown value unit",
+        "run-s --unknown -s unit",
+        "run-s --unknown --a:b unit",
         "run-s -- unit",
         'run-p "{a,b}"',
         "run-s ?nit",
@@ -967,6 +974,7 @@ describe("verification configuration gate", () => {
         expect(unrelated(test), test).toBe(true);
       // A resolved target does not gate unrelated scripts.
       expect(unrelated("run-s unit")).toBe(false);
+      expect(unrelated("run-s --a:b --npm-path unit lint")).toBe(false);
       expect(unrelated("concurrently npm:unit")).toBe(false);
     });
   });
