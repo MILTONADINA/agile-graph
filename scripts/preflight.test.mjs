@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planPreflight, preflightNotes } from "./preflight.mjs";
+import {
+  linkedTestFiles,
+  planPreflight as planWithLinks,
+  preflightNotes,
+} from "./preflight.mjs";
 
 const names = (steps) => steps.map((step) => step.name);
+/** Plans with no spec-linked tests, so the cases do not depend on specs/. */
+const planPreflight = (changed, deleted = []) =>
+  planWithLinks(changed, deleted, new Set());
 
 test("a docs-only change runs only the format check", () => {
   assert.deepEqual(names(planPreflight(["docs/outcomes.md"])), ["format"]);
@@ -151,5 +158,41 @@ test("a spec change with a dist-dependent script test builds once, before the sc
       ]),
     ),
     ["format", "lint", "build engine", "script tests", "spec-check"],
+  );
+});
+
+test("a changed or deleted test file that a spec links builds the engine and checks the specs", () => {
+  const linked = new Set(["scripts/npm-packages.test.mjs"]);
+  assert.deepEqual(
+    names(planWithLinks(["scripts/npm-packages.test.mjs"], [], linked)),
+    ["format", "lint", "script tests", "build engine", "spec-check"],
+  );
+  assert.deepEqual(
+    names(planWithLinks([], ["scripts/npm-packages.test.mjs"], linked)),
+    ["format", "build engine", "spec-check"],
+  );
+  assert.ok(
+    !names(
+      planWithLinks(["scripts/license-allowlist.test.mjs"], [], linked),
+    ).includes("spec-check"),
+  );
+});
+
+test("linked test files are read the way spec-check reads them", () => {
+  const files = linkedTestFiles([
+    "- AC1: x\n  - Test: scripts/a.test.mjs :: does a\r\n  - Test: packages/engine/tests/b.test.ts :: does b",
+    "- Test: scripts/unindented.test.mjs :: not a link\n  Test: scripts/no-dash.test.mjs :: nor this",
+  ]);
+  assert.deepEqual([...files].sort(), [
+    "packages/engine/tests/b.test.ts",
+    "scripts/a.test.mjs",
+  ]);
+});
+
+test("the repository's specs link the release workflow test, so renaming it runs spec-check", () => {
+  assert.ok(
+    names(planWithLinks(["scripts/npm-packages.test.mjs"])).includes(
+      "spec-check",
+    ),
   );
 });

@@ -33,9 +33,11 @@ const NEEDS_BUILT_ENGINE = new Set([
  * (`changed`) and deleted (`deleted`), in order. A deleted path chooses
  * steps (a deleted source still needs the typecheck that finds imports of
  * it) but is never passed to a tool. Each step is { name, command, args,
- * cwd? }; cwd is relative to the repository.
+ * cwd? }; cwd is relative to the repository. `linked` holds the test
+ * files a spec names on a `- Test:` line: renaming or removing a test in
+ * one breaks spec-check without touching specs/ (#330).
  */
-export function planPreflight(changed, deleted = []) {
+export function planPreflight(changed, deleted = [], linked = linkedTests()) {
   const files = [...new Set(changed)].filter(Boolean).sort();
   const touched = [...new Set([...files, ...deleted])].filter(Boolean);
   const steps = [
@@ -98,6 +100,7 @@ export function planPreflight(changed, deleted = []) {
     touched.some(
       (file) =>
         file.startsWith("specs/") ||
+        linked.has(file) ||
         (file.startsWith(ENGINE) && file.includes("/tests/")),
     )
   ) {
@@ -109,6 +112,43 @@ export function planPreflight(changed, deleted = []) {
     });
   }
   return steps;
+}
+
+/**
+ * The test files the specs link, read the way spec-check reads them:
+ * an indented `- Test: <path> :: <exact test name>` line.
+ */
+export function linkedTestFiles(specTexts) {
+  const files = new Set();
+  for (const text of specTexts)
+    for (const line of text.split(/\r?\n/)) {
+      const match = /^\s+- Test: (.+?) :: (.+)$/.exec(line);
+      if (match) files.add(match[1]);
+    }
+  return files;
+}
+
+function linkedTests() {
+  let specs;
+  try {
+    specs = execFileSync("git", ["ls-files", "-z", "--", "specs/*.md"], {
+      cwd: root,
+      encoding: "utf8",
+    })
+      .split("\0")
+      .filter(Boolean);
+  } catch {
+    return new Set();
+  }
+  return linkedTestFiles(
+    specs.map((file) => {
+      try {
+        return readFileSync(path.join(root, file), "utf8");
+      } catch {
+        return "";
+      }
+    }),
+  );
 }
 
 /** Paths a contracts change can break beyond the related engine tests. */
