@@ -18,21 +18,24 @@ approval.
 ## What a release checks
 
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) runs when a
-tag such as `v0.1.0` is pushed. It:
+tag such as `v0.1.0` is pushed. Its `verify` job, which cannot request an npm
+credential, runs every step that executes this repository's or a dependency's
+code. It:
 
 1. refuses a tag whose commit is not on `main`, so only work merged through a
    pull request with passing checks is released, whoever pushed the tag. Branch
    protection requires no approving review;
-2. waits for an approval on the `npm` environment;
-3. builds everything, then checks that the tag matches both package versions,
+2. builds everything, then checks that the tag matches both package versions,
    the package metadata and the exact files each tarball contains
    (`scripts/npm-packages.test.mjs`);
-4. packs each package twice from the one build and fails with a file-by-file
+3. packs each package twice from the one build and fails with a file-by-file
    diff if the two tarballs' SHA-256 hashes differ, so a nondeterministic
    build cannot ship (`scripts/pack-twice.mjs`, also run in CI and tested by
    `scripts/pack-twice.test.mjs`);
-5. installs both packed tarballs into an empty directory and runs the CLI
+4. installs both packed tarballs into an empty directory and runs the CLI
    (`scripts/npm-smoke.mjs`);
+5. packs the two tarballs to publish and uploads them as the artifact
+   `tarballs-<tag>`;
 6. generates a CycloneDX SBOM for each package with `scripts/sbom.mjs`, which
    runs `npm sbom --workspace <dir> --sbom-format cyclonedx`, makes the
    published package the subject (npm names the private root) and keeps only
@@ -41,8 +44,11 @@ tag such as `v0.1.0` is pushed. It:
    (`--omit dev` would drop them, since the lockfile marks them dev), and uploads
    `contracts.cdx.json` and `engine.cdx.json` as the workflow artifact
    `sbom-<tag>`, next to the provenance npm records;
-7. publishes the contracts package, then the engine, skipping a version that
-   is already on npm.
+   Then the `publish` job waits for an approval on the `npm` environment. It is
+   the only job with `id-token: write`, and it installs, builds and runs nothing
+   from the repository: it downloads `tarballs-<tag>` and publishes the contracts
+   tarball, then the engine's, skipping a version that is already on npm.
+   Publishing a tarball runs no lifecycle script.
 
 `scripts/sbom.test.mjs` runs the same script locally and checks the subject,
 the optional peers and that every dependency reference resolves.

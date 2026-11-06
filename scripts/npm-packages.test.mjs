@@ -168,6 +168,52 @@ test("the release workflow publishes only commits from main, without a stored to
   assert.match(workflow, /node scripts\/npm-smoke\.mjs/);
 });
 
+// The job that can mint an npm credential (id-token: write in the npm
+// environment) must run no dependency or repository code, so a malicious
+// dependency version cannot request that token during a release.
+function releaseJobs(workflow) {
+  const jobs = {};
+  const body = workflow.slice(workflow.indexOf("\njobs:\n") + 7);
+  for (const block of body.split(/\n(?= {2}[a-z][\w-]*:\n)/)) {
+    const name = /^ {2}([a-z][\w-]*):/.exec(block.replace(/^\n+/, ""))?.[1];
+    if (name) jobs[name] = block;
+  }
+  return jobs;
+}
+
+test("only the release publish job can mint an npm credential, and it runs no dependency code", async () => {
+  const workflow = await read(".github/workflows/release.yml");
+  const top = workflow.slice(0, workflow.indexOf("\njobs:\n"));
+  assert.doesNotMatch(top, /id-token/);
+  const jobs = releaseJobs(workflow);
+  assert.deepEqual(Object.keys(jobs).sort(), ["publish", "verify"]);
+  const { publish, verify } = jobs;
+  assert.match(publish, /^ {6}id-token: write$/m);
+  assert.match(publish, /^ {4}environment: npm$/m);
+  assert.match(publish, /^ {4}needs: verify$/m);
+  assert.match(publish, /npm publish "\$tarball"/);
+  for (const forbidden of [
+    /npm ci\b/,
+    /npm rebuild\b/,
+    /npm run\b/,
+    /npm pack\b/,
+    /npm install (?!-g npm@\d+\.\d+\.\d+\s*$)/m,
+    /node (--test )?scripts\//,
+    /actions\/checkout@/,
+  ])
+    assert.doesNotMatch(publish, forbidden, `publish job runs ${forbidden}`);
+  assert.doesNotMatch(verify, /id-token/);
+  assert.doesNotMatch(verify, /environment:/);
+  for (const step of [
+    /git merge-base --is-ancestor/,
+    /node --test scripts\/npm-packages\.test\.mjs/,
+    /node scripts\/pack-twice\.mjs/,
+    /node scripts\/npm-smoke\.mjs/,
+    /npm pack --workspace/,
+  ])
+    assert.match(verify, step);
+});
+
 async function javaScriptFiles(directory) {
   const found = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {

@@ -17,13 +17,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  # Everything that runs this repository's or a dependency's code happens
+  # here, in a job that cannot mint an npm credential: no id-token, no npm
+  # environment. It hands the publish job only the verified tarballs.
+  verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    environment: npm
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,9 +37,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
-      # Trusted publishing needs npm 11.5.1 or later.
-      - run: npm install -g npm@11.16.0
       - name: Install dependencies with one bounded retry
         run: |
           # The root postinstall native archive fetch is outside npm's retry.
@@ -53,6 +51,12 @@ jobs:
         run: node scripts/pack-twice.mjs
       - name: Install the packed tarballs and run the CLI
         run: node scripts/npm-smoke.mjs
+      - name: Pack the tarballs to publish
+        run: |
+          mkdir tarballs
+          for workspace in packages/contracts packages/engine; do
+            npm pack --workspace "$workspace" --pack-destination tarballs
+          done
       - name: Generate CycloneDX SBOMs
         run: |
           mkdir sbom
@@ -66,14 +70,44 @@ jobs:
           name: sbom-${{ github.ref_name }}
           path: sbom/*.cdx.json
           if-no-files-found: error
+      - name: Upload the tarballs to publish
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tarballs-${{ github.ref_name }}
+          path: tarballs/*.tgz
+          if-no-files-found: error
+
+  # Holds the npm credential, so it installs nothing and runs no repository
+  # or dependency code: npm publishes the verified tarballs, which runs no
+  # lifecycle script.
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11.16.0
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: tarballs-${{ github.ref_name }}
+          path: tarballs
       - name: Publish contracts, then the engine that depends on it
         run: |
-          for workspace in packages/contracts packages/engine; do
-            name=$(node -p "require('./$workspace/package.json').name")
-            version=$(node -p "require('./$workspace/package.json').version")
+          for prefix in agile-graph-contracts- agile-graph-engine-; do
+            tarball=$(ls tarballs/"$prefix"[0-9]*.tgz)
+            name=$(tar -xOzf "$tarball" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0)).name")
+            version=$(tar -xOzf "$tarball" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0)).version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "$name@$version is already published"
             else
-              npm publish --workspace "$workspace" --access public
+              npm publish "$tarball" --access public --provenance
             fi
           done

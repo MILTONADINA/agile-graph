@@ -79,6 +79,11 @@ to it.
   - Test: scripts/docs-policy.test.mjs :: a release section that mentions hashes needs an upgrading heading, one that does not is exempt
   - Test: scripts/docs-policy.test.mjs :: Node.js range in upgrading.md matches engines.node
   - Test: scripts/docs-policy.test.mjs :: README.md and publishing.md link docs/upgrading.md
+- AC11: The release workflow shall install, build, test, pack, smoke-test and
+  generate SBOMs in a job without `id-token: write` or the `npm` environment,
+  and the job that holds them shall only publish the tarballs that job
+  uploaded, running no install, build, pack or repository script.
+  - Test: scripts/npm-packages.test.mjs :: only the release publish job can mint an npm credential, and it runs no dependency code
 
 ## Security considerations
 
@@ -91,7 +96,11 @@ position inside it and the repository's own root package name. Publishing
 uses OpenID Connect from GitHub Actions, so no npm token is stored, and npm
 records provenance for each version. Anyone with write access can push a
 tag, so the release refuses a commit that did not reach `main` through its
-protected checks and waits for the owner's approval. The optional Cursor SDK
+protected checks and waits for the owner's approval. A dependency's install
+script or module code could request the publishing job's OpenID Connect
+token, so every step that runs dependency code happens in a separate job
+that cannot request one, and the publishing job only publishes the verified
+tarballs. The optional Cursor SDK
 has a proprietary license and brings an HTTP client version with known
 advisories, which the repository's own override cannot fix for installed
 users; it is installed only by people who choose it.
