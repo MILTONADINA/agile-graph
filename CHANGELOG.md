@@ -33,6 +33,10 @@
 
 ### Fixed
 
+- `spec-check` no longer reads an environment switch, a test name or a brace
+  written inside a string, template literal, regex literal or comment as test
+  structure, so a test file that mentions a gated `describe` in text is not
+  reported as gated (#319).
 - `spec-check` reports a line that starts like a criterion but is not
   `- AC<n>: text`, with its file and line, instead of dropping it and giving
   its test links to the criterion above. Criterion IDs with a letter suffix

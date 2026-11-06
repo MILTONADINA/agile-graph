@@ -50,6 +50,13 @@ runs it, and plans can be created straight from a ready spec.
   - Test: packages/engine/tests/specs-criteria.test.ts :: reports a criterion line with text before its colon and keeps its test links off the criterion above
   - Test: packages/engine/tests/specs-criteria.test.ts :: fails spec-check on a malformed criterion, naming the file and line
   - Test: packages/engine/tests/specs-criteria.test.ts :: reads a criterion ID with a letter suffix, such as AC7a, and covers it in plans
+- AC11: When `spec-check` looks for the environment switch that gates a test, code written inside a string, template literal, regex literal or comment shall neither gate nor enclose the test, and shall not stand in for the test's own definition (#319).
+  - Test: packages/engine/tests/specs-switch-literals.test.ts :: ignores a gated describe written inside $label
+  - Test: packages/engine/tests/specs-switch-literals.test.ts :: ignores a test name written inside a string in a gated block
+  - Test: packages/engine/tests/specs-switch-literals.test.ts :: ignores braces inside strings when pairing a gated block
+  - Test: packages/engine/tests/specs-switch-literals.test.ts :: ignores braces inside regex literals but not division
+  - Test: packages/engine/tests/specs-switch-literals.test.ts :: reads a comment opener inside a regex literal as part of the regex
+  - Test: packages/engine/tests/specs-switch-literals.test.ts :: reads a slash after a postfix increment as division
 
 ## Security considerations
 
