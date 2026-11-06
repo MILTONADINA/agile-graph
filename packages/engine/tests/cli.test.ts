@@ -709,6 +709,82 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("answers malformed JSON-RPC lines over stdio and keeps serving", async () => {
+    const { graph } = await project();
+    await graph("init");
+    const child = graph.start("mcp", "--client", "cloud");
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    const messages = () =>
+      stdout
+        .split("\n")
+        .filter((line) => line.trim())
+        .map(
+          (line) =>
+            JSON.parse(line) as {
+              id?: number | null;
+              result?: unknown;
+              error?: { code: number; message: string };
+            },
+        );
+    const reply = (
+      match: (message: ReturnType<typeof messages>[number]) => boolean,
+      label: string,
+    ) =>
+      until(
+        child,
+        label,
+        () => messages().find(match),
+        () => stdout + stderr,
+      );
+    const write = (line: string) => child.stdin.write(`${line}\n`);
+    try {
+      write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "cli-test", version: "0.0.0" },
+          },
+        }),
+      );
+      await reply((m) => m.id === 1, "initialize");
+      write('{"jsonrpc":"2.0","method":"notifications/initialized"}');
+      const cases: [string, number | null, number][] = [
+        ["{not json", null, -32700],
+        ['{"jsonrpc":"2.0","id":77}', 77, -32600],
+        [
+          '{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"symbol_search","arguments":"x"}}',
+          22,
+          -32602,
+        ],
+      ];
+      let ping = 100;
+      for (const [line, id, code] of cases) {
+        write(line);
+        const answer = await reply(
+          (m) => m.id === id && m.error?.code === code,
+          `error ${code}`,
+        );
+        expect(answer.error?.message).not.toMatch(
+          /invalid_type|"code"|expected/,
+        );
+        ping += 1;
+        write(JSON.stringify({ jsonrpc: "2.0", id: ping, method: "ping" }));
+        const pong = await reply((m) => m.id === ping, `ping ${ping}`);
+        expect(pong.result).toEqual({});
+      }
+    } finally {
+      child.kill();
+      await once(child, "exit");
+    }
+  }, 120_000);
+
   it("names the flag and the file when --steps or policy --file cannot be read or parsed", async () => {
     const { root, graph } = await project();
     await graph("init");

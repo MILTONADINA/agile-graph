@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- The stdio MCP server answers a malformed line instead of dropping it, so a client no longer waits until its own timeout. An unparseable line gets -32700 with id null, an invalid envelope or a batch array gets -32600, and `tools/call` with non-object `arguments` gets -32602. A line over 10 MB gets -32600 and the server keeps serving, where the transport used to close. The messages are fixed and never include validator output (#297).
 - `symbol_search` and `symbols` match non-ASCII names case-insensitively too: names and queries are NFC-normalized and lowercased before matching, where SQLite folded ASCII only. Folding happens at query time, so existing snapshots need no rebuild (#298).
 - `docs/mcp-clients.md` has a ready installed-package configuration (`"command": "graph-engine"`) for Claude Code, Codex and Cursor beside the source-checkout ones. The platform guide's "installed CLI" example no longer shows a checkout path (#285).
 - `plan --steps`, `policy --file` and the other commands that read a JSON file name the flag or argument and the file as typed: "--steps: cannot read missing.json (no such file)" or "--steps: steps.json is not valid JSON (line 1, column 2)". They used to print a raw ENOENT with an absolute path, or a parse error with no filename (#280).
