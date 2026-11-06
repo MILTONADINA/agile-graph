@@ -33,6 +33,9 @@
 
 ### Fixed
 
+- CI pulls the Docker execution-test image (`node:24-alpine`) by digest and
+  tags it locally, like every other workflow image, and a test fails when a
+  workflow `docker pull` names an image by tag alone (#291).
 - `spec-check` no longer reads an environment switch, a test name or a brace
   written inside a string, template literal, regex literal or comment as test
   structure, so a test file that mentions a gated `describe` in text is not

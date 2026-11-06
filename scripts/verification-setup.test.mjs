@@ -204,3 +204,20 @@ test("every registry base image is pinned by digest", async () => {
     }
   }
 });
+
+test("every workflow docker pull is pinned by digest", async () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const dir = path.join(root, ".github", "workflows");
+  let pulls = 0;
+  for (const name of await readdir(dir)) {
+    if (!/\.ya?ml$/.test(name)) continue;
+    const text = await readFile(path.join(dir, name), "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const m = /\bdocker\s+pull\s+(?:--\S+\s+)*(\S+)/.exec(line);
+      if (!m) continue;
+      pulls++;
+      assert.match(m[1], /@sha256:[0-9a-f]{64}$/, `${name}: ${line.trim()}`);
+    }
+  }
+  assert.ok(pulls >= 9, `expected the workflow docker pulls, found ${pulls}`);
+});
