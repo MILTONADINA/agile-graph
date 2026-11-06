@@ -218,7 +218,8 @@ function onStopSignal(stop: () => void): () => void {
     for (const signal of STOP_SIGNALS) process.off(signal, handle);
   };
 }
-// serve, mcp and watch run until a signal stops them. The first signal
+// serve, mcp and watch run until a signal stops them (mcp also stops by
+// itself when its client closes stdin). The first signal
 // closes them, which for serve and mcp cancels the runs they started; later
 // ones are ignored until that has finished, so a repeated Ctrl-C cannot end
 // the process while those runs' checks and agents are being stopped.
