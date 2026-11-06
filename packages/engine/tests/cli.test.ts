@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { createRequire } from "node:module";
 import {
   chmod,
   mkdir,
@@ -2191,6 +2192,43 @@ describe("command line", () => {
     expect(missing.stderr).not.toContain("ENOENT");
     expect((await graph("init")).code).toBe(0);
     expect((await graph("tester")).code).toBe(0);
+  }, 120_000);
+
+  it("describes every command and option in --help", async () => {
+    const { graph } = await project();
+    // A preload replaces parseAsync, so the CLI builds its whole command tree
+    // and prints whatever lacks help text instead of running a command.
+    const stubs = await mkdtemp(path.join(tmpdir(), "graph-cli-help-"));
+    directories.push(stubs);
+    const commander = pathToFileURL(
+      createRequire(import.meta.url).resolve("commander"),
+    ).href;
+    const preload = path.join(stubs, "walk-help.mjs");
+    await writeFile(
+      preload,
+      [
+        `import { Command } from ${JSON.stringify(commander)};`,
+        "Command.prototype.parseAsync = async function () {",
+        "  const missing = [];",
+        "  const walk = (command, name) => {",
+        "    if (name && !command.description()) missing.push(name);",
+        "    for (const option of command.options)",
+        "      if (!option.description) missing.push(`${name || 'graph-engine'} ${option.flags}`);",
+        "    for (const child of command.commands) walk(child, child.name());",
+        "  };",
+        "  walk(this, '');",
+        "  process.stdout.write(JSON.stringify(missing));",
+        "  process.exit(0);",
+        "};",
+        "",
+      ].join("\n"),
+    );
+    const child = graph.startPreloaded([preload], "--help");
+    let stdout = "";
+    child.stdout?.on("data", (chunk) => (stdout += String(chunk)));
+    const [code] = await once(child, "exit");
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout)).toEqual([]);
   }, 120_000);
 
   it("says there is no such project directory when init gets a missing -C, and creates none", async () => {

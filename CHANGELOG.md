@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- `graph-engine --help` describes every command and option; 21 commands and 10 options had no help text, and a test now fails on any new one without it (#283).
 - Both packages declare top-level `main` and `types`, so TypeScript projects using CommonJS or `moduleResolution: node10` resolve their types instead of failing with TS2307 (#284).
 - `graph-engine -C <path> init` with a directory that does not exist now exits 1 with "No such project directory: <path>" instead of a raw ENOENT error, and creates nothing (#288).
 - Both packages export `./package.json`, so tools can read an installed
