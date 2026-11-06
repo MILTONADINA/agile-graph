@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- `check-add` refuses `--id` or `--optional` after the image, which it used to store silently as part of the check's command. It says to put the flag before the image, or to start the command with `--` if the command takes that flag itself (#276).
 - `security-scan` says "Docker is not installed or not on PATH" when it cannot start a `docker` binary, instead of telling you to start a daemon you may not have; a daemon that does not answer still gets "Docker is not running" (#278).
 - `graph-engine --help` describes every command and option; 21 commands and 10 options had no help text, and a test now fails on any new one without it (#283).
 - Both packages declare top-level `main` and `types`, so TypeScript projects using CommonJS or `moduleResolution: node10` resolve their types instead of failing with TS2307 (#284).
