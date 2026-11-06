@@ -709,6 +709,48 @@ describe("command line", () => {
     expect((await graph("--version")).stdout.trim()).toBe(ENGINE_VERSION);
   }, 120_000);
 
+  it("refuses check-add's own flags after the image unless the command starts with --", async () => {
+    const { root, graph } = await project();
+    await graph("init");
+    for (const [flag, argv] of [
+      ["--id", ["node", "--id", "x"]],
+      ["--id", ["node", "--id=x"]],
+      ["--optional", ["node", "--test", "--optional"]],
+    ] as const) {
+      const refused = await graph("check-add", "fixture:local", ...argv);
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain(`put ${flag} before the image`);
+    }
+    const file = path.join(root, ".graph/project.json");
+    expect(JSON.parse(await readFile(file, "utf8")).verification).toEqual([]);
+    // A command that takes --id itself goes after --, and a tool's own --
+    // passes later tokens through.
+    expect(
+      (await graph("check-add", "fixture:local", "--", "tool", "--id", "x"))
+        .code,
+    ).toBe(0);
+    expect(
+      (
+        await graph(
+          "check-add",
+          "fixture:local",
+          "cargo",
+          "test",
+          "--",
+          "--optional",
+        )
+      ).code,
+    ).toBe(0);
+    expect(
+      JSON.parse(await readFile(file, "utf8")).verification.map(
+        (check: { argv: string[] }) => check.argv,
+      ),
+    ).toEqual([
+      ["tool", "--id", "x"],
+      ["cargo", "test", "--", "--optional"],
+    ]);
+  }, 120_000);
+
   it("registers only safe pinned generators, preserves argv, and revokes old revisions", async () => {
     const { root, graph } = await project();
     await graph("init");

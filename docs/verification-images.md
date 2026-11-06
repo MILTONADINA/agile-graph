@@ -39,9 +39,13 @@ graph-engine check-add --id unit --optional toy-verify:local npm test
 graph-engine check-add --id integration --optional toy-verify:local npm run integration
 ```
 
-Put `--id` and `--optional` **after `check-add`, before the image**. After the
-optional initial `--` separator, the command's arguments remain unchanged,
-including later `--` arguments and flags with those same names. IDs are
+Put `--id` and `--optional` **after `check-add`, before the image**. Without an
+initial `--`, `check-add` refuses either flag after the image, before the
+command's own `--`, because it would be stored as part of the command. A
+command that takes `--id` or `--optional` itself goes after an initial `--`
+separator: `graph-engine check-add toy-verify:local -- tool --id x`. After
+that separator, the command's arguments remain unchanged, including later `--`
+arguments and flags with those same names. IDs are
 case-sensitive, unique, and 1–80 characters: an ASCII letter or digit followed
 by letters, digits, `_` or `-`. They are operator-assigned names, not array
 positions, file paths or commands. `optional: true` requires an ID; an omitted

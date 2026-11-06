@@ -702,7 +702,10 @@ cli
   .description(
     "Register a verification command, run with network disabled in a provisioned image",
   )
-  .option("--id <id>", "Stable check catalogue ID; put before the image")
+  .option(
+    "--id <id>",
+    "Stable check catalogue ID; put before the image (a command that takes --id itself goes after --)",
+  )
   .option(
     "--optional",
     "Allow explicit plans to omit this named check; put before the image",
@@ -714,6 +717,24 @@ cli
     const project = await loadProject(root());
     // A leading -- only separates the command from check-add's own options.
     if (argv[0] === "--") argv = argv.slice(1);
+    // Without that separator, check-add's own flags after the image are a
+    // mistake: they would be stored as part of the command, unvalidated. Tokens
+    // after the command's own -- belong to the tool and are left alone.
+    else {
+      const own = argv.slice(
+        0,
+        argv.includes("--") ? argv.indexOf("--") : undefined,
+      );
+      const misplaced = own.find((arg) =>
+        /^--(?:id|optional)(?:=|$)/.test(arg),
+      );
+      if (misplaced !== undefined) {
+        const flag = misplaced.split("=")[0];
+        throw new Error(
+          `${flag} after the image would be stored as part of the check's command; put ${flag} before the image, or start the command with -- if the command itself takes ${flag}`,
+        );
+      }
+    }
     project.verification.push({
       image,
       argv,
