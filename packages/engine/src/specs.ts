@@ -33,6 +33,12 @@ export interface Spec {
   epic?: string;
   sections: Record<string, string>;
   criteria: SpecCriterion[];
+  /**
+   * Lines in "Acceptance criteria" that start like a criterion (`- AC<n>`)
+   * but are not in the form `- AC<n>: text`, so no criterion was read from
+   * them; `line` counts from 1 in the file (#318).
+   */
+  malformed: { line: number; text: string }[];
 }
 
 /**
@@ -96,8 +102,11 @@ export function parseSpec(relativePath: string, text: string): Spec {
   const meta: Record<string, string> = Object.create(null);
   const sections: Record<string, string[]> = Object.create(null);
   let section: string | undefined;
+  // Every line after a heading belongs to its section, so a section line's
+  // file line number is its heading's plus its offset.
+  const sectionStart: Record<string, number> = Object.create(null);
   const fences = new Fences();
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     // Example Markdown inside a code fence is text, never structure.
     if (fences.read(line) || fences.inside) {
       if (section) sections[section]!.push(line);
@@ -107,6 +116,7 @@ export function parseSpec(relativePath: string, text: string): Spec {
     if (heading) {
       section = heading[1]!.trim();
       sections[section] = [];
+      sectionStart[section] = index + 1;
       continue;
     }
     if (section) sections[section]!.push(line);
@@ -116,13 +126,20 @@ export function parseSpec(relativePath: string, text: string): Spec {
     }
   }
   const criteria: SpecCriterion[] = [];
+  const malformed: Spec["malformed"] = [];
+  // After a malformed criterion line, test links belong to no criterion
+  // until the next well-formed one, rather than to the one before it.
+  let orphaned = false;
+  const firstCriterionLine = (sectionStart["Acceptance criteria"] ?? 0) + 1;
   // The criterion that indented lines still belong to. Its wrapped lines and
   // nested bullets are part of what a worker must satisfy, so they are kept;
   // only a line back at the margin ends it. Blank lines do not, so a nested
   // list separated by an empty line stays with its criterion.
   let open: SpecCriterion | undefined;
   const criterionFences = new Fences();
-  for (const line of sections["Acceptance criteria"] ?? []) {
+  for (const [offset, line] of (
+    sections["Acceptance criteria"] ?? []
+  ).entries()) {
     // A fenced block indented under a criterion is part of what it asks for,
     // so its lines, delimiters included, are kept as text; nothing inside a
     // fence is ever read as a criterion or a test link. A fence opened at
@@ -134,19 +151,30 @@ export function parseSpec(relativePath: string, text: string): Spec {
       if (open && line.trim()) open.text += ` ${line.trim()}`;
       continue;
     }
-    const criterion = /^- (AC\d+): (.+)$/.exec(line);
+    const criterion = /^- (AC\d+[a-z]?): (.+)$/.exec(line);
     if (criterion) {
       open = { id: criterion[1]!, text: criterion[2]!.trim(), tests: [] };
       criteria.push(open);
+      orphaned = false;
+      continue;
+    }
+    if (/^- AC\d/.test(line)) {
+      malformed.push({
+        line: firstCriterionLine + offset,
+        text: line.slice(0, 80),
+      });
+      open = undefined;
+      orphaned = true;
       continue;
     }
     const test = /^\s+- Test: (.+?) :: (.+)$/.exec(line);
     if (test) {
       // As before, a test link belongs to the last criterion listed.
-      criteria.at(-1)?.tests.push({
-        path: test[1]!.trim(),
-        name: test[2]!.trim(),
-      });
+      if (!orphaned)
+        criteria.at(-1)?.tests.push({
+          path: test[1]!.trim(),
+          name: test[2]!.trim(),
+        });
       continue;
     }
     if (!line.trim()) continue;
@@ -169,6 +197,7 @@ export function parseSpec(relativePath: string, text: string): Spec {
       ]),
     ),
     criteria,
+    malformed,
   };
 }
 
@@ -453,6 +482,10 @@ export async function checkSpecs(
       problem(`must live in ${SPECS_DIR}/${spec.area}/`);
     for (const section of REQUIRED_SECTIONS)
       if (!spec.sections[section]) problem(`missing '## ${section}' section`);
+    for (const bad of spec.malformed)
+      problem(
+        `line ${bad.line} is not a criterion: write it as '- AC<n>: text' (${JSON.stringify(bad.text)})`,
+      );
     const seen = new Set<string>();
     for (const criterion of spec.criteria) {
       if (seen.has(criterion.id)) problem(`${criterion.id} is listed twice`);

@@ -197,7 +197,7 @@ export function acCoverage(
   steps: readonly Pick<ExecutionPlan["steps"][number], "covers">[],
 ): { uncovered: string[]; unknown: string[] } {
   const ids = acceptance.flatMap(
-    (criterion) => /^(AC\d+):/.exec(criterion)?.[1] ?? [],
+    (criterion) => /^(AC\d+[a-z]?):/.exec(criterion)?.[1] ?? [],
   );
   const covered = new Set(steps.flatMap((step) => step.covers ?? []));
   return {
