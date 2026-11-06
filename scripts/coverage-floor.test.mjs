@@ -132,9 +132,11 @@ test("no second engine test pass runs for coverage", () => {
   assert.doesNotMatch(step[1], /vitest|npm (run )?test/);
 });
 
-test("the Ubuntu platform job timeout is back to 45 minutes", () => {
+// A healthy Linux x64 run takes about 35 minutes; slower runners reached 45
+// with tests still passing, so the budget is 60 (it was 45 from f4f278d).
+test("the Ubuntu platform job timeout is 60 minutes", () => {
   assert.match(
     ci,
-    /timeout-minutes: \$\{\{ matrix\.os == 'ubuntu-24\.04' && 45 \|\| 30 \}\}/,
+    /timeout-minutes: \$\{\{ matrix\.os == 'ubuntu-24\.04' && 60 \|\| 30 \}\}/,
   );
 });
