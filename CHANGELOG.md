@@ -33,6 +33,11 @@
 
 ### Fixed
 
+- `spec-check` reports a line that starts like a criterion but is not
+  `- AC<n>: text`, with its file and line, instead of dropping it and giving
+  its test links to the criterion above. Criterion IDs with a letter suffix
+  (`AC7a`) are now read; five such criteria in this repository's own specs had
+  been skipped and are now checked (#318).
 - A memory proposed through MCP records `proposedBy` (`cloud` or `local`),
   which `memory-accept` and `memory-review` show, and the call log entry for
   `memory_propose` carries the new memory's ID, so a person accepting a

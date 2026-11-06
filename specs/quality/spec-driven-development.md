@@ -46,6 +46,10 @@ runs it, and plans can be created straight from a ready spec.
   - Test: packages/engine/tests/specs-workflows.test.ts :: reports a dangling workflow link and does not count the switched test
   - Test: packages/engine/tests/specs-workflows.test.ts :: reports an unreadable workflow entry but still counts a readable one that runs the switch
   - Test: packages/engine/tests/specs-workflows.test.ts :: still treats a repository without .github as having no CI to check
+- AC10: A criterion is a line `- AC<n>: text`, where the ID may carry one lowercase letter suffix (`AC7a`). When a line in "Acceptance criteria" starts with `- AC` and a digit but is not in that form, `spec-check` shall report it with its file and line number, and the `Test:` links under it shall belong to no criterion until the next well-formed one. Plan coverage reads suffixed IDs the same way (#318).
+  - Test: packages/engine/tests/specs-criteria.test.ts :: reports a criterion line with text before its colon and keeps its test links off the criterion above
+  - Test: packages/engine/tests/specs-criteria.test.ts :: fails spec-check on a malformed criterion, naming the file and line
+  - Test: packages/engine/tests/specs-criteria.test.ts :: reads a criterion ID with a letter suffix, such as AC7a, and covers it in plans
 
 ## Security considerations
 
