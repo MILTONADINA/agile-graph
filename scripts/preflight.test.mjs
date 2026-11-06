@@ -194,7 +194,7 @@ test("linked test files are read the way spec-check reads them", () => {
   ]);
 });
 
-test("the repository's specs link the release workflow test, so renaming it runs spec-check", () => {
+test("a change to scripts/npm-packages.test.mjs runs spec-check, because the repository's specs link it", () => {
   assert.ok(
     names(planWithLinks(["scripts/npm-packages.test.mjs"])).includes(
       "spec-check",
@@ -203,15 +203,35 @@ test("the repository's specs link the release workflow test, so renaming it runs
 });
 
 test("a renamed file counts as its old path deleted and its new path added", () => {
-  const repo = mkdtempSync(path.join(tmpdir(), "preflight-rename-"));
+  // The repository and an empty global git config live side by side, so
+  // the developer's own settings (commit signing, hooks, a default branch)
+  // cannot change what the test does.
+  const scratch = mkdtempSync(path.join(tmpdir(), "preflight-rename-"));
+  const repo = path.join(scratch, "repo");
+  const globalConfig = path.join(scratch, "gitconfig");
+  mkdirSync(repo);
+  writeFileSync(globalConfig, "");
   try {
     const git = (...args) =>
       execFileSync(
         "git",
-        ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args],
+        [
+          "-c",
+          "user.name=t",
+          "-c",
+          "user.email=t@example.invalid",
+          "-c",
+          "commit.gpgsign=false",
+          ...args,
+        ],
         {
           cwd: repo,
           stdio: "pipe",
+          env: {
+            ...process.env,
+            GIT_CONFIG_GLOBAL: globalConfig,
+            GIT_CONFIG_NOSYSTEM: "1",
+          },
         },
       );
     git("init", "-q", "-b", "main");
@@ -229,6 +249,6 @@ test("a renamed file counts as its old path deleted and its new path added", () 
       names(planWithLinks(changed, deleted, linked)).includes("spec-check"),
     );
   } finally {
-    rmSync(repo, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
   }
 });
