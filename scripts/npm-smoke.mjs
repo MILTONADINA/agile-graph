@@ -179,6 +179,30 @@ try {
         `${name}/package.json reported ${read}, expected ${version}`,
       );
   }
+  // CommonJS and node10 consumers resolve types from top-level types (#284).
+  // skipLibCheck stays on until the engine's declarations need no @types/node (#286).
+  await writeFile(
+    path.join(app, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        module: "commonjs",
+        moduleResolution: "node10",
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+      files: ["index.ts"],
+    }),
+  );
+  await writeFile(
+    path.join(app, "index.ts"),
+    'import { DEFAULT_POLICY } from "@agile-graph/contracts";\nimport { GraphEngine } from "@agile-graph/engine";\nexport const used = [DEFAULT_POLICY, GraphEngine];\n',
+  );
+  run(
+    process.execPath,
+    [path.join(repository, "node_modules/typescript/bin/tsc"), "-p", "."],
+    app,
+  );
   const printed = run(cli, ["--version"], app).trim();
   if (printed !== version)
     throw new Error(`--version printed ${printed}, expected ${version}`);

@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- Both packages declare top-level `main` and `types`, so TypeScript projects using CommonJS or `moduleResolution: node10` resolve their types instead of failing with TS2307 (#284).
 - `graph-engine -C <path> init` with a directory that does not exist now exits 1 with "No such project directory: <path>" instead of a raw ENOENT error, and creates nothing (#288).
 - Both packages export `./package.json`, so tools can read an installed
   version with `require('@agile-graph/engine/package.json')` (#287).

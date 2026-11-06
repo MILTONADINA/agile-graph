@@ -20,7 +20,9 @@ it.
   public, MIT-licensed, require Node.js 22.18 or later on 22, or 24 to 26, name this repository (with
   the exact URL npm trusted publishing checks) and share one version, with the
   engine depending on exactly that contracts version. Each exports
-  `./package.json`, so tools can read an installed version. The dashboard and
+  `./package.json`, so tools can read an installed version, and declares
+  top-level `main` and `types` equal to `exports["."]`, so CommonJS and
+  `moduleResolution: node10` consumers get its types. The dashboard and
   the workspace root stay private.
   - Test: scripts/npm-packages.test.mjs :: both packages are public, MIT-licensed and point at this repository
 - AC2: Each package carries the repository's license file and the engine its
