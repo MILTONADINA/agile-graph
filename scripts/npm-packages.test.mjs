@@ -56,6 +56,9 @@ test("both packages are public, MIT-licensed and point at this repository", asyn
     assert.ok(value.description && value.files?.length);
     // Tools read a dependency's version from its manifest (#287).
     assert.equal(value.exports["./package.json"], "./package.json", directory);
+    // node10 resolution ignores exports and reads only main and types (#284).
+    assert.equal(value.main, value.exports["."].default, directory);
+    assert.equal(value.types, value.exports["."].types, directory);
   }
   assert.equal(contracts.version, engine.version);
   assert.equal(
