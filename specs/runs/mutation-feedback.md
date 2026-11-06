@@ -74,7 +74,7 @@ tester and the answers are only recorded.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: is off without policy.mutationRounds and keeps the policy hash
 - AC3: With `mutationRounds` set, surviving mutants go back to the tester as `file:line: description` lines with no source text, at most once per round, and each round records its score in a `mutation.analyzed` event and the receipt's evidence ledger.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: sends surviving mutants back to the tester as locations and operators only, and records the score
-- AC4: When no check passes on the unmutated code with the new tests, the round runs no mutant, records `baseline-failed` and sends no feedback.
+- AC4: When no check passes on the unmutated code with the new tests, the round runs no mutant, records `baseline-failed` and sends no feedback, unless the shared deadline cut the baseline short (AC10).
   - Test: packages/engine/tests/mutation-feedback.test.ts :: skips the analysis when no check passes on the unmutated code
 - AC5: A round never makes a model call beyond `policy.maxTurns`: on the tester's last turn it records `turn-budget` and accepts the proposal without running the sandbox.
   - Test: packages/engine/tests/mutation-feedback.test.ts :: never spends a round when no model call is left within maxTurns
