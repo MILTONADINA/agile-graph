@@ -20,8 +20,9 @@ approval.
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) runs when a
 tag such as `v0.1.0` is pushed. It:
 
-1. refuses a tag whose commit is not on `main`, so only reviewed, green work is
-   released, whoever pushed the tag;
+1. refuses a tag whose commit is not on `main`, so only work merged through a
+   pull request with passing checks is released, whoever pushed the tag. Branch
+   protection requires no approving review;
 2. waits for an approval on the `npm` environment;
 3. builds everything, then checks that the tag matches both package versions,
    the package metadata and the exact files each tarball contains

@@ -29,8 +29,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Only a commit that reached main through a reviewed, green PR is
-      # released, whoever pushed the tag.
+      # Only a commit that reached main through a pull request with passing
+      # checks is released, whoever pushed the tag. No approval is required.
       - name: The tag points at a commit on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
