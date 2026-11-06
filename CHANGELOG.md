@@ -54,6 +54,10 @@
   share it, and a failed runtime init is reported as `parser unavailable`
   instead of rejecting `parseFile`. The Dart and Rust snapshot grammars retry
   the same way (#265).
+- `graph-engine mcp` exits by itself when its client closes stdin, after writing
+  the replies it still owes, instead of waiting for the client's SIGTERM. On
+  Windows that SIGTERM is a forced kill that skips closing the context database
+  and the run store.
 
 ### Internal
 

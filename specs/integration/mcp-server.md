@@ -69,6 +69,9 @@ Developers use AI clients such as Claude Code, Codex and Cursor, which should be
 - AC15: When an unhandled promise rejection or an uncaught exception occurs while `serve`, `mcp` or `watch` is running, the command shall write one line to stderr (`Fatal error: ` and the message, redacted of secrets, with absolute paths replaced by `<path>`, on one line of at most 300 characters), close the server or watcher and then the engine (and so the SQLite stores) within 5 seconds, and exit 1. The error is never swallowed. One-shot commands register no such handler and keep Node's default crash behaviour.
   - Test: packages/engine/tests/cli.test.ts :: closes the database and exits 1 with one stderr line when serve or mcp hits an unhandled rejection or uncaught exception
   - Test: packages/engine/tests/cli.test.ts :: runs the real close methods on a fatal error, bounds a close that hangs at 5 seconds, and covers watch
+- AC16: When the client closes the standard input of `mcp`, the server shall write the replies it still owes, then close the server and then the engine, so the process exits by itself without waiting for a signal.
+  - Test: packages/engine/tests/mcp-stdin-shutdown.test.ts :: exits by itself when its client closes stdin, without waiting for a signal
+  - Test: packages/engine/tests/mcp-stdin-shutdown.test.ts :: answers a request its client sent before closing stdin, then exits by itself
 
 ## Security considerations
 
