@@ -54,6 +54,8 @@
 
 ### Internal
 
+- The Linux x64 CI job may run for 60 minutes instead of 45: a healthy run
+  takes about 35, and slower runners were cut off at 45 while tests still passed.
 - Seeded property tests for the verification-config scanner (tokenizer,
   runner targets, pytest ini and TOML readers) and its public gate; replay a
   failure with `PROPERTY_SEED`.
