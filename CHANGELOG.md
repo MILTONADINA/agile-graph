@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-06
+
 ### Added
 
 - Tests for the promotion trust-anchor schema (pin limits and formats, the

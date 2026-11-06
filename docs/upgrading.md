@@ -45,8 +45,6 @@ what needs an action from you.
 
 ## 0.4.0
 
-This heading is renamed to the version number when a release is cut.
-
 - **Three MCP tool descriptions changed**: `context_get`, `symbol_search` and
   `graph_neighbors`. Pins in `mcp.toolHashes` must be taken again with
   `graph-engine mcp-tools --hashes`, as above.
@@ -63,8 +61,15 @@ This heading is renamed to the version number when a release is cut.
   policy allows (the default is 16000). Raise `policy.maxOutputTokens` or trim
   the security baseline.
 
-## Unreleased
+## 0.5.0
 
+- **`spec-check` is stricter.** A line in "Acceptance criteria" that starts
+  with `- AC` and a digit but is not written `- AC<n>: text` now fails
+  `spec-check`, naming its file and line. Rewrite such lines, for example
+  `- AC9 (#12): text` as `- AC9: text (#12)`.
+- **The MCP call log gains a `memory_id` column.** It is added in place the
+  first time 0.5.0 opens the store; older entries keep working and an older
+  engine still reads the log.
 - **One MCP tool description changed**: `memory_propose` now takes an optional
   `validFrom`. Pins in `mcp.toolHashes` must be taken again with
   `graph-engine mcp-tools --hashes`, as above.
