@@ -11,8 +11,8 @@ People should be able to install Agile Graph with
 machine, without cloning the repository. What they install must contain only
 the built engine and the files it needs at run time, carry the project's
 license, and never reach outside its own package for code or files to load
-or serve. Releases must be reproducible from reviewed work and traceable to
-it.
+or serve. Releases must be reproducible from work merged to `main` and traceable
+to it.
 
 ## Acceptance criteria
 
@@ -51,7 +51,7 @@ it.
 - AC6: A release publishes only a tagged commit that is on `main`, after the
   owner approves the `npm` environment, with npm trusted publishing rather
   than a stored token, and only when the tag names the packages' version.
-  - Test: scripts/npm-packages.test.mjs :: the release workflow publishes only reviewed commits from main, without a stored token
+  - Test: scripts/npm-packages.test.mjs :: the release workflow publishes only commits from main, without a stored token
   - Test: scripts/npm-packages.test.mjs :: a release tag names the packages' version
 - AC7: While the README's Install quick start names a `graph-engine`
   subcommand, a flag the built CLI lacks or a Node range that differs from
