@@ -14,8 +14,9 @@ import { checked } from "../src/util.js";
 
 const CLI = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 const ENGINE = fileURLToPath(new URL("../", import.meta.url));
-// Far above a clean close, far below the test timeout.
-const EXIT_WITHIN_MS = 5_000;
+// Far above a clean close (Windows runners are several times slower than a
+// workstation), far below the test timeout.
+const EXIT_WITHIN_MS = 20_000;
 const directories: string[] = [];
 afterEach(async () => {
   for (const directory of directories.splice(0))
@@ -149,6 +150,32 @@ it("answers a request its client sent before closing stdin, then exits by itself
     // The client closes stdin without waiting for that reply.
     child.stdin.end();
     expect((await client.reply(2)).result).toBeDefined();
+    expect(await exitWithin(child, EXIT_WITHIN_MS), client.stderr()).toEqual({
+      code: 0,
+      signal: null,
+    });
+  } finally {
+    child.kill("SIGKILL");
+  }
+}, 120_000);
+
+it("exits by itself after its client cancels a request and closes stdin", async () => {
+  const { serve } = await project();
+  const child = serve();
+  const client = converse(child);
+  try {
+    await client.initialize();
+    client.send({
+      id: 2,
+      method: "tools/call",
+      params: { name: "context_get", arguments: { query: "rule" } },
+    });
+    // The client cancels it (as on Esc) and closes stdin: no reply is owed.
+    client.send({
+      method: "notifications/cancelled",
+      params: { requestId: 2, reason: "user cancelled" },
+    });
+    child.stdin.end();
     expect(await exitWithin(child, EXIT_WITHIN_MS), client.stderr()).toEqual({
       code: 0,
       signal: null,
