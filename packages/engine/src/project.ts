@@ -80,7 +80,12 @@ export async function initializeProject(
   name?: string,
   options: InitializeOptions = {},
 ): Promise<ProjectConfig> {
-  const absolute = await realpath(root);
+  const absolute = await realpath(root).catch((error: unknown) => {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR")
+      throw new Error(`No such project directory: ${root}`);
+    throw error;
+  });
   const policy =
     options.cloudMcpExportPaths === undefined
       ? structuredClone(DEFAULT_POLICY)

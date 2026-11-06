@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- `graph-engine -C <path> init` with a directory that does not exist now exits 1 with "No such project directory: <path>" instead of a raw ENOENT error, and creates nothing (#288).
 - Both packages export `./package.json`, so tools can read an installed
   version with `require('@agile-graph/engine/package.json')` (#287).
 - A Dart `pubspec.yaml` `name` line with spaces or tabs before its colon (`name : toy_counter`) no longer aborts the Dart snapshot. An analyzer reply outside its three expected shapes leaves only its own call unresolved, reported once per file, instead of failing the whole Dart binding pass (#266). The Dart resolver identity advances to `snapshot-dart-analyzer:4`, so Dart snapshots are derived again once.

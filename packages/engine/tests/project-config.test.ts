@@ -191,8 +191,9 @@ describe("initializeProject and loadProject", () => {
   });
 
   it("refuses a root that does not exist", async () => {
-    await expect(initializeProject(path.join(dir, "missing"))).rejects.toThrow(
-      "ENOENT",
+    const missing = path.join(dir, "missing");
+    await expect(initializeProject(missing)).rejects.toThrow(
+      `No such project directory: ${missing}`,
     );
   });
 });
