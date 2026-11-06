@@ -187,7 +187,22 @@ rules.
 
 ## Claude Code
 
-Create `.mcp.json` in the project root:
+Create `.mcp.json` in the project root. With the engine installed from npm
+(`npm install -g @agile-graph/engine`, or as a project dependency on `PATH`):
+
+```json
+{
+  "mcpServers": {
+    "agile-graph": {
+      "type": "stdio",
+      "command": "graph-engine",
+      "args": ["-C", "<path-to-project>", "mcp", "--client", "cloud"]
+    }
+  }
+}
+```
+
+From a source checkout of this repository:
 
 ```json
 {
@@ -214,7 +229,15 @@ one.
 ## Codex
 
 Add a server table to `.codex/config.toml` in the project (or to your user
-Codex configuration):
+Codex configuration). With the engine installed from npm:
+
+```toml
+[mcp_servers.agile-graph]
+command = "graph-engine"
+args = ["-C", "<path-to-project>", "mcp", "--client", "cloud"]
+```
+
+From a source checkout of this repository:
 
 ```toml
 [mcp_servers.agile-graph]
@@ -232,8 +255,22 @@ project; your user configuration is always read. A hosted Codex environment has 
 
 ## Cursor
 
-Copy the tracked example and adjust it if the project is not the open
-workspace:
+With the engine installed from npm, create `.cursor/mcp.json` in the project:
+
+```json
+{
+  "mcpServers": {
+    "agile-graph": {
+      "type": "stdio",
+      "command": "graph-engine",
+      "args": ["-C", "${workspaceFolder}", "mcp", "--client", "cloud"]
+    }
+  }
+}
+```
+
+In a source checkout of this repository, copy the tracked example and adjust
+it if the project is not the open workspace:
 
 ```sh
 cp .cursor/mcp.example.json .cursor/mcp.json
@@ -248,11 +285,11 @@ only for the separate managed SDK worker.
 
 Configure a stdio server with:
 
-- command: `node`
-- arguments: `<path-to-repo>/packages/engine/dist/cli.js -C <path-to-project> mcp --client cloud`
+- command: `graph-engine` (installed from npm), or `node` with
+  `<path-to-repo>/packages/engine/dist/cli.js` as the first argument (source
+  checkout)
+- arguments: `-C <path-to-project> mcp --client cloud`
 
-When the engine package is installed or linked, its `graph-engine` command is
-the same program: `graph-engine -C <path-to-project> mcp --client cloud`.
 Program options such as `-C` go before `mcp`. The server writes the MCP stream
 to standard output and its own messages to standard error.
 
