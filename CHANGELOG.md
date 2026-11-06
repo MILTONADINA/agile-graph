@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `docs/publishing.md` and the release workflow no longer say only reviewed
+  work is released. They now say what is enforced: a commit merged to `main`
+  through a pull request with passing checks. Branch protection requires no
+  approving review. A test forbids the old wording (#293).
+
 ## [0.5.0] - 2026-11-06
 
 ### Added

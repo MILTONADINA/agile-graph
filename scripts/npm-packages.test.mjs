@@ -148,8 +148,15 @@ test("the engine tarball holds its compiled code and runtime files, never source
   assert.ok(!files.some((file) => /^dist\/.*template/.test(file)));
 });
 
-test("the release workflow publishes only reviewed commits from main, without a stored token", async () => {
+test("the release workflow publishes only commits from main, without a stored token", async () => {
   const workflow = await read(".github/workflows/release.yml");
+  const publishing = await read("docs/publishing.md");
+  // Branch protection requires no approval, so neither file may claim a
+  // reviewed release gate (#293).
+  for (const text of [workflow, publishing]) {
+    assert.doesNotMatch(text, /reviewed,\s+green/);
+    assert.match(text, /pull\s+request\s+with\s+passing\s+(#\s+)?checks/);
+  }
   assert.match(workflow, /^\s+id-token: write$/m);
   assert.match(workflow, /^\s+environment: npm$/m);
   assert.match(
