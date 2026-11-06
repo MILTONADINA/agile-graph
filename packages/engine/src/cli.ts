@@ -423,7 +423,10 @@ async function closeOnFailure<T>(
 
 cli
   .command("init")
-  .option("--name <name>")
+  .description(
+    "Create .graph/project.json for the project at -C with the default shadow policy; an existing project is left unchanged",
+  )
+  .option("--name <name>", "Project name (default: the directory name)")
   .option(
     "--cloud-mcp",
     "Let cloud-backed MCP clients (Claude Code, Codex, Cursor) retrieve context from the new project: sets policy.inference and policy.network to allowlisted, with no providers or hosts added. Needs --export",
@@ -453,6 +456,9 @@ cli
   });
 cli
   .command("index")
+  .description(
+    "Index the project's source, code graph, summaries and (unless --lexical) embeddings into a new snapshot",
+  )
   .option(
     "--lexical",
     "Index source, graph, and summaries without computing embeddings",
@@ -527,6 +533,9 @@ cli
   .action(() => withEngine((engine) => engine.context.provisionEmbeddings()));
 cli
   .command("context <query>")
+  .description(
+    "Retrieve ranked context for a query from the latest snapshot, within a token budget",
+  )
   .option("--budget <tokens>", "Context token ceiling", (v) => Number(v))
   .action((query, options) =>
     withEngine((engine) =>
@@ -535,11 +544,13 @@ cli
   );
 cli
   .command("symbols <query>")
+  .description("Search the latest snapshot's code symbols by name")
   .action((query) =>
     withEngine((engine) => engine.context.searchSymbols(query)),
   );
 cli
   .command("summaries")
+  .description("List the latest snapshot's file and directory summaries")
   .action(() => withEngine((engine) => engine.context.listSummaries()));
 cli
   .command("memory-review")
@@ -561,6 +572,9 @@ cli
   );
 cli
   .command("snapshots-prune")
+  .description(
+    "Preview, or with --apply delete, old index snapshots no run or evidence references",
+  )
   .option(
     "--keep <count>",
     "Newest snapshots to retain, plus protected evidence/worktree snapshots",
@@ -626,6 +640,9 @@ cli
   });
 cli
   .command("watch")
+  .description(
+    "Re-index the project whenever its files change, printing each new snapshot",
+  )
   .option(
     "--interval <ms>",
     "Backpressured reconciliation interval",
@@ -658,6 +675,9 @@ cli
   });
 cli
   .command("policy")
+  .description(
+    "Print the project policy, or replace it from a reviewed JSON file with --file",
+  )
   .option("--file <json>", "Replace project policy from a reviewed JSON file")
   .action(async (options) => {
     const project = await loadProject(root());
@@ -1181,11 +1201,17 @@ cli
   });
 cli
   .command("provider-add <id> <kind> <model>")
-  .option("--endpoint <url>")
+  .description(
+    "Configure a worker provider, replacing any with the same ID; a cloud or installed worker also needs --enable",
+  )
+  .option("--endpoint <url>", "API base URL; required for a local worker")
   .option("--key-env <name>", "Environment variable holding the API key")
   .option("--api-key-env <name>", "Same as --key-env")
-  .option("--efforts <list>")
-  .option("--default-effort <effort>")
+  .option(
+    "--efforts <list>",
+    "Comma-separated reasoning efforts the model supports",
+  )
+  .option("--default-effort <effort>", "Effort used when a plan names none")
   .option("--input-cost <usdPerMillion>", "Reviewed input-token price", Number)
   .option(
     "--output-cost <usdPerMillion>",
@@ -1287,10 +1313,13 @@ cli
     warnIfUnpriced(provider, project.policy);
     print(project.policy.providers);
   });
-cli.command("providers").action(async () => {
-  const project = await loadProject(root());
-  print(await loadProviders(projectDataDir(project.projectId)));
-});
+cli
+  .command("providers")
+  .description("List configured worker providers")
+  .action(async () => {
+    const project = await loadProject(root());
+    print(await loadProviders(projectDataDir(project.projectId)));
+  });
 cli
   .command("executable-identity <kind>")
   .description(
@@ -1394,8 +1423,8 @@ cli
     "--spec <path>",
     "Plan from a ready or implemented spec under specs/ (objective and criteria come from it)",
   )
-  .option("--provider <id>")
-  .option("--effort <effort>")
+  .option("--provider <id>", "Worker provider for every step")
+  .option("--effort <effort>", "Reasoning effort for every step")
   .option(
     "--check <id>",
     "Select a registered check ID (repeatable); include every mandatory ID; omitted means all checks",
@@ -1455,8 +1484,8 @@ cli
   .description(
     "Plan a follow-up of a finished run: a new plan holding only the acceptance criteria its latest AI review did not find met. The run and its plan are left unchanged; with every criterion met, nothing is created",
   )
-  .option("--provider <id>")
-  .option("--effort <effort>")
+  .option("--provider <id>", "Worker provider for every step")
+  .option("--effort <effort>", "Reasoning effort for every step")
   .option(
     "--check <id>",
     "Select a registered check ID (repeatable); include every mandatory ID; omitted means all checks",
@@ -1685,7 +1714,7 @@ cli
   .requiredOption("--planner <id>", "API or local provider that proposes steps")
   .requiredOption("--out <file>", "New file to write the proposed steps to")
   .option("--provider <id>", "Worker provider for every step")
-  .option("--effort <effort>")
+  .option("--effort <effort>", "Reasoning effort for every step")
   .action(async (objective, options) =>
     withEngine(async (engine) => {
       // Never overwrite: the file is what a person reviews and approves.
@@ -1827,26 +1856,35 @@ cli
       ),
     ),
   );
-cli.command("run <planId>").action((planId) =>
-  withRunEngine(async (engine) => {
-    // Starting a run from the command line is the person's own approval.
-    const run = await engine.start(planId, { approvedByPerson: true });
-    process.stderr.write(`Run ${run.id}\n`);
-    for (const event of engine.store.events(run.id))
-      if (event.type === "security.database_missing")
-        process.stderr.write(`warning: ${String(event.data.message)}\n`);
-    return noteFailedRun(await engine.wait(run.id));
-  }),
-);
+cli
+  .command("run <planId>")
+  .description(
+    "Start a run of a plan; starting it here counts as your approval of the plan",
+  )
+  .action((planId) =>
+    withRunEngine(async (engine) => {
+      // Starting a run from the command line is the person's own approval.
+      const run = await engine.start(planId, { approvedByPerson: true });
+      process.stderr.write(`Run ${run.id}\n`);
+      for (const event of engine.store.events(run.id))
+        if (event.type === "security.database_missing")
+          process.stderr.write(`warning: ${String(event.data.message)}\n`);
+      return noteFailedRun(await engine.wait(run.id));
+    }),
+  );
 cli
   .command("runs")
+  .description("List runs")
   .action(() => withEngine(async (engine) => engine.store.runs()));
-cli.command("inspect <runId>").action((runId) =>
-  withEngine(async (engine) => ({
-    run: engine.store.run(runId),
-    events: engine.store.events(runId),
-  })),
-);
+cli
+  .command("inspect <runId>")
+  .description("Print a run and its events")
+  .action((runId) =>
+    withEngine(async (engine) => ({
+      run: engine.store.run(runId),
+      events: engine.store.events(runId),
+    })),
+  );
 cli
   .command("mcp-log")
   .description(
@@ -1925,6 +1963,7 @@ cli
   });
 cli
   .command("cancel <runId>")
+  .description("Cancel a run")
   .action((runId) => withEngine(async (engine) => engine.cancel(runId)));
 cli
   .command("review-approve <runId>")
@@ -1975,6 +2014,7 @@ cli
   });
 cli
   .command("resume <runId>")
+  .description("Resume a stopped or interrupted run")
   .option(
     "--reconciled",
     "Acknowledge review of the retained workspace and external effects",
@@ -2066,9 +2106,11 @@ cli
   );
 cli
   .command("memories")
+  .description("List memories and memory proposals")
   .action(() => withEngine((engine) => engine.context.listMemories()));
 cli
   .command("memory-accept <id>")
+  .description("Accept a proposed memory so context can include it")
   .option(
     "--valid-until <iso>",
     "Set or replace the proposal's expiry, as an ISO 8601 date-time with a time zone; once it passes, context leaves the memory out",
@@ -2143,13 +2185,18 @@ cli
   );
 cli
   .command("memory-import")
+  .description("Import shared memories committed under .graph/knowledge/")
   .action(() => withEngine((engine) => engine.context.importSharedMemories()));
 cli
   .command("decisions")
+  .description("List recorded decisions")
   .action(() => withEngine(async (engine) => engine.store.decisions()));
 cli
   .command("evaluation-export <mapping> <output>")
-  .requiredOption("--dataset <id>")
+  .requiredOption(
+    "--dataset <id>",
+    "Evaluation dataset ID to record in the export",
+  )
   .description(
     "Export observed decisions with explicit decision-ID/task-ID mappings; does not invent expected labels",
   )
@@ -2313,6 +2360,7 @@ promotion
   });
 cli
   .command("serve")
+  .description("Serve the local dashboard on a loopback port")
   .option("--port <number>", "Loopback port", "4317")
   .option("--log-requests", "Write one JSON line per request to stderr")
   .action(async (options) => {
@@ -2358,6 +2406,7 @@ cli
   });
 cli
   .command("mcp")
+  .description("Serve this project's tools to an MCP client over stdio")
   .option(
     "--client <kind>",
     "Declare whether the consuming model is local or cloud-backed",
