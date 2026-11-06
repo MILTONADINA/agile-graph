@@ -57,6 +57,10 @@ runs it, and plans can be created straight from a ready spec.
   - Test: packages/engine/tests/specs-switch-literals.test.ts :: ignores braces inside regex literals but not division
   - Test: packages/engine/tests/specs-switch-literals.test.ts :: reads a comment opener inside a regex literal as part of the regex
   - Test: packages/engine/tests/specs-switch-literals.test.ts :: reads a slash after a postfix increment as division
+- AC12: When `npm run preflight` sees an added, changed or deleted test file that a spec names on a `- Test:` line, the system shall build the engine and run `spec-check`, so a renamed or removed linked test fails before push instead of in CI. It shall read the links the way `spec-check` does and shall not run `spec-check` for an unlinked script test alone (#330).
+  - Test: scripts/preflight.test.mjs :: a changed or deleted test file that a spec links builds the engine and checks the specs
+  - Test: scripts/preflight.test.mjs :: linked test files are read the way spec-check reads them
+  - Test: scripts/preflight.test.mjs :: the repository's specs link the release workflow test, so renaming it runs spec-check
 
 ## Security considerations
 
