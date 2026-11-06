@@ -1085,6 +1085,41 @@ export async function serveMcp(
   server.server.onclose = () => {
     void engine.close();
   };
-  await server.connect(new StdioServerTransport());
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  closeWhenInputEnds(server, transport);
   return server;
+}
+
+// The MCP stdio shutdown begins with the client closing this process's input,
+// and the server then exits by itself. It closes once every reply it still owes
+// has been written, so a client that ends its input right after a request still
+// gets that reply. Without this the server runs until the client's SIGTERM after
+// a grace period, and Windows delivers SIGTERM as a forced kill that skips the
+// close of the context database and the run store.
+function closeWhenInputEnds(
+  server: McpServer,
+  transport: StdioServerTransport,
+): void {
+  const owed = new Set<string | number>();
+  let inputEnded = false;
+  const settle = () => {
+    if (inputEnded && owed.size === 0) void server.close();
+  };
+  const receive = transport.onmessage;
+  transport.onmessage = (message) => {
+    if ("method" in message && "id" in message) owed.add(message.id);
+    receive?.(message);
+  };
+  const send = transport.send.bind(transport);
+  transport.send = async (message) => {
+    if (!("method" in message) && "id" in message && message.id !== undefined)
+      owed.delete(message.id);
+    await send(message);
+    settle();
+  };
+  process.stdin.once("end", () => {
+    inputEnded = true;
+    settle();
+  });
 }

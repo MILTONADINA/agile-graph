@@ -56,8 +56,8 @@ function runCli(cli, root, args) {
 /**
  * Starts `mcp` and sends an MCP `initialize` request. Resolves when the child
  * exits on its own, answers the request (then it is stopped), or misses the
- * deadline. The server does not exit when stdin closes, so an answer is what
- * shows it started past the freshness check.
+ * deadline. The test keeps the server's stdin open, so an answer is what shows
+ * it started past the freshness check.
  */
 function runMcp(cli, args) {
   return new Promise((resolve) => {
