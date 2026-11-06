@@ -2193,6 +2193,16 @@ describe("command line", () => {
     expect((await graph("tester")).code).toBe(0);
   }, 120_000);
 
+  it("says there is no such project directory when init gets a missing -C, and creates none", async () => {
+    const { root, graph } = await project();
+    const missing = path.join(root, "projcet");
+    const result = await graph("-C", missing, "init");
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(`No such project directory: ${missing}`);
+    expect(result.stderr).not.toContain("ENOENT");
+    await expect(stat(missing)).rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
+
   it("names the zero-price fix for an unpriced local worker under a cost cap, when it is set up and at planning", async () => {
     const { root, graph } = await project();
     await graph("init");
