@@ -6,7 +6,8 @@
 
 - `npm run preflight` now runs `spec-check` when a change touches a test file
   that a spec links, so renaming or deleting a linked test fails locally instead
-  of on every CI platform (#330).
+  of on every CI platform. A rename now counts as its old path deleted and its
+  new path added (#330).
 - `docs/publishing.md` and the release workflow no longer say only reviewed
   work is released. They now say what is enforced: a commit merged to `main`
   through a pull request with passing checks. Branch protection requires no
