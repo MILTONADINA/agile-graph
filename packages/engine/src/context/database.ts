@@ -37,6 +37,8 @@ export class ContextDatabase {
         }
       }
       db.pragma('foreign_keys = ON');
+      // Unicode case folding for name search; SQLite's LIKE folds ASCII only (#298).
+      db.function('graph_fold', { deterministic: true }, value => typeof value === 'string' ? value.normalize('NFC').toLowerCase().replaceAll('\u03c2', '\u03c3') : value);
       let vectorError = null;
       try { require(workerData.vectorModule).load(db); } catch (error) { vectorError = error.message; }
       const handle = async ({ id, operation, sql, params, statements, snapshotId, migrations, destination, keepLatest, dryRun, protectedSnapshotIds, projectId, requiredSnapshots }) => {

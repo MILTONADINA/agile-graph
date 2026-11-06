@@ -926,10 +926,17 @@ export class ContextEngine {
     snapshotId?: string,
   ): Promise<CodeSymbol[]> {
     const snapshot = await this.snapshot(snapshotId);
-    const escaped = query.replace(/[\\%_]/g, "\\$&");
+    // Both sides are folded the same way (NFC, lowercase, then final sigma
+    // to sigma, since lowercasing picks the sigma form by context), so
+    // non-ASCII names match case-insensitively too (#298).
+    const escaped = query
+      .normalize("NFC")
+      .toLowerCase()
+      .replaceAll("\u03c2", "\u03c3")
+      .replace(/[\\%_]/g, "\\$&");
     return (
       await this.db.all<Payload>(
-        "SELECT payload FROM symbols WHERE snapshot_id=? AND name LIKE ? ESCAPE '\\' ORDER BY name LIMIT 100",
+        "SELECT payload FROM symbols WHERE snapshot_id=? AND graph_fold(name) LIKE ? ESCAPE '\\' ORDER BY name LIMIT 100",
         [snapshot.id, `%${escaped}%`],
       )
     )
