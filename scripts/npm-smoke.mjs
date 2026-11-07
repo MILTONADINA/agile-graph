@@ -227,16 +227,26 @@ try {
     'import { DEFAULT_POLICY } from "@agile-graph/contracts";\nimport { GraphEngine } from "@agile-graph/engine";\nexport const used = [DEFAULT_POLICY, GraphEngine];\n',
   );
   // No declaration it loads may fail, including web-tree-sitter's, which the
-  // engine keeps out of its published types (#342).
-  run(
-    process.execPath,
-    [
-      path.join(repository, "node_modules/typescript/bin/tsc"),
-      "-p",
-      "tsconfig.nodenext.json",
-    ],
-    app,
-  );
+  // engine keeps out of its published types (#342). tsc prints its diagnostics
+  // on stdout, so a failure shows them.
+  try {
+    run(
+      process.execPath,
+      [
+        path.join(repository, "node_modules/typescript/bin/tsc"),
+        "-p",
+        "tsconfig.nodenext.json",
+        "--pretty",
+        "false",
+      ],
+      app,
+    );
+  } catch (error) {
+    throw new Error(
+      `nodenext consumer compile failed:\n${error.stdout ?? ""}${error.stderr ?? ""}`,
+      { cause: error },
+    );
+  }
   const printed = run(cli, ["--version"], app).trim();
   if (printed !== version)
     throw new Error(`--version printed ${printed}, expected ${version}`);
