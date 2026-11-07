@@ -226,15 +226,33 @@ try {
     path.join(app, "nodenext.mts"),
     'import { DEFAULT_POLICY } from "@agile-graph/contracts";\nimport { GraphEngine } from "@agile-graph/engine";\nexport const used = [DEFAULT_POLICY, GraphEngine];\n',
   );
-  run(
-    process.execPath,
-    [
-      path.join(repository, "node_modules/typescript/bin/tsc"),
-      "-p",
-      "tsconfig.nodenext.json",
-    ],
-    app,
-  );
+  // The one error left is web-tree-sitter's own declarations needing
+  // @types/emscripten (#342); any other error, such as a missing Node type, fails.
+  const KNOWN =
+    /^node_modules\/web-tree-sitter\/web-tree-sitter\.d\.ts\(\d+,\d+\): error TS2304: Cannot find name 'EmscriptenModule'\.$/;
+  let checked = "";
+  try {
+    checked = run(
+      process.execPath,
+      [
+        path.join(repository, "node_modules/typescript/bin/tsc"),
+        "-p",
+        "tsconfig.nodenext.json",
+        "--pretty",
+        "false",
+      ],
+      app,
+    );
+  } catch (error) {
+    checked = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+  }
+  const unexpected = checked
+    .split("\n")
+    .filter((line) => /error TS\d+/.test(line) && !KNOWN.test(line));
+  if (unexpected.length)
+    throw new Error(
+      `nodenext consumer compile failed:\n${unexpected.join("\n")}`,
+    );
   const printed = run(cli, ["--version"], app).trim();
   if (printed !== version)
     throw new Error(`--version printed ${printed}, expected ${version}`);
