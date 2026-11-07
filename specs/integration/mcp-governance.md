@@ -57,6 +57,11 @@ three places.
   - Test: packages/engine/tests/zod-bounds.test.ts :: installs zod 4.6.6 or later, which closes GHSA-mrhx-c7xc-m3w5
 - AC12: When `context_get`, `symbol_search` or `graph_neighbors` returns, the result shall also carry the additive fields `evidence` (the source ranges or symbols the result rests on, each with path, line range and content hash; never memory), `unknowns` (typed entries with a fixed-sentence `note` and an optional `count`, for withheld, truncated, unresolved or uncovered results) and `limits` (each cap that applied, with `max`, `used` and `reached`). The fields shall be built only from data the result already holds, and for a cloud client shall hold no path outside the export policy, no indexing diagnostic and no count of private matches; a local client's coverage unknown also carries the diagnostics.
   - Test: packages/engine/tests/mcp-governance.test.ts :: gives context_get, symbol_search and graph_neighbors typed evidence, unknowns and limits, and a cloud client's carry no private path or memory
+- AC13: Every free-text string a tool accepts shall state a maximum length in its schema (IDs 256, `symbol_search.query` 512, `context_get.query` and a step objective 4000, effort and timestamps 64, check IDs 128), so an over-length input is refused by its bound without the response echoing it. If SQLite refuses a symbol search pattern, then `symbol_search` shall return a fixed message instead of SQLite's text, and a refused memory expiry shall name `validUntil`, not only the CLI flag (#296). A tool's definition hash changes with its schema, so operator pins must be taken again with `mcp-tools --hashes`.
+  - Test: packages/engine/tests/mcp-input-bounds.test.ts :: every string a tool accepts has a maxLength in tools/list
+  - Test: packages/engine/tests/mcp-input-bounds.test.ts :: refuses an over-length symbol_search query and providerId without echoing them
+  - Test: packages/engine/tests/mcp-input-bounds.test.ts :: returns a fixed message when SQLite refuses a symbol pattern
+  - Test: packages/engine/tests/mcp-input-bounds.test.ts :: names validUntil, not only a CLI flag, when an MCP memory expiry has passed
 
 ## Security considerations
 
