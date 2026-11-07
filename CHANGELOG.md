@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The dashboard builds with vite 8 and @vitejs/plugin-react 6.
+
 ## [0.6.0] - 2026-11-07
 
 ### Security
