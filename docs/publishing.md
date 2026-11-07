@@ -66,7 +66,17 @@ workflow needs npm 11.5.1 or later, which it installs.
 2. **Protect the release environment.** In the GitHub repository, open
    Settings → Environments → `npm` and add yourself as a required reviewer,
    so every publish waits for your approval.
-3. **Publish the first version once from your machine.** npm configures
+3. **Protect the release tags.** Add an active tag ruleset for `refs/tags/v*`
+   that restricts creation and blocks updates and deletions, with the
+   repository admin role as the only bypass. Then only an admin can create,
+   move or delete a release tag. This repository's ruleset is named
+   `release tags`:
+
+   ```sh
+   gh api repos/MILTONADINA/agile-graph/rulesets --jq '.[] | select(.target == "tag") | {name, enforcement}'
+   ```
+
+4. **Publish the first version once from your machine.** npm configures
    trusted publishing on an existing package, so the very first publish is
    manual:
 
@@ -81,7 +91,7 @@ workflow needs npm 11.5.1 or later, which it installs.
    npm publish --workspace packages/engine --access public
    ```
 
-4. **Connect each package to the workflow.** `npm trust` needs npm 11.15.0 or
+5. **Connect each package to the workflow.** `npm trust` needs npm 11.15.0 or
    later, so check `npm --version` first and upgrade with
    `npm install -g npm@11` if it is older. Run these in your own terminal,
    because npm asks you to confirm each one with two-factor authentication:
@@ -95,7 +105,7 @@ workflow needs npm 11.5.1 or later, which it installs.
    settings → Trusted Publisher → GitHub Actions. A new trusted publisher must
    complete a publish within two days, or it has to be created again.
 
-5. **Optionally require trusted publishing.** In each package's settings,
+6. **Optionally require trusted publishing.** In each package's settings,
    choose to disallow token publishing, so only the workflow can publish.
 
 ## Releasing a new version
