@@ -11,6 +11,10 @@
   declarations use (`NodeJS.ProcessEnv`, Node's `http` types). A TypeScript
   consumer using `nodenext` with `skipLibCheck` off no longer needs to install
   it to compile. The npm smoke test checks that build (#286).
+- The engine's published declarations no longer reach `web-tree-sitter`'s
+  types, which need `@types/emscripten`. The grammar loader moved to its own
+  module, so a `nodenext` consumer with `skipLibCheck` off now compiles with no
+  errors, and the npm smoke test accepts none (#342).
 
 ## [0.5.2] - 2026-11-06
 

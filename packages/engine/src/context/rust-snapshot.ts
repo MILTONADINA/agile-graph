@@ -3,7 +3,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Parser, type Node } from "web-tree-sitter";
 import { z } from "zod";
 import type { GraphEdge } from "@agile-graph/contracts";
-import { hash, loadGrammar, type ParsedFile } from "./parser.js";
+import { loadGrammar } from "./grammar.js";
+import { hash, type ParsedFile } from "./parser.js";
 
 export const RUST_LIMITS = {
   files: 64,

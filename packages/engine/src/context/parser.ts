@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { createRequire } from "node:module";
-import { dirname, extname, join } from "node:path";
-import { Parser, Language as Grammar, type Node } from "web-tree-sitter";
+import { extname } from "node:path";
+import { Parser, type Node } from "web-tree-sitter";
 import type {
   CodeSymbol,
   GraphEdge,
@@ -9,6 +8,7 @@ import type {
   SourceReference,
 } from "@agile-graph/contracts";
 import { DART_SYNTAX_VERSION, extractDart } from "./dart-syntax.js";
+import { loadGrammar } from "./grammar.js";
 
 export const PARSER_VERSION =
   "web-tree-sitter:0.25.10/grammars:0.1.13/extractor:4";
@@ -17,10 +17,6 @@ export const PARSER_VERSION =
 export const DART_PARSER_VERSION = `${PARSER_VERSION}/${DART_SYNTAX_VERSION}`;
 export const hash = (input: string | Uint8Array) =>
   createHash("sha256").update(input).digest("hex");
-const grammars = new Map<string, Promise<Grammar>>();
-let initialized: Promise<void> | undefined;
-const require = createRequire(import.meta.url);
-const grammarRoot = dirname(require.resolve("tree-sitter-wasms/package.json"));
 const languages: Record<string, [Language, string]> = {
   ".ts": ["typescript", "typescript"],
   ".tsx": ["typescript", "tsx"],
@@ -96,35 +92,6 @@ export interface ParsedFile {
     >;
     edges: Record<string, { start: number; end: number }>;
   };
-}
-
-// A rejected runtime or grammar load is dropped from its cache before its
-// callers resume, so the next call retries it. Only one load per key is in
-// flight at a time, so the removal can only drop the rejected promise itself.
-// Parses that start while a load is pending share that one load.
-function initRuntime(): Promise<void> {
-  initialized ??= Parser.init().catch((error: unknown) => {
-    initialized = undefined;
-    throw error;
-  });
-  return initialized;
-}
-
-/** Loads a bundled grammar once after the shared runtime init, and retries it
- * after a failure. */
-export function loadGrammar(name: string): Promise<Grammar> {
-  let grammar = grammars.get(name);
-  if (!grammar) {
-    grammar = (async () => {
-      await initRuntime();
-      return Grammar.load(join(grammarRoot, "out", `tree-sitter-${name}.wasm`));
-    })().catch((error: unknown) => {
-      grammars.delete(name);
-      throw error;
-    });
-    grammars.set(name, grammar);
-  }
-  return grammar;
 }
 
 export async function parseFile(

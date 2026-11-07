@@ -7,12 +7,8 @@ import type {
   GraphEdge,
   SourceReference,
 } from "@agile-graph/contracts";
-import {
-  hash,
-  loadGrammar,
-  parserVersionFor,
-  type ParsedFile,
-} from "./parser.js";
+import { hash, parserVersionFor, type ParsedFile } from "./parser.js";
+import { loadGrammar } from "./grammar.js";
 
 export const DART_LIMITS = {
   files: 250,
