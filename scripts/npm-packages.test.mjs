@@ -196,6 +196,19 @@ test("only the release publish job can mint an npm credential, and it runs no de
   assert.match(publish, /^ {4}environment: npm$/m);
   assert.match(publish, /^ {4}needs: verify$/m);
   assert.match(publish, /npm publish "\$tarball"/);
+  // npm reads `tarballs/x.tgz` as the GitHub repository tarballs/x.tgz and
+  // runs git against github.com (v0.5.2's first publish failed this way); a
+  // path must start with ./ or / to name a local file.
+  const tarballPaths = [...publish.matchAll(/tarball=\$\(ls ([^"\s]+)/g)].map(
+    (m) => m[1],
+  );
+  assert.ok(tarballPaths.length > 0, "publish job sets $tarball from ls");
+  for (const path of tarballPaths)
+    assert.match(
+      path,
+      /^\.?\//,
+      `tarball path ${path} must start with ./ or /`,
+    );
   for (const forbidden of [
     /npm ci\b/,
     /npm rebuild\b/,

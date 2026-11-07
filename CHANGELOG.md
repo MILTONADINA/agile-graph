@@ -18,6 +18,12 @@
   `publish` job, in the `npm` environment, only publishes the tarballs
   `verify` uploaded (GHSA-8v9m-r9vq-3c4f).
 
+### Fixed
+
+- The `publish` job names each tarball as `./tarballs/...`. npm read the
+  bare `tarballs/...` path as a GitHub repository and failed before
+  publishing anything, so the first v0.5.2 run published no package.
+
 ## [0.5.1] - 2026-11-06
 
 ### Security
