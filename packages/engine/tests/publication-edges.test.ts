@@ -280,11 +280,11 @@ describe("publishRun draft pull requests", () => {
     draftPr(config);
     config.github = undefined;
     await expect(publishRun(root, run, config)).rejects.toThrow(
-      "Configure `github` (repository, remote and baseBranch)",
+      "Configure `github` (repository, remote and baseBranch) in .graph/project.json",
     );
   });
 
-  it.each(["main", "master"])(
+  it.each(["main", "master", "release/1.2", "feature_x"])(
     "opens a draft pull request against %s without pushing to it (#277)",
     async (baseBranch) => {
       const { root, config, run } = await fixture();
@@ -297,7 +297,6 @@ describe("publishRun draft pull requests", () => {
       expect(create[create.indexOf("--base") + 1]).toBe(baseBranch);
       expect(calls.push).toHaveLength(1);
       expect(calls.push[0]!.at(-1)).toBe(`HEAD:refs/heads/${run.branch}`);
-      expect(run.branch).not.toMatch(/(?:^|\/)(?:main|master)$/);
     },
   );
 
@@ -310,6 +309,10 @@ describe("publishRun draft pull requests", () => {
     "dev/",
     "dev.lock",
     "a;b",
+    ".",
+    "a//b",
+    "a/.b",
+    "x.lock/y",
   ])("refuses the base branch %j and names the setting", async (baseBranch) => {
     const { root, config, run } = await fixture();
     draftPr(config, { baseBranch });

@@ -23,8 +23,9 @@
 
 ### Changed
 
-- A managed draft pull request may target `main`: `github.baseBranch` names
-  any branch, and the engine no longer refuses `main` or `master` as the base.
+- A managed draft pull request may target `main`: `github.baseBranch` may name
+  any plain branch name (letters, digits, `_`, `.`, `/` and `-`), and the
+  engine no longer refuses `main` or `master` as the base.
   A run still never pushes to `main` or `master`. A base branch that is not a
   plain branch name (for example one starting with `-`) is refused before any
   push, and the refusal names `github.baseBranch` in `.graph/project.json`

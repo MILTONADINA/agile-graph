@@ -935,13 +935,23 @@ describe("project boundaries", () => {
     ).toThrow("not exportable");
   });
   it("prevents main/master publication even when publication is enabled", () => {
-    for (const branch of ["main", "master", "refs/heads/main", "-bad"])
-      expect(() =>
-        assertPublication(
-          { ...cloud, publication: "draft-pr", allowedHosts: ["github.com"] },
-          branch,
-        ),
-      ).toThrow();
+    for (const publication of ["commit", "draft-pr"] as const)
+      for (const branch of [
+        "main",
+        "master",
+        "refs/heads/main",
+        "-bad",
+        "a b",
+        "a;b",
+      ])
+        expect(() =>
+          assertPublication(
+            { ...cloud, publication, allowedHosts: ["github.com"] },
+            branch,
+          ),
+        ).toThrow(
+          "Publishing to main/master or an invalid branch is prohibited",
+        );
     expect(() =>
       assertPublication(
         { ...cloud, publication: "draft-pr", allowedHosts: ["github.com"] },
