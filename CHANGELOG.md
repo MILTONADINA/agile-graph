@@ -4,6 +4,13 @@
 
 ### Security
 
+- `@agile-graph/engine` now depends on `@fastify/static` 10.1.10, which uses
+  `glob` 14.0.4 and `minimatch` 11.0.5, and the lockfile resolves
+  `@hono/node-server` 2.1.6. These fix GHSA-3g3m-2fjr-6pw4 (`glob`: cancellation
+  bypass), GHSA-g3hv-75wg-m249 (`minimatch`: denial of service through pattern
+  amplification) and GHSA-rmxm-3fg6-px4f (`@hono/node-server`: `serveStatic` decodes
+  the path twice) in the production dependencies. `minimatch` 10.2.6 remains
+  only as a development dependency of ESLint (#326).
 - CI now fails when a workflow or composite action names an action by tag,
   branch or short SHA, or without a `# v<version>` comment, and when a `uses`
   key is written in a form the check cannot read (flow style, quoted, inside a
