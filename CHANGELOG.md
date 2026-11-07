@@ -21,6 +21,15 @@
   `scripts/action-pins.test.mjs` keeps it that way, and the two `mcp-native.yml`
   steps without a version comment now have one (#290).
 
+### Changed
+
+- A managed draft pull request may target `main`: `github.baseBranch` names
+  any branch, and the engine no longer refuses `main` or `master` as the base.
+  A run still never pushes to `main` or `master`. A base branch that is not a
+  plain branch name (for example one starting with `-`) is refused before any
+  push, and the refusal names `github.baseBranch` in `.graph/project.json`
+  (#277).
+
 ### Fixed
 
 - MCP tools state a maximum length on every free-text string input (IDs 256,

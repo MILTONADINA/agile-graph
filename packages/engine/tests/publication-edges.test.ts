@@ -280,20 +280,48 @@ describe("publishRun draft pull requests", () => {
     draftPr(config);
     config.github = undefined;
     await expect(publishRun(root, run, config)).rejects.toThrow(
-      "Configure the GitHub repository",
+      "Configure `github` (repository, remote and baseBranch)",
     );
   });
 
   it.each(["main", "master"])(
-    "refuses %s as the pull request base",
+    "opens a draft pull request against %s without pushing to it (#277)",
     async (baseBranch) => {
       const { root, config, run } = await fixture();
       draftPr(config, { baseBranch });
-      await expect(publishRun(root, run, config)).rejects.toThrow(
-        "main/master PR targets are prohibited",
-      );
+      await addRemote(root);
+      await edit(run);
+      const calls = fakeGithub();
+      await publishRun(root, run, config);
+      const create = calls.create[0]!;
+      expect(create[create.indexOf("--base") + 1]).toBe(baseBranch);
+      expect(calls.push).toHaveLength(1);
+      expect(calls.push[0]!.at(-1)).toBe(`HEAD:refs/heads/${run.branch}`);
+      expect(run.branch).not.toMatch(/(?:^|\/)(?:main|master)$/);
     },
   );
+
+  it.each([
+    "-main",
+    "--base=x",
+    "refs/heads/main",
+    "a..b",
+    "has space",
+    "dev/",
+    "dev.lock",
+    "a;b",
+  ])("refuses the base branch %j and names the setting", async (baseBranch) => {
+    const { root, config, run } = await fixture();
+    draftPr(config, { baseBranch });
+    await addRemote(root);
+    await edit(run);
+    const calls = fakeGithub();
+    await expect(publishRun(root, run, config)).rejects.toThrow(
+      "set `github.baseBranch` in .graph/project.json",
+    );
+    expect(calls.push).toHaveLength(0);
+    expect(calls.create).toHaveLength(0);
+  });
 
   it.each([
     "-upload-pack=x",
