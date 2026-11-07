@@ -82,6 +82,14 @@ what needs an action from you.
   a changed test target and needs approval, where 0.5.0 could pass it
   unflagged (GHSA-6g95-x523-3j5c). No configuration change is needed.
 
+## 0.5.2
+
+- **Releases publish from a job that runs no dependency code.** Nothing changes
+  in the packages themselves. The release workflow now installs, builds, tests
+  and smoke-tests in a `verify` job that cannot request an npm credential, and
+  the `publish` job only publishes the tarballs `verify` produced
+  (GHSA-8v9m-r9vq-3c4f). No action is needed to upgrade.
+
 ## Run store
 
 The run store schema is version 5 in 0.2.0 and in the current `main`, so
