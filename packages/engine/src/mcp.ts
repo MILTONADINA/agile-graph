@@ -50,6 +50,15 @@ import {
 } from "./util.js";
 import { MAX_STEP_DEPENDENCIES } from "./schema-bounds.js";
 
+// Length bounds on free-text tool inputs, so an oversized string is refused by
+// the schema before it reaches SQLite or an error message (#296).
+const MAX_ID_INPUT = 256;
+const MAX_EFFORT_INPUT = 64;
+const MAX_TIMESTAMP_INPUT = 64;
+const MAX_CHECK_ID_INPUT = 128;
+const MAX_SYMBOL_QUERY_INPUT = 512;
+const MAX_CONTEXT_QUERY_INPUT = 4000;
+
 /**
  * Tools that change project state or pay for a model call. A call to one is
  * refused when the call log cannot record it first (fail closed); a read-only
@@ -489,6 +498,7 @@ export function createMcpServer(
       inputSchema: {
         query: z
           .string()
+          .max(MAX_CONTEXT_QUERY_INPUT)
           .min(1)
           .describe(
             "Plain-text description of the task or question. Its words become full-text search terms, and repository-relative file paths mentioned in it rank excerpts from those files first.",
@@ -616,6 +626,7 @@ export function createMcpServer(
       inputSchema: {
         query: z
           .string()
+          .max(MAX_SYMBOL_QUERY_INPUT)
           .describe(
             "Text to find within symbol names, matched literally (% and _ are not wildcards). An empty string returns the first 100 symbols by name.",
           ),
@@ -681,6 +692,7 @@ export function createMcpServer(
       inputSchema: {
         symbolId: z
           .string()
+          .max(MAX_ID_INPUT)
           .describe(
             "ID of the starting symbol: a symbol_search result's id, or a from or to value from an earlier edge. A declaration's ID changes when an edit moves it; file symbol IDs are stable.",
           ),
@@ -776,6 +788,7 @@ export function createMcpServer(
           ),
         validUntil: z
           .string()
+          .max(MAX_TIMESTAMP_INPUT)
           .datetime({ offset: true })
           .optional()
           .describe(
@@ -783,6 +796,7 @@ export function createMcpServer(
           ),
         validFrom: z
           .string()
+          .max(MAX_TIMESTAMP_INPUT)
           .datetime({ offset: true })
           .optional()
           .describe(
@@ -816,6 +830,7 @@ export function createMcpServer(
         inputSchema: {
           runId: z
             .string()
+            .max(MAX_ID_INPUT)
             .describe(
               "ID of a run in this project, as returned by run_start or listed by graph-engine runs.",
             ),
@@ -843,6 +858,7 @@ export function createMcpServer(
         inputSchema: {
           planId: z
             .string()
+            .max(MAX_ID_INPUT)
             .describe(
               "ID of an existing plan in this project, as printed by graph-engine plan; it must match the current project policy and source.",
             ),
@@ -908,7 +924,10 @@ export function createMcpServer(
         description:
           "Returns a run's recorded events in order, from position `after`, with the position to pass next time and `complete`, which is true only when the run has stopped (its recorded status is final and this server is not executing it) and every event has been returned, so a client can follow a run by polling until complete, whichever process started it. A run whose owning process is proven to have died is first recorded as needing reconciliation, as every engine start does, and then reports complete; a run whose owner may still be alive stays incomplete. A local client gets each event's full data; a cloud-backed client (only with --allow-run-status) gets each event's type, time and step, which show progress without the run's content. Apart from that recovery it is read-only, and it fails for an ID that is not a run in this project.",
         inputSchema: {
-          runId: z.string().describe("ID of a run in this project."),
+          runId: z
+            .string()
+            .max(MAX_ID_INPUT)
+            .describe("ID of a run in this project."),
           after: z
             .number()
             .int()
@@ -981,11 +1000,21 @@ export function createMcpServer(
             ),
           providerId: z
             .string()
+            .max(MAX_ID_INPUT)
             .optional()
             .describe("Configured worker provider to use."),
-          effort: z.string().optional().describe("Worker effort level."),
+          effort: z
+            .string()
+            .max(MAX_EFFORT_INPUT)
+            .optional()
+            .describe("Worker effort level."),
           checkIds: z
-            .array(z.string().regex(new RegExp(VERIFICATION_CHECK_ID_PATTERN)))
+            .array(
+              z
+                .string()
+                .max(MAX_CHECK_ID_INPUT)
+                .regex(new RegExp(VERIFICATION_CHECK_ID_PATTERN)),
+            )
             .min(1)
             .max(MAX_VERIFICATION_SELECTION)
             .optional()
@@ -996,13 +1025,15 @@ export function createMcpServer(
             .array(
               z
                 .object({
-                  id: z.string(),
+                  id: z.string().max(MAX_ID_INPUT),
                   kind: z.enum(["worker", "generator"]),
-                  objective: z.string(),
-                  dependsOn: z.array(z.string()).max(MAX_STEP_DEPENDENCIES),
-                  providerId: z.string().optional(),
-                  effort: z.string().optional(),
-                  generatorId: z.string().optional(),
+                  objective: z.string().max(MAX_PLAN_OBJECTIVE),
+                  dependsOn: z
+                    .array(z.string().max(MAX_ID_INPUT))
+                    .max(MAX_STEP_DEPENDENCIES),
+                  providerId: z.string().max(MAX_ID_INPUT).optional(),
+                  effort: z.string().max(MAX_EFFORT_INPUT).optional(),
+                  generatorId: z.string().max(MAX_ID_INPUT).optional(),
                   writes: z
                     .array(z.string().min(1).max(200))
                     .min(1)
@@ -1080,13 +1111,19 @@ export function createMcpServer(
             .describe("Checkable acceptance criteria the steps must satisfy."),
           plannerId: z
             .string()
+            .max(MAX_ID_INPUT)
             .min(1)
             .describe("Configured API or local provider that proposes steps."),
           providerId: z
             .string()
+            .max(MAX_ID_INPUT)
             .optional()
             .describe("Configured worker provider for every step."),
-          effort: z.string().optional().describe("Worker effort level."),
+          effort: z
+            .string()
+            .max(MAX_EFFORT_INPUT)
+            .optional()
+            .describe("Worker effort level."),
         },
       },
       async (args) => {
@@ -1111,7 +1148,10 @@ export function createMcpServer(
         description:
           "Requests cancellation of an active run (planned, running or verifying) and returns JSON with its id and status. Work already applied in the run's isolated workspace stays there for inspection; nothing is published after cancellation.",
         inputSchema: {
-          runId: z.string().describe("ID of an active run in this project."),
+          runId: z
+            .string()
+            .max(MAX_ID_INPUT)
+            .describe("ID of an active run in this project."),
         },
       },
       async ({ runId }) => {
