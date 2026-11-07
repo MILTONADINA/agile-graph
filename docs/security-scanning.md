@@ -523,7 +523,9 @@ a branch, a short SHA or no `# v` comment. A Docker image must be pinned by
 reusable workflow from another repository is pinned like an action. With no
 YAML parser installed, the test fails closed: write each `uses:` in block form,
 unquoted, on its own line. A flow mapping (`{uses: ...}`), a quoted key or
-value, or the text `uses:` inside a `run:` script fails it. Dependabot's
+value, or the text `uses:` inside a `run:` script fails it, as do an explicit
+`?` key, an alias used as a key and a double-quoted key with a backslash
+escape anywhere in a workflow. Dependabot's
 grouped Actions updates keep the block form.
 
 The platform job then runs `node scripts/license-allowlist.mjs`, which reads
