@@ -90,6 +90,19 @@ what needs an action from you.
   the `publish` job only publishes the tarballs `verify` produced
   (GHSA-8v9m-r9vq-3c4f). No action is needed to upgrade.
 
+## 0.6.0
+
+- **MCP tool definitions changed.** Every free-text string input now states a
+  maximum length, so all tool definition hashes change. Pins in
+  `mcp.toolHashes` must be taken again with `graph-engine mcp-tools --hashes`,
+  as above. A client that sends a longer value now gets a schema refusal
+  naming the field and its limit.
+- **Draft pull requests may target `main`.** With `policy.publication` set to
+  `draft-pr`, `github.baseBranch` in `.graph/project.json` may now be `main`
+  or `master`, which 0.5.x refused. A base branch that is not a plain branch
+  name, for example one starting with `-`, is now refused before any push.
+  Check the value if you configured an unusual one.
+
 ## Run store
 
 The run store schema is version 5 in 0.2.0 and in the current `main`, so

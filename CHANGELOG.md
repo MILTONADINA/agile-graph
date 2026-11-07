@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-07
+
 ### Security
 
 - `@agile-graph/engine` now depends on `@fastify/static` 10.1.10, which uses
