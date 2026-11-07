@@ -62,11 +62,22 @@ export async function publishRun(
   if (config.policy.publication === "draft-pr") {
     if (!config.github)
       throw new Error(
-        "Configure the GitHub repository and dev base branch before opening PRs",
+        "Configure `github` (repository, remote and baseBranch) in .graph/project.json before opening PRs",
       );
-    if (["main", "master"].includes(config.github.baseBranch))
+    // #277: the base may be any branch, `main` included, since a draft PR
+    // still needs a person to merge it. Run branches are never `main` or
+    // `master` (assertPublication), so nothing is pushed to them.
+    const base = config.github.baseBranch;
+    if (
+      !/^[A-Za-z0-9_./-]+$/.test(base) ||
+      base.startsWith("-") ||
+      base.startsWith("refs/") ||
+      base.includes("..") ||
+      base.endsWith("/") ||
+      base.endsWith(".lock")
+    )
       throw new Error(
-        "This workspace uses dev as its integration branch; main/master PR targets are prohibited",
+        "Invalid pull request base branch; set `github.baseBranch` in .graph/project.json to a branch name",
       );
     if (
       !/^[A-Za-z0-9_./-]+$/.test(config.github.remote) ||
