@@ -2,13 +2,15 @@
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-06
+
 ### Security
 
 - The release workflow no longer runs dependency code in the job that can
   request an npm publish credential. Installing, building, testing, packing
   and the npm smoke test run in a `verify` job without `id-token: write`; the
   `publish` job, in the `npm` environment, only publishes the tarballs
-  `verify` uploaded.
+  `verify` uploaded (GHSA-8v9m-r9vq-3c4f).
 
 ## [0.5.1] - 2026-11-06
 
