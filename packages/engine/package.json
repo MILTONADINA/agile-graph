@@ -63,7 +63,7 @@
   },
   "dependencies": {
     "@agile-graph/contracts": "0.5.2",
-    "@fastify/static": "10.1.6",
+    "@fastify/static": "10.1.10",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "^24.0.0",
     "better-sqlite3": "13.0.3",
