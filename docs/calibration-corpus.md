@@ -10,7 +10,7 @@ Task category, complexity, and risk are explicitly proposed classifications.
 | ------------------------------------ | ------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `zero-api-budget`                    | Configuration validation / localized        | `6d7d67d`       | Existing guarded replay; independent labels and paired measurements missing                                                                                                                        |
 | `unmetered-decision-budget`          | Spend control / localized                   | `545e230`       | Isolated candidate verifier; measured worker outcomes still missing                                                                                                                                |
-| `cloud-graph-export`                 | Privacy boundary / multi-file               | `fd7081d`       | [Isolated known-history replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-11-07.json); no paired model calls                                                                      |
+| `cloud-graph-export`                 | Privacy boundary / multi-file               | `fd7081d`       | [Isolated known-history replay](../evaluation/isolated-cloud-graph-fixture-validation-2026-11-07b.json); no paired model calls                                                                     |
 | `retry-state-visibility`             | State consistency / localized               | `5703aba`       | [Pinned historical replay](../evaluation/retry-visibility-runtime/fixture-validation.json) plus opt-in arbitrary-source diagnostic; candidate-directed RPC is not independent algorithm provenance |
 | `verifier-infrastructure-stop`       | Failure classification / system integration | `06e1689`       | [Isolated service/virtual-setup replay](../evaluation/infrastructure-runtime/fixture-validation.json); no held-out runs                                                                            |
 | `linux-private-verification-mount`   | Container permissions / system integration  | `fc56768`       | Isolated candidate verifier plus native Linux private-mount permission proof                                                                                                                       |
@@ -31,7 +31,8 @@ replay after the minor and patch dependency group of that day, and the
 replay (`2026-10-26b`) after the move to zod 4, and the third
 (`2026-10-26c`) after `@vitest/coverage-v8` was added, and the 2026-11-07
 replay after the security updates of `@fastify/static` (with `glob` and
-`minimatch`) and `@hono/node-server` (#326); each is still a
+`minimatch`) and `@hono/node-server` (#326), and the 2026-11-07b
+replay after the dashboard moved to vite 8 and `@vitejs/plugin-react` 6; each is still a
 zero-model-call fixture check, not a new measured worker result.
 
 On 2026-10-11 the app generator, the template kit and the reference app were
