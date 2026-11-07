@@ -28,6 +28,9 @@ const NEEDS_BUILT_ENGINE = new Set([
   "evaluation/sealed/tests/aggregate-vault.test.mjs",
 ]);
 
+/** A test file of any kind, for when the spec links cannot be read (#333). */
+const TEST_FILE = /\.test\./;
+
 /**
  * The steps to run for the repository paths a change added or modified
  * (`changed`) and deleted (`deleted`), in order. A deleted path chooses
@@ -35,7 +38,8 @@ const NEEDS_BUILT_ENGINE = new Set([
  * it) but is never passed to a tool. Each step is { name, command, args,
  * cwd? }; cwd is relative to the repository. `linked` holds the test
  * files a spec names on a `- Test:` line: renaming or removing a test in
- * one breaks spec-check without touching specs/ (#330).
+ * one breaks spec-check without touching specs/ (#330). Null means the
+ * links could not be read: every touched test file counts as linked (#333).
  */
 export function planPreflight(changed, deleted = [], linked = linkedTests()) {
   const files = [...new Set(changed)].filter(Boolean).sort();
@@ -100,7 +104,7 @@ export function planPreflight(changed, deleted = [], linked = linkedTests()) {
     touched.some(
       (file) =>
         file.startsWith("specs/") ||
-        linked.has(file) ||
+        (linked === null ? TEST_FILE.test(file) : linked.has(file)) ||
         (file.startsWith(ENGINE) && file.includes("/tests/")),
     )
   ) {
@@ -128,27 +132,43 @@ export function linkedTestFiles(specTexts) {
   return files;
 }
 
-function linkedTests() {
-  let specs;
-  try {
-    specs = execFileSync("git", ["ls-files", "-z", "--", "specs/*.md"], {
+/**
+ * The spec-linked test files, or null when the specs cannot be listed or
+ * read. Null makes planPreflight treat every touched test file as linked,
+ * so a failure here runs spec-check instead of silently skipping it (#333).
+ */
+export function linkedTests({
+  listSpecs = () =>
+    execFileSync("git", ["ls-files", "-z", "--", "specs/*.md"], {
       cwd: root,
       encoding: "utf8",
     })
       .split("\0")
-      .filter(Boolean);
-  } catch {
-    return new Set();
+      .filter(Boolean),
+  readSpec = (file) => readFileSync(path.join(root, file), "utf8"),
+  warn = (message) => console.error(message),
+} = {}) {
+  let specs;
+  try {
+    specs = listSpecs();
+  } catch (error) {
+    warn(
+      `Preflight: cannot list specs/*.md (${error?.message ?? String(error)}); every changed test file runs spec-check.`,
+    );
+    return null;
   }
-  return linkedTestFiles(
-    specs.map((file) => {
-      try {
-        return readFileSync(path.join(root, file), "utf8");
-      } catch {
-        return "";
-      }
-    }),
-  );
+  const texts = [];
+  for (const file of specs) {
+    try {
+      texts.push(readSpec(file));
+    } catch (error) {
+      warn(
+        `Preflight: cannot read ${file} (${error?.message ?? String(error)}); every changed test file runs spec-check.`,
+      );
+      return null;
+    }
+  }
+  return linkedTestFiles(texts);
 }
 
 /** Paths a contracts change can break beyond the related engine tests. */

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `npm run preflight` no longer skips `spec-check` without a word when it cannot
+  list or read `specs/*.md`. It prints a warning naming the error and runs
+  `spec-check` for any changed or deleted test file (#333).
+
 ## [0.5.2] - 2026-11-06
 
 ### Security

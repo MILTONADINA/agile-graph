@@ -62,6 +62,9 @@ runs it, and plans can be created straight from a ready spec.
   - Test: scripts/preflight.test.mjs :: linked test files are read the way spec-check reads them
   - Test: scripts/preflight.test.mjs :: a change to scripts/npm-packages.test.mjs runs spec-check, because the repository's specs link it
   - Test: scripts/preflight.test.mjs :: a renamed file counts as its old path deleted and its new path added
+- AC13: If `npm run preflight` cannot list `specs/*.md` or read one of them, then the system shall print a warning naming the error and shall run `spec-check` for any added, changed or deleted test file, instead of silently planning no `spec-check` (#333).
+  - Test: scripts/preflight.test.mjs :: specs that cannot be listed or read run spec-check for a changed test file and say why
+  - Test: scripts/preflight.test.mjs :: readable specs give the linked files without a warning
 
 ## Security considerations
 

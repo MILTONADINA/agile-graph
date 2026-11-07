@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   changedFiles,
   linkedTestFiles,
+  linkedTests,
   planPreflight as planWithLinks,
   preflightNotes,
 } from "./preflight.mjs";
@@ -251,4 +252,66 @@ test("a renamed file counts as its old path deleted and its new path added", () 
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+});
+
+test("specs that cannot be listed or read run spec-check for a changed test file and say why", () => {
+  const warnings = [];
+  const warn = (message) => warnings.push(message);
+  const unlisted = linkedTests({
+    listSpecs: () => {
+      throw new Error("git failed");
+    },
+    warn,
+  });
+  const unread = linkedTests({
+    listSpecs: () => ["specs/a.md"],
+    readSpec: () => {
+      throw new Error("EACCES");
+    },
+    warn,
+  });
+  const partly = linkedTests({
+    listSpecs: () => ["specs/a.md", "specs/b.md"],
+    readSpec: (file) => {
+      if (file === "specs/b.md") throw "denied";
+      return "  - Test: scripts/x.test.mjs :: does x\n";
+    },
+    warn,
+  });
+  assert.equal(unlisted, null);
+  assert.equal(unread, null);
+  assert.equal(partly, null);
+  assert.equal(warnings.length, 3);
+  assert.match(warnings[0], /cannot list specs\/\*\.md \(git failed\)/);
+  assert.match(warnings[1], /cannot read specs\/a\.md \(EACCES\)/);
+  assert.match(warnings[2], /cannot read specs\/b\.md \(denied\)/);
+  assert.ok(
+    names(
+      planWithLinks(["packages/engine/fixtures/x.test.json"], [], null),
+    ).includes("spec-check"),
+  );
+  assert.ok(
+    names(planWithLinks(["scripts/sbom.test.mjs"], [], null)).includes(
+      "spec-check",
+    ),
+  );
+  assert.ok(
+    names(planWithLinks([], ["scripts/old.test.mjs"], null)).includes(
+      "spec-check",
+    ),
+  );
+  assert.deepEqual(names(planWithLinks(["docs/outcomes.md"], [], null)), [
+    "format",
+  ]);
+});
+
+test("readable specs give the linked files without a warning", () => {
+  const warnings = [];
+  const linked = linkedTests({
+    listSpecs: () => ["specs/a.md"],
+    readSpec: () => "  - Test: scripts/x.test.mjs :: does x\n",
+    warn: (message) => warnings.push(message),
+  });
+  assert.deepEqual([...linked], ["scripts/x.test.mjs"]);
+  assert.deepEqual(warnings, []);
 });
