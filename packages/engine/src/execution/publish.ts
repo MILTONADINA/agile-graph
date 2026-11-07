@@ -73,8 +73,9 @@ export async function publishRun(
       base.startsWith("-") ||
       base.startsWith("refs/") ||
       base.includes("..") ||
-      base.endsWith("/") ||
-      base.endsWith(".lock")
+      base
+        .split("/")
+        .some((part) => !part || part.startsWith(".") || part.endsWith(".lock"))
     )
       throw new Error(
         "Invalid pull request base branch; set `github.baseBranch` in .graph/project.json to a branch name",
