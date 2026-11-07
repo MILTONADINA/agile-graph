@@ -15,11 +15,24 @@ const SHA_REF = /^[\w.-]+\/[\w./-]+@[0-9a-f]{40} # v\d[\w.-]*$/;
 const DIGEST_REF = /^docker:\/\/[\w./:-]+@sha256:[0-9a-f]{64}$/;
 const BLOCK = /^\s*(?:-\s+)?uses:\s(\S.*?)\s*$/;
 const MENTION = /(?:^|[\s{,[])["']?uses["']?\s*:/;
+// YAML forms that can spell a key without the plain text `uses`: an explicit
+// `? key`, a quoted key with an escape (`"us\u0065s":`) and an alias used as a
+// key (`*name :`). No workflow needs them, so any of them anywhere is refused.
+const HIDDEN_KEY = [
+  /^\s*(?:-\s+)?\?(?:\s|$)/,
+  /"(?:[^"\\]|\\.)*\\(?:[^"\\]|\\.)*"\s*:/,
+  /(?:^|[\s{,[-])\*[^\s,{}[\]]+\s*:/,
+];
 
 export function unpinnedUses(text) {
   const problems = [];
   text.split(/\r?\n/).forEach((line, index) => {
-    if (/^\s*#/.test(line) || !MENTION.test(line)) return;
+    if (/^\s*#/.test(line)) return;
+    if (HIDDEN_KEY.some((form) => form.test(line))) {
+      problems.push(`${index + 1}: ${line.trim()}`);
+      return;
+    }
+    if (!MENTION.test(line)) return;
     const ref = BLOCK.exec(line)?.[1];
     const ok =
       ref !== undefined &&
@@ -89,6 +102,11 @@ test("the check refuses uses forms it does not read", () => {
     `      - uses: 'actions/checkout@${sha}' # v7.0.1`,
     "      - name: x\n        with: {uses: actions/checkout@v4}",
     "          echo uses: actions/checkout@v4",
+    '      - "us\\u0065s": actions/checkout@v4',
+    '      - "\\x75ses": actions/checkout@v4',
+    "      - ? uses\n        : actions/checkout@v4",
+    "      - ?\n          uses\n        : actions/checkout@v4",
+    "      - *step_key : actions/checkout@v4",
   ]) {
     assert.ok(unpinnedUses(`${line}\n`).length >= 1, `refused: ${line}`);
   }
