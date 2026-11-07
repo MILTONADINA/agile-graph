@@ -4,10 +4,12 @@
 
 ### Security
 
-- CI now fails when a workflow `uses:` line names an action by tag, branch or
-  short SHA, or has no `# v<version>` comment. Every action was already pinned
-  to a full commit SHA; `scripts/action-pins.test.mjs` keeps it that way, and
-  the two `mcp-native.yml` steps without a version comment now have one (#290).
+- CI now fails when a workflow or composite action names an action by tag,
+  branch or short SHA, or without a `# v<version>` comment, and when a `uses`
+  key is written in a form the check cannot read (flow style, quoted, inside a
+  script). Every action was already pinned to a full commit SHA;
+  `scripts/action-pins.test.mjs` keeps it that way, and the two `mcp-native.yml`
+  steps without a version comment now have one (#290).
 
 ### Fixed
 

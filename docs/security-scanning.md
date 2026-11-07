@@ -516,9 +516,15 @@ to every workflow's `npm rebuild` line.
 Every action a workflow runs is pinned to a full commit SHA with its version in
 a comment, for example `actions/checkout@<40-hex SHA> # v7.0.1`, so a tag that
 moves cannot change the code that runs with a job token.
-`scripts/action-pins.test.mjs` fails for a `uses:` line that names a tag, a
-branch, a short SHA or no `# v` comment; local `./` actions and reusable
-workflows are exempt. Dependabot's grouped Actions updates keep this form.
+`scripts/action-pins.test.mjs` reads `.github/workflows/` and any composite
+action under `.github/actions/`, and fails for a `uses:` line that names a tag,
+a branch, a short SHA or no `# v` comment. A Docker image must be pinned by
+`@sha256:` digest. Local (`./`) actions and reusable workflows are exempt; a
+reusable workflow from another repository is pinned like an action. With no
+YAML parser installed, the test fails closed: write each `uses:` in block form,
+unquoted, on its own line. A flow mapping (`{uses: ...}`), a quoted key or
+value, or the text `uses:` inside a `run:` script fails it. Dependabot's
+grouped Actions updates keep the block form.
 
 The platform job then runs `node scripts/license-allowlist.mjs`, which reads
 `package-lock.json` offline and exits 1 for any production (non-dev) package

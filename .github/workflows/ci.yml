@@ -85,7 +85,7 @@ jobs:
         run: |
           node --test scripts/coverage-floor.test.mjs
           node scripts/coverage-floor.mjs
-      - name: Branch-protection policy
+      - name: Branch-protection policy and action pins
         run: node --test scripts/branch-protection.test.mjs scripts/action-pins.test.mjs
       - name: Secret-scan CI job
         run: node --test scripts/ci-gitleaks.test.mjs
