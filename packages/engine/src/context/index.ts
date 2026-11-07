@@ -934,12 +934,21 @@ export class ContextEngine {
       .toLowerCase()
       .replaceAll("\u03c2", "\u03c3")
       .replace(/[\\%_]/g, "\\$&");
-    return (
-      await this.db.all<Payload>(
+    let rows: Payload[];
+    try {
+      rows = await this.db.all<Payload>(
         "SELECT payload FROM symbols WHERE snapshot_id=? AND graph_fold(name) LIKE ? ESCAPE '\\' ORDER BY name LIMIT 100",
         [snapshot.id, `%${escaped}%`],
-      )
-    )
+      );
+    } catch (error) {
+      // SQLite's own text names its internals; callers get a fixed message (#296).
+      if (/pattern too complex/i.test(String((error as Error)?.message)))
+        throw new Error("The symbol search query is too long; shorten it.", {
+          cause: error,
+        });
+      throw error;
+    }
+    return rows
       .map((row) => json<CodeSymbol>(row))
       .filter((symbol) => !this.excluded(symbol.source.path));
   }
@@ -1544,7 +1553,7 @@ export class ContextEngine {
     const validUntil = parseMemoryExpiry(input);
     if (Date.parse(validUntil) <= this.now())
       throw new Error(
-        `The memory expiry ${validUntil} has already passed; give a later --valid-until`,
+        `The memory expiry ${validUntil} has already passed; give a later expiry (validUntil, or --valid-until on the command line)`,
       );
     return validUntil;
   }

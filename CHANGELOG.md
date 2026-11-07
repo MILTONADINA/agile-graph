@@ -23,6 +23,13 @@
 
 ### Fixed
 
+- MCP tools state a maximum length on every free-text string input (IDs 256,
+  `symbol_search` queries 512, `context_get` queries and step objectives 4000),
+  so an over-length input is refused without being echoed back. A symbol
+  search that SQLite refuses returns a fixed message instead of SQLite's text,
+  and a refused memory expiry names `validUntil`. Tool definition hashes
+  change, so pins in `mcp.toolHashes` must be taken again with
+  `graph-engine mcp-tools --hashes` (#296).
 - `npm run preflight` no longer skips `spec-check` without a word when it cannot
   list or read `specs/*.md`. It prints a warning naming the error and runs
   `spec-check` for any changed or deleted test file (#333).
@@ -209,7 +216,7 @@
   to the worker as feedback unless a person listed the path in
   `policy.approvedVerificationConfigPaths`. Scripts a test script reaches in
   another workspace package (`--workspace`, `--prefix`, `--filter`, `yarn
-  workspace`) are gated too, option values such as `--script-shell` are
+workspace`) are gated too, option values such as `--script-shell` are
   skipped when finding the script, and an invocation that cannot be resolved
   gates every script of the manifests.
   The `pyproject.toml` pytest settings are read as TOML with the key path
