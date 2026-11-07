@@ -102,7 +102,7 @@ jobs:
       - name: Publish contracts, then the engine that depends on it
         run: |
           for prefix in agile-graph-contracts- agile-graph-engine-; do
-            tarball=$(ls tarballs/"$prefix"[0-9]*.tgz)
+            tarball=$(ls ./tarballs/"$prefix"[0-9]*.tgz)
             name=$(tar -xOzf "$tarball" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0)).name")
             version=$(tar -xOzf "$tarball" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0)).version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
