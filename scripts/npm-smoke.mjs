@@ -13,6 +13,7 @@
 // HOME points into a temporary directory, so nothing is written to the
 // caller's own data directory.
 import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -180,7 +181,8 @@ try {
       );
   }
   // CommonJS and node10 consumers resolve types from top-level types (#284).
-  // skipLibCheck stays on until the engine's declarations need no @types/node (#286).
+  // skipLibCheck stays on here: bundler and node10 consumers still meet Fastify
+  // namespace errors in dist/server.d.ts, which #286 does not cover.
   await writeFile(
     path.join(app, "tsconfig.json"),
     JSON.stringify({
@@ -201,6 +203,36 @@ try {
   run(
     process.execPath,
     [path.join(repository, "node_modules/typescript/bin/tsc"), "-p", "."],
+    app,
+  );
+  // A nodenext consumer checks every declaration it loads (skipLibCheck off) and
+  // installs no @types package itself: the engine brings @types/node (#286).
+  if (!existsSync(path.join(app, "node_modules/@types/node/package.json")))
+    throw new Error("installing the engine did not bring @types/node");
+  await writeFile(
+    path.join(app, "tsconfig.nodenext.json"),
+    JSON.stringify({
+      compilerOptions: {
+        module: "nodenext",
+        moduleResolution: "nodenext",
+        strict: true,
+        noEmit: true,
+        skipLibCheck: false,
+      },
+      files: ["nodenext.mts"],
+    }),
+  );
+  await writeFile(
+    path.join(app, "nodenext.mts"),
+    'import { DEFAULT_POLICY } from "@agile-graph/contracts";\nimport { GraphEngine } from "@agile-graph/engine";\nexport const used = [DEFAULT_POLICY, GraphEngine];\n',
+  );
+  run(
+    process.execPath,
+    [
+      path.join(repository, "node_modules/typescript/bin/tsc"),
+      "-p",
+      "tsconfig.nodenext.json",
+    ],
     app,
   );
   const printed = run(cli, ["--version"], app).trim();
