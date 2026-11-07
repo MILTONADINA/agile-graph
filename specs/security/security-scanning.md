@@ -135,9 +135,10 @@ Teams need security tools chosen for what their repository actually contains, wi
   - Test: packages/engine/tests/container-removal.test.ts :: a scanner that may survive fails the scan by name when $label
   - Test: packages/engine/tests/container-removal.test.ts :: a scanner timeout with confirmed removal is recorded per tool and the scan continues
   - Test: packages/engine/tests/container-removal.test.ts :: a database download that may survive fails by name and drops the freshness stamp when $label
-- AC35: Every `uses:` line in `.github/workflows/*.yml` that names an action outside this repository shall pin it to a full 40-character commit SHA followed by a `# v<version>` comment, and CI shall fail when one names a tag, a branch, a short SHA or no version comment. A local action or reusable workflow (`./`) needs no pin. (#290)
+- AC35: Every `uses:` in `.github/workflows/` or `.github/actions/` that names an action or reusable workflow outside this repository shall pin it to a full 40-character commit SHA followed by a `# v<version>` comment, or a Docker image by `@sha256:` digest, and CI shall fail when one names a tag, a branch, a short SHA or no version comment. A local (`./`) action or reusable workflow needs no pin. A `uses` key the check cannot read as an unquoted block-form line (a flow mapping, a quoted key or value, text in a script) shall fail too. (#290)
   - Test: scripts/action-pins.test.mjs :: every workflow uses line pins a full SHA with a version comment
   - Test: scripts/action-pins.test.mjs :: the check refuses tags, short SHAs, branches and missing comments
+  - Test: scripts/action-pins.test.mjs :: the check refuses uses forms it does not read
   - Test: scripts/action-pins.test.mjs :: the check accepts pinned, nested and local references
 
 ## Security considerations
