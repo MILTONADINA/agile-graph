@@ -74,6 +74,14 @@ what needs an action from you.
   `validFrom`. Pins in `mcp.toolHashes` must be taken again with
   `graph-engine mcp-tools --hashes`, as above.
 
+## 0.5.1
+
+- **The verification-config gate flags more `npm-run-all` command lines.** A
+  `run-s`, `run-p` or `npm-run-all` script that uses an overwrite option such
+  as `--pkg:key value`, or an option the gate does not know, is now treated as
+  a changed test target and needs approval, where 0.5.0 could pass it
+  unflagged (GHSA-6g95-x523-3j5c). No configuration change is needed.
+
 ## Run store
 
 The run store schema is version 5 in 0.2.0 and in the current `main`, so
