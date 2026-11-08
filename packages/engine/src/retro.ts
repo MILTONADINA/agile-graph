@@ -488,12 +488,14 @@ export function runRetro(
       humanWait = isPersonReason(waitReason) ? waitReason : "graph";
     if (event.type === "attempt.started") attempts++;
     // A step is ready once its dependencies applied; its wait ends when it
-    // starts. Only the step's kind and minutes are kept.
+    // starts. Only the step's kind and minutes are kept. A stop ends every
+    // open wait, and a resumed run announces its ready steps again, so time
+    // stopped is never counted as wait.
+    if (event.type === "run.stopped") readySteps.clear();
     if (
       event.type === "dag.step.ready" &&
       step &&
-      (event.data.kind === "worker" || event.data.kind === "generator") &&
-      !readySteps.has(step)
+      (event.data.kind === "worker" || event.data.kind === "generator")
     )
       readySteps.set(step, { kind: event.data.kind, at });
     if (event.type === "dag.step.started" && readySteps.has(step)) {
