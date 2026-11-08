@@ -478,14 +478,25 @@ describe("Java analyzer memory sampling", () => {
         broken.unwatch();
       }
 
-      // A child that has exited but is not yet reaped (ps reports a zombie)
-      // is finished, not unreadable: it must not be killed for the samples
-      // taken while the exit is still on its way to this process.
+      // A child that has exited but is not yet reaped (ps reports a zero
+      // reading) is not unreadable: it must not be killed for the samples
+      // taken while the exit is still on its way to this process. The watch
+      // goes on until the analyzer stops it.
       const exited = watch(async () => null);
       await vi.advanceTimersByTimeAsync(2000);
       expect(exited.onOverLimit).not.toHaveBeenCalled();
-      expect(exited.calls).toHaveBeenCalledTimes(1);
+      expect(exited.calls.mock.calls.length).toBeGreaterThan(10);
       exited.unwatch();
+
+      // A zero reading does not lift the cap: a live child that read zero
+      // (fully swapped out) and then grows past the limit is still stopped.
+      let swapped: number | null = null;
+      const resumed = watch(async () => swapped);
+      await vi.advanceTimersByTimeAsync(200);
+      swapped = 1001;
+      await vi.advanceTimersByTimeAsync(200);
+      expect(resumed.onOverLimit).toHaveBeenCalledTimes(1);
+      resumed.unwatch();
 
       // An actual reading over the limit stops the analyzer once.
       let rss = 900;
