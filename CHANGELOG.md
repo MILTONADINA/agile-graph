@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- `graph-engine retro` records how long each multi-step plan step was ready but
+  waiting for a free slot: its kind and minutes, with no step ID or content.
+  The run record gives the waits and their median, and the summary gives the
+  step count, total minutes and median per step. Runs from before this read
+  as no waits. #365.
+
+### Changed
+
+- A multi-step plan starts each step as soon as its own dependencies have
+  applied, with at most `maxParallel` generations running, instead of waiting
+  for each whole wave to settle. Patches still apply one at a time, in plan
+  order among the proposals waiting to apply, with the same checkpoint and
+  reconciliation guarantees. A failed step starts nothing new; the steps
+  already running that do not depend on it still apply, and the run then fails
+  with the first failure's error. A sibling that finishes first now applies
+  before a slower sibling's proposal exists, so a colliding or invalid
+  proposal is refused before its own patch is written, not before any patch
+  is written. #365.
+
 ### Fixed
 
 - The Java binding analyzer no longer drops its results under machine load. A
