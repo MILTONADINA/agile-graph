@@ -1927,7 +1927,7 @@ cli
 cli
   .command("retro")
   .description(
-    "Look back at delivery: per run and in total, minutes in worker, verification, review and security phases, time stopped and waiting, retries that repeated the previous attempt's failure or left the snapshot unchanged, the first-pass verification rate, and stop reasons as kinds. Read-only local analysis: counts, minutes, kinds and run IDs only; no MCP tool returns it",
+    "Look back at delivery: per run and in total, minutes in worker, verification, review and security phases, time stopped and waiting, retries that repeated the previous attempt's failure or left the snapshot unchanged, the first-pass verification rate, stop reasons as kinds, stops and waits handed to the person by reason (approval, credential, spending, decision) against those the graph schedules itself, and re-check cycles (a gate repeated on the same step) with their minutes. Read-only local analysis: counts, minutes, kinds and run IDs only; no MCP tool returns it",
   )
   .option("--since <date>", "Only runs created on or after this ISO 8601 date")
   .action((options) =>

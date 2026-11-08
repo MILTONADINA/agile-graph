@@ -9,9 +9,24 @@
   that closes the whole defect class, keeping the earlier cases as regression
   tests. A third consecutive repeat stops the run as blocked, naming the
   signature. Each repeat records the minutes of the rounds that raised it.
+- `graph-engine retro` counts re-check cycles per run and in total: a
+  verification, review or security scan of a step that an earlier scan of the
+  same phase in that run already covered. Each finished cycle's minutes are
+  kept with its phase, and the totals give the cycles, their minutes and the
+  median minutes per cycle. A cycle a stop cut short is counted without
+  minutes. Records from before these fields read as zero. #164.
+- The retro's report type can carry step estimates, printed as "<state after
+  the step>. after this step: N steps remain before <goal>"; an estimate
+  without a state, a goal or a whole count is refused. The engine prints no
+  time estimate yet, so the output lists none. #164.
 
 ### Changed
 
+- The person reason `owner-decision` is renamed `decision`, the closed set now
+  being `approval`, `credential`, `spending` and `decision`. `retro` output and
+  `docs/outcomes.md` use the new name. #163.
+- A stop with no reason, or whose message names no known kind, counts as
+  graph-owned instead of being left out of the retro. #163.
 - The dashboard builds with vite 8 and @vitejs/plugin-react 6.
 
 ### Fixed
