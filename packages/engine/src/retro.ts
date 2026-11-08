@@ -87,6 +87,15 @@ export interface RecheckCycle {
   minutes: number;
 }
 
+/**
+ * How long one multi-step plan step was ready but not started: its kind and
+ * minutes only, never its ID or content. Zero when a slot was free at once.
+ */
+export interface StepWait {
+  kind: "worker" | "generator";
+  minutes: number;
+}
+
 /** One run's delivery record: counts, minutes, kinds and its ID only. */
 export interface RunRetro {
   runId: string;
@@ -108,6 +117,15 @@ export interface RunRetro {
   recheckTotalMinutes?: number;
   /** Median minutes per finished re-check cycle of this run; zero for none. */
   recheckMedianMinutes?: number;
+  /**
+   * Each multi-step plan step's wait, from becoming ready (its dependencies
+   * applied) to starting, in start order. Empty for runs without steps.
+   */
+  stepWaits?: StepWait[];
+  /** Minutes of this run's step waits, summed. */
+  stepWaitTotalMinutes?: number;
+  /** Median minutes per step wait of this run; zero for none. */
+  stepWaitMedianMinutes?: number;
   /** Worker attempts started, counting the attempts of each resume. */
   attempts: number;
   verifications: number;
@@ -166,6 +184,8 @@ export interface RetroSummary {
     minutes: number;
     medianPerCycle: number;
   };
+  /** Multi-step plan steps' waits to start, across the runs. */
+  stepWait: { steps: number; minutes: number; medianPerStep: number };
   /** The estimates the caller supplied, each stated as its text. */
   estimates: string[];
   perRun: RunRetro[];
@@ -376,6 +396,9 @@ export function runRetro(
   // Opening event and step keys a span has already opened in this run.
   const opened = new Set<string>();
   const recheckMinutes: RecheckCycle[] = [];
+  // Steps ready and not yet started, by ID, with their kind and when they became ready.
+  const readySteps = new Map<string, { kind: StepWait["kind"]; at: number }>();
+  const stepWaits: StepWait[] = [];
   let recheckCycles = 0;
   // Only a span its finish event closed counts as a finished cycle.
   const close = (key: string, at: number, completed: boolean) => {
@@ -464,6 +487,23 @@ export function runRetro(
     if (waitReason)
       humanWait = isPersonReason(waitReason) ? waitReason : "graph";
     if (event.type === "attempt.started") attempts++;
+    // A step is ready once its dependencies applied; its wait ends when it
+    // starts. Only the step's kind and minutes are kept.
+    if (
+      event.type === "dag.step.ready" &&
+      step &&
+      (event.data.kind === "worker" || event.data.kind === "generator") &&
+      !readySteps.has(step)
+    )
+      readySteps.set(step, { kind: event.data.kind, at });
+    if (event.type === "dag.step.started" && readySteps.has(step)) {
+      const ready = readySteps.get(step)!;
+      readySteps.delete(step);
+      stepWaits.push({
+        kind: ready.kind,
+        minutes: round(Math.max(0, at - ready.at) / 60_000),
+      });
+    }
     // A multi-step plan's first worker attempts start as steps.
     if (
       event.type === "dag.step.started" &&
@@ -539,6 +579,13 @@ export function runRetro(
     recheckMinutes: cycles,
     recheckTotalMinutes: round(cycleTotals.total),
     recheckMedianMinutes: round(cycleTotals.median),
+    stepWaits,
+    stepWaitTotalMinutes: round(
+      stepWaits.reduce((total, wait) => total + wait.minutes, 0),
+    ),
+    stepWaitMedianMinutes: round(
+      medianOf(stepWaits.map((wait) => wait.minutes)),
+    ),
     deferredToPerson: Object.values(deferredByReason).reduce(
       (total, n) => total + n,
       0,
@@ -652,6 +699,20 @@ export function summarizeRetro(
       cycles: sum((retro) => retro.recheckCycles ?? 0),
       minutes: round(cycleTotals.total),
       medianPerCycle: round(cycleTotals.median),
+    },
+    stepWait: {
+      steps: perRun.reduce(
+        (total, retro) => total + (retro.stepWaits?.length ?? 0),
+        0,
+      ),
+      minutes: sum((retro) => retro.stepWaitTotalMinutes ?? 0),
+      medianPerStep: round(
+        medianOf(
+          perRun.flatMap((retro) =>
+            (retro.stepWaits ?? []).map((wait) => wait.minutes),
+          ),
+        ),
+      ),
     },
     estimates: (options.estimates ?? []).map(stepEstimateText),
     perRun,

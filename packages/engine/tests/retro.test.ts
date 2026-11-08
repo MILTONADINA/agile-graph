@@ -324,6 +324,37 @@ describe("delivery retro", () => {
     expect(retro.minutes).toMatchObject({ worker: 6, waiting: 4 });
   });
 
+  it("shows how many minutes each step was ready before it started, without its ID", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const retro = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      step(event(0, "dag.step.ready", { kind: "worker" }), "step-private-zq"),
+      step(event(0, "dag.step.ready", { kind: "generator" }), "two"),
+      step(
+        event(0, "dag.step.started", { providerId: "local" }),
+        "step-private-zq",
+      ),
+      step(event(2, "dag.step.started", { providerId: null }), "two"),
+      step(event(3, "dag.step.completed"), "step-private-zq"),
+      step(event(5, "dag.step.completed"), "two"),
+      event(6, "run.succeeded"),
+    ]);
+    expect(retro.stepWaits).toEqual([
+      { kind: "worker", minutes: 0 },
+      { kind: "generator", minutes: 2 },
+    ]);
+    expect(retro.stepWaitTotalMinutes).toBe(2);
+    expect(retro.stepWaitMedianMinutes).toBe(1);
+    expect(summarizeRetro([retro]).stepWait).toEqual({
+      steps: 2,
+      minutes: 2,
+      medianPerStep: 1,
+    });
+    expect(JSON.stringify(summarizeRetro([retro]))).not.toContain(
+      "step-private-zq",
+    );
+  });
+
   it("tells unnamed checks with the same command in different images apart", () => {
     const failingIn = (image: string) => [
       { argv: ["npm", "test"], image, code: 1, stdout: "", stderr: "" },
