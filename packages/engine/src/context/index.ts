@@ -126,8 +126,8 @@ const BUILTIN_EXCLUSIONS = [
 ];
 // One conservative estimate for every token budget; see tokens.ts.
 export { estimateTokens };
-// Preserve portable path identity while still allowing .graph/project.json as
-// local context; worker policy separately protects execution-control metadata.
+// Preserve portable path identity. The .graph state folder is kept out of the
+// index by excludedFromIndex; worker policy separately protects execution-control metadata.
 const safePath = (path: string): boolean =>
   !!path &&
   !isAbsolute(path) &&
@@ -189,6 +189,9 @@ export function excludedFromIndex(
   )
     return true;
   const segments = path.split("/");
+  // The .graph state folder holds project state, private evidence and caches,
+  // never indexed source. Committed knowledge packs stay indexed.
+  if (!pack && segments.includes(".graph")) return true;
   const prefixes = segments.map((_, index) =>
     segments.slice(0, index + 1).join("/"),
   );

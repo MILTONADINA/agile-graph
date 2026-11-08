@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { DEFAULT_POLICY } from "@agile-graph/contracts";
-import { ContextEngine } from "../src/context/index.js";
+import { ContextEngine, excludedFromIndex } from "../src/context/index.js";
 import { SUMMARY_VERSION } from "../src/context/intelligence.js";
 import { parseFile } from "../src/context/parser.js";
 import { SEMANTIC_VERSION } from "../src/context/semantic.js";
@@ -289,6 +289,45 @@ describe("local context indexing", () => {
         }),
       ).rejects.toThrow("source");
     }
+  });
+
+  it("skips the .graph state folder but keeps committed knowledge packs", async () => {
+    const { engine } = await fixture({
+      "src/app.ts": "export function appFunction() {}",
+      ".graph/project.json": '{"name":"toy"}',
+      ".graph/decisions.json": '{"graphStateCanary":true}',
+      ".graph/knowledge/memory.json": '{"graphMemoryCanary":true}',
+      ".graph/knowledge-packs/toy.md": "# Toy pack\n\nToy documentation.\n",
+    });
+    const snapshot = await engine.index();
+    expect(snapshot.fileCount).toBe(2);
+    expect(await engine.searchSymbols("appFunction", snapshot.id)).toHaveLength(
+      1,
+    );
+    const packet = await engine.getContext({
+      query: "toy documentation appFunction",
+      snapshotId: snapshot.id,
+    });
+    expect(
+      packet.items.every(
+        (item) =>
+          !item.source?.path.startsWith(".graph/") ||
+          item.source.path.startsWith(".graph/knowledge-packs/"),
+      ),
+    ).toBe(true);
+    expect(packet.items.map((item) => item.source?.path)).toContain(
+      ".graph/knowledge-packs/toy.md",
+    );
+    expect(JSON.stringify(packet)).not.toContain("graphStateCanary");
+    expect(JSON.stringify(packet)).not.toContain("graphMemoryCanary");
+    expect(excludedFromIndex(".graph/project.json", DEFAULT_POLICY)).toBe(true);
+    expect(
+      excludedFromIndex(".graph", DEFAULT_POLICY, { directory: true }),
+    ).toBe(false);
+    expect(
+      excludedFromIndex(".graph/knowledge-packs/toy.md", DEFAULT_POLICY),
+    ).toBe(false);
+    expect(excludedFromIndex("pkg/.graph/x.json", DEFAULT_POLICY)).toBe(true);
   });
 
   it("does not execute configured fsmonitor hooks during read-only indexing", async () => {

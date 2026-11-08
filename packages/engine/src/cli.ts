@@ -51,6 +51,8 @@ import {
 } from "./feedback.js";
 import {
   automaticFeedbackNotice,
+  automaticFeedbackNoticeRecorded,
+  recordAutomaticFeedbackNotice,
   readAutomaticFeedbackSettings,
   setAutomaticFeedbackEnabled,
   submitAutomaticFeedback,
@@ -502,6 +504,9 @@ cli
         : {}),
     });
     print(project);
+    console.error(
+      "Commit .graph/project.json. Keep .graph/local/, .graph/cache/ and .graph/workspaces/ out of Git: they hold private evidence, caches and run workspaces.",
+    );
     if (options.cloudMcp)
       console.error(
         `Cloud MCP clients may now receive these files and their symbols and graph edges: ${project.policy.exportPaths.join(", ")}. No cloud or installed worker is permitted until you add it with provider-enable.`,
@@ -2693,7 +2698,10 @@ let automaticFeedbackNoticeShown = false;
 function notifyAutomaticFeedback(message: string): void {
   if (message === automaticFeedbackNotice()) {
     if (automaticFeedbackNoticeShown) return;
+    // Once per user data directory: a marker records the first print.
+    if (automaticFeedbackNoticeRecorded()) return;
     automaticFeedbackNoticeShown = true;
+    recordAutomaticFeedbackNotice();
   }
   process.stderr.write(message.endsWith("\n") ? message : `${message}\n`);
 }

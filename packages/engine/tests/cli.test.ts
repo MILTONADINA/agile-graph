@@ -504,6 +504,28 @@ describe("command line", () => {
     });
   }, 120_000);
 
+  it("says on stderr which .graph files to commit and which to keep out of Git", async () => {
+    const { root, graph } = await project();
+    const init = await graph("init");
+    expect(init.code).toBe(0);
+    // stdout stays the JSON project document.
+    expect(() => JSON.parse(init.stdout)).not.toThrow();
+    const guidance = init.stderr
+      .split("\n")
+      .filter((line) => line.includes("Commit .graph/project.json"));
+    expect(guidance).toHaveLength(1);
+    expect(guidance[0]).toContain(
+      "Keep .graph/local/, .graph/cache/ and .graph/workspaces/ out of Git",
+    );
+    // init writes no .gitignore inside .graph or at the project root.
+    await expect(
+      readFile(path.join(root, ".graph/.gitignore"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      readFile(path.join(root, ".gitignore"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  }, 120_000);
+
   it("explains an unusable worker, records the difficulty kind privately, and never prompts without a person", async () => {
     const { graph } = await project();
     await graph("init");

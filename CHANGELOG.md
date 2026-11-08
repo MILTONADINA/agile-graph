@@ -28,6 +28,18 @@
 - A stop with no reason, or whose message names no known kind, counts as
   graph-owned instead of being left out of the retro. #163.
 - The dashboard builds with vite 8 and @vitejs/plugin-react 6.
+- The automatic feedback notice is printed once per user data directory, then
+  recorded in a marker file there, instead of before every ordinary command.
+  Its wording now says reports are sent only when the project policy allows
+  `api.github.com`. `GRAPH_ENGINE_NO_FEEDBACK=1` still prints nothing and sends
+  nothing (#357).
+- The context indexer skips the `.graph/` state folder (project state, private
+  evidence and caches), so `summaries` and retrieval no longer include
+  `.graph/project.json`. Committed knowledge packs under
+  `.graph/knowledge-packs/` stay indexed (#357).
+- `init` prints one stderr line saying to commit `.graph/project.json` and to
+  keep `.graph/local/`, `.graph/cache/` and `.graph/workspaces/` out of Git. It
+  still writes no `.gitignore` (#357).
 
 ### Fixed
 

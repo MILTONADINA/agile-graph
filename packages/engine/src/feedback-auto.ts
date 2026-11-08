@@ -1,5 +1,12 @@
 import Database from "better-sqlite3";
-import { closeSync, constants, lstatSync, mkdirSync, openSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import {
   assertProjectPolicy,
@@ -255,10 +262,39 @@ export async function setAutomaticFeedbackEnabled(
 
 export function automaticFeedbackNotice(): string {
   return [
-    `Automatic feedback is enabled by default. Eligible reports create PUBLIC issues at https://github.com/${FEEDBACK_REPOSITORY}/issues using your existing GitHub CLI login; they are attributed to that GitHub account, not anonymous.`,
+    `Automatic feedback is enabled by default. Reports are sent only when the project policy allows api.github.com; then eligible reports create PUBLIC issues at https://github.com/${FEEDBACK_REPOSITORY}/issues using your existing GitHub CLI login. They are attributed to that GitHub account, not anonymous.`,
     "Only engine version, a fixed command/phase, difficulty kind/count, OS/architecture and Node major version are sent. No notes, project names, paths, code, prompts, context, raw errors or credentials are included.",
     "Project outbound policy, daily attempt limits and duplicate suppression still apply. Disable with graph-engine feedback-config off or GRAPH_ENGINE_NO_FEEDBACK=1.",
   ].join("\n");
+}
+
+const NOTICE_MARKER = "notice-shown";
+
+/** The marker file that records the notice was printed for this data directory. */
+export function automaticFeedbackNoticeMarker(dir = feedbackDir()): string {
+  return path.join(dir, NOTICE_MARKER);
+}
+
+/** Whether the notice was already printed once for this data directory. */
+export function automaticFeedbackNoticeRecorded(dir = feedbackDir()): boolean {
+  try {
+    const info = lstatSync(automaticFeedbackNoticeMarker(dir));
+    return info.isFile() && !info.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/** Records the notice as printed. Failure only means it may print again. */
+export function recordAutomaticFeedbackNotice(dir = feedbackDir()): void {
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeFileSync(automaticFeedbackNoticeMarker(dir), "shown\n", {
+      mode: 0o600,
+    });
+  } catch {
+    // The notice is advisory; an unwritable marker never blocks a command.
+  }
 }
 
 function automaticPayload(input: AutomaticFeedbackInput) {
