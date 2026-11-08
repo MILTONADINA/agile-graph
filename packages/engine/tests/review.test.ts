@@ -537,6 +537,19 @@ describe("finding signature", () => {
       { type: "review.repeated_finding", data: {} },
     ]);
     expect(repeatedSignatures(resumed.at(-1)!, history[0]!)).toHaveLength(0);
+    // Any resume compares afresh, also after a run that ran out of attempts.
+    const afterResume = rejectionHistory([
+      rejected("Same"),
+      rejected("Same"),
+      { type: "run.started", data: { resuming: true } },
+    ]);
+    expect(afterResume.at(-1)).toEqual([]);
+    expect(
+      rejectionHistory([
+        rejected("Same"),
+        { type: "run.started", data: { resuming: false } },
+      ]),
+    ).toHaveLength(1);
   });
 
   it("asks for a structural fix on a repeat and stops as blocked on the third", () => {

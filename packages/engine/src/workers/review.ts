@@ -539,6 +539,9 @@ export function rejectionHistory(
       data.action !== "structural-fix"
     )
       return [[]];
+    // A resume is a person's decision to go on, whatever stopped the run (a
+    // repeat, or running out of attempts): it starts a fresh comparison too.
+    if (event.type === "run.started" && data.resuming === true) return [[]];
     if (event.type !== "review.completed" || data.by === "person") return [];
     if (data.passed !== false || !Array.isArray(data.findings)) return [];
     const found = data.findings.flatMap((item: unknown) => {
