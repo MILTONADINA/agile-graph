@@ -34,7 +34,7 @@ export function quickstart(readme) {
 /**
  * The help of a subcommand, or undefined when the CLI has no such one. An
  * unknown subcommand given --help prints the root help and exits 0, so the
- * help must open with that subcommand's own Usage line.
+ * help must open with that subcommand's own Usage line, under either binary name.
  */
 function subcommandHelp(helpOf, subcommand) {
   let help;
@@ -43,7 +43,9 @@ function subcommandHelp(helpOf, subcommand) {
   } catch {
     return undefined;
   }
-  return new RegExp(`^Usage: graph-engine ${subcommand}(\\s|$)`).test(help)
+  return new RegExp(
+    `^Usage: (?:graph-engine|agile-graph) ${subcommand}(\\s|$)`,
+  ).test(help)
     ? help
     : undefined;
 }
