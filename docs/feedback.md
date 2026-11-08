@@ -1,7 +1,8 @@
 # Feedback reports
 
-Automatic difficulty reporting is enabled by default. Ordinary CLI commands
-show a notice on stderr explaining the public destination and how to opt out.
+Automatic difficulty reporting is enabled by default. The first ordinary CLI
+command run with a user data directory shows a notice on stderr explaining the
+public destination and how to opt out; later commands do not repeat it.
 Reports contain only fixed difficulty categories and runtime metadata, not
 project content. They are **public GitHub issues attributed to the existing
 GitHub CLI account**, not anonymous reports.
