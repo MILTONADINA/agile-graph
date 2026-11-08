@@ -129,3 +129,22 @@ a database only when its version is newer than its own.
    created the `agile-graph` folder on a machine with no old folder, set
    `GRAPH_ENGINE_DATA_DIR` to that folder when you roll back, or 0.2.0 sees no
    runs.
+
+## 0.7.0
+
+- **Node outside the supported range is refused.** The CLI exits 1 with one
+  line naming the supported range (`^22.18.0 || >=24 <27`) and the running
+  version. Before, Node 22.17 and other unsupported versions ran with only
+  npm's EBADENGINE warning. Upgrade Node before upgrading the engine.
+- **`.graph/` is no longer indexed.** Summaries and context no longer include
+  `.graph/project.json` or other files under `.graph/`, except knowledge packs.
+  Re-run `index` to drop them from an existing index.
+- **The retro's person reason `owner-decision` is now `decision`.** Scripts
+  that read `retro` output and match on `owner-decision` must match `decision`.
+  A stop with no reason now counts as graph-owned.
+- **A repeated review finding blocks the run.** The second consecutive
+  rejection with the same finding signature asks for a structural fix; a third
+  stops the run as blocked, naming the signature. Resuming a run starts a
+  fresh comparison.
+- **The feedback notice prints once per user data directory**, not on every
+  command.
