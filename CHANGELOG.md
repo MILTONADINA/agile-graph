@@ -20,16 +20,6 @@
   without a state, a goal or a whole count is refused. The engine prints no
   time estimate yet, so the output lists none. #164.
 
-### Fixed
-
-- The engine CLI refuses to start on a Node version outside `engines.node`
-  (`^22.18.0 || >=24 <27`). It writes one line to stderr, `agile-graph needs
-  Node 22.18+ or 24 to 26; this is <version>`, and exits 1, before any other
-  module loads. Before, Node 22.17 only printed npm's EBADENGINE warning and
-  every command ran (#355).
-- `--help` names the binary that was invoked: `agile-graph` or `graph-engine`.
-  Before, the usage line always said `graph-engine` (#355).
-
 ### Changed
 
 - The person reason `owner-decision` is renamed `decision`, the closed set now
@@ -41,6 +31,15 @@
 
 ### Fixed
 
+- The engine CLI refuses to start on a Node version outside `engines.node`
+  (`^22.18.0 || >=24 <27`). It writes one line to stderr, `agile-graph needs
+  Node 22.18+ or 24 to 26; this is <version>`, and exits 1, before any other
+  module loads. Before, Node 22.17 only printed npm's EBADENGINE warning and
+  every command ran (#355).
+- `--help` names the binary that was invoked, `agile-graph` or `graph-engine`,
+  when run through npm's bin link. A shim that runs `cli.js` directly, as on
+  Windows or with pnpm, shows `agile-graph`. Before, the usage line always said
+  `graph-engine` (#355).
 - An approval from a code review that was given no executed checks no longer
   passes; the review records `checksRun`.
 
