@@ -204,7 +204,7 @@ describe("dependency DAG execution", () => {
     expect(charged).toEqual(["a", "b", "c"]);
     expect(result.appliedStepIds).toEqual(["a", "b", "c"]);
   });
-  it("rejects sibling collisions before any patch, including case aliases", async () => {
+  it("rejects a sibling collision before the colliding patch is written, including case aliases", async () => {
     const workspace = await fixture();
     let charged = 0;
     await expect(
@@ -220,10 +220,11 @@ describe("dependency DAG execution", () => {
           proposal(current.id === "a" ? "same.txt" : "SAME.txt", current.id),
       }),
     ).rejects.toThrow("collide");
-    await expect(readFile(path.join(workspace, "same.txt"))).rejects.toThrow();
+    // The sibling that finished first has applied; the colliding one wrote nothing.
+    expect(await readFile(path.join(workspace, "same.txt"), "utf8")).toBe("a");
     expect(charged).toBe(2);
   });
-  it("validates all wave preconditions before the first write", async () => {
+  it("validates a step's preconditions before its own write", async () => {
     const workspace = await fixture();
     await expect(
       runDag({
@@ -237,7 +238,9 @@ describe("dependency DAG execution", () => {
             : proposal("source.txt", "changed", "not present"),
       }),
     ).rejects.toThrow("precondition");
-    await expect(readFile(path.join(workspace, "new.txt"))).rejects.toThrow();
+    expect(await readFile(path.join(workspace, "source.txt"), "utf8")).toBe(
+      "original",
+    );
   });
   it("matches an exact write scope by path, whatever its spelling, and never as a glob", () => {
     const scope = writeScope(step("t"), {

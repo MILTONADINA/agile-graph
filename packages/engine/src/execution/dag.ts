@@ -92,7 +92,7 @@ export interface DagOptions {
       workerProviderKind?: ProviderKind;
     },
   ) => Promise<WorkerResult>;
-  /** Recheck live authorization before wave validation and each serialized write. */
+  /** Recheck live authorization before each step's validation and each serialized write. */
   beforeApply?: (step: ExecutionStep) => Promise<void>;
   /** Called for every fulfilled generation, including siblings of a failed step. */
   onUsage?: (usage: Usage, step: ExecutionStep) => Promise<void> | void;
@@ -254,6 +254,16 @@ export function checkpointPaths(checkpoint: DagCheckpoint): string[] {
     ...checkpoint.completed.flatMap((item) => item.paths),
     ...(checkpoint.repairPaths ?? []),
   ];
+}
+
+/** A step's generation settled: its proposal, or the error it failed with. */
+type GenerationOutcome =
+  | { step: ExecutionStep; ok: true; value: WorkerResult }
+  | { step: ExecutionStep; ok: false; reason: unknown };
+/** A generated proposal waiting for its serialized application. */
+interface QueuedProposal {
+  step: ExecutionStep;
+  result: WorkerResult;
 }
 
 /** Parallelize independent proposal generation; all filesystem mutation is serialized. */
@@ -423,191 +433,233 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
   const appliedStepIds: string[] = [];
   checkCancelled();
   await save();
-  while (completed.size < dag.steps.length) {
-    checkCancelled();
-    if (hash(policy) !== policyHash)
-      throw new DagReconciliationError(
-        "Project policy changed during DAG execution",
-      );
-    const ready = dag.steps
-      .filter(
-        (step) =>
-          !completed.has(step.id) &&
-          step.dependsOn.every((id) => completed.has(id)),
-      )
-      .slice(0, maxParallel);
-    if (!ready.length) throw new Error("DAG has no runnable steps");
-    const before = await workspaceFingerprint(workspace, policy);
-    if (before !== checkpoint.workspaceHash)
-      throw new DagReconciliationError(
-        "Workspace changed outside the DAG scheduler",
-      );
-    await event("dag.wave.started", undefined, {
-      stepIds: ready.map((step) => step.id),
-      snapshotHash: before,
-    });
-    const generated = await Promise.allSettled(
-      ready.map(async (step) => {
-        await event("dag.step.started", step.id, {
-          providerId: step.providerId ?? null,
-        });
-        // Each step's generation has its own policy timeout, so a long plan
-        // is not bounded by a single step's allowance.
-        const workerProviderKind =
-          step.kind === "worker"
-            ? options.workerProviderKind?.(step)
-            : undefined;
-        const timeoutMs = workerTimeoutMs(policy, workerProviderKind);
-        return options.generate(structuredClone(step), {
-          snapshotHash: before,
-          workerProviderKind,
-          signal:
-            timeoutMs === null
-              ? signal
-              : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
-        });
-      }),
+  // Streaming schedule: a step starts once its own dependencies have applied,
+  // with at most maxParallel generations running. Generated proposals wait in
+  // `queued` and apply one at a time, the lowest plan position first, so
+  // checkpoint ordering and pending-patch reconciliation are unchanged.
+  const order = new Map(dag.steps.map((step, index) => [step.id, index]));
+  const started = new Set<string>(completed);
+  const announced = new Set<string>();
+  const inflight = new Map<string, Promise<GenerationOutcome>>();
+  const queued: QueuedProposal[] = [];
+  // The first failure ends the run: no step starts after it, but generations
+  // already running that do not depend on the failed step still finish and
+  // apply. Any error during validation or application stops at once.
+  let failure: { error: unknown } | undefined;
+  const launch = (step: ExecutionStep, snapshotHash: string) => {
+    const generation = (async () => {
+      await event("dag.step.started", step.id, {
+        providerId: step.providerId ?? null,
+      });
+      // Each step's generation has its own policy timeout, so a long plan
+      // is not bounded by a single step's allowance.
+      const workerProviderKind =
+        step.kind === "worker" ? options.workerProviderKind?.(step) : undefined;
+      const timeoutMs = workerTimeoutMs(policy, workerProviderKind);
+      return options.generate(structuredClone(step), {
+        snapshotHash,
+        workerProviderKind,
+        signal:
+          timeoutMs === null
+            ? signal
+            : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
+      });
+    })();
+    inflight.set(
+      step.id,
+      generation.then(
+        (value): GenerationOutcome => ({ step, ok: true, value }),
+        (reason): GenerationOutcome => ({ step, ok: false, reason }),
+      ),
     );
-    // Charge fulfilled siblings even if another model failed, before any patch.
-    for (let index = 0; index < generated.length; index++) {
-      const result = generated[index];
-      if (result.status === "fulfilled")
-        await options.onUsage?.(result.value.usage, ready[index]);
-    }
-    checkCancelled();
-    if ((await workspaceFingerprint(workspace, policy)) !== before)
-      throw new DagReconciliationError(
-        "A proposal worker modified the workspace",
-      );
-    const failure = generated.find((result) => result.status === "rejected");
-    if (failure?.status === "rejected") throw failure.reason;
-    await options.beforeApply?.(structuredClone(ready[0]));
+  };
+  const applyQueued = async ({ step, result }: QueuedProposal) => {
+    await options.beforeApply?.(structuredClone(step));
     checkCancelled();
     if (hash(policy) !== policyHash)
       throw new DagReconciliationError(
         "Project policy changed before DAG patch validation",
       );
-    const proposals = generated.map((result) =>
-      proposalSchema.parse(
-        (result as PromiseFulfilledResult<WorkerResult>).value.proposal,
-      ),
-    );
-    const waveWrites: { id: string; paths: string[] }[] = [];
-    for (let index = 0; index < ready.length; index++) {
-      const step = ready[index],
-        proposal = proposals[index];
-      if (proposal.requests.length)
-        throw new Error(
-          `Step ${step.id} still requests source; its generation callback must resolve context requests before returning`,
-        );
-      const paths = [...new Set(proposal.changes.map((change) => change.path))];
-      const scope = writeScope(step, options.writeScopes);
-      if (
-        paths.some((file, position) =>
-          paths
-            .slice(0, position)
-            .some((previous) => pathsOverlap(previous, file)),
-        )
+    const proposal = proposalSchema.parse(result.proposal);
+    if (proposal.requests.length)
+      throw new Error(
+        `Step ${step.id} still requests source; its generation callback must resolve context requests before returning`,
+      );
+    const paths = [...new Set(proposal.changes.map((change) => change.path))];
+    const scope = writeScope(step, options.writeScopes);
+    if (
+      paths.some((file, index) =>
+        paths.slice(0, index).some((earlier) => pathsOverlap(earlier, file)),
       )
-        throw new Error(`Step ${step.id} has conflicting path aliases`);
-      for (const file of paths) {
-        await safePath(workspace, file, policy);
-        if (scope && !scope(file))
+    )
+      throw new Error(`Step ${step.id} has conflicting path aliases`);
+    for (const file of paths) {
+      await safePath(workspace, file, policy);
+      if (scope && !scope(file))
+        throw new Error(
+          `Step ${step.id} writes outside its declared scope: ${file}`,
+        );
+      // Every applied step is a completed one; a step that is not one of its
+      // ancestors may not write where it overlaps.
+      for (const previous of checkpoint.completed) {
+        if (
+          !dag.ancestors.get(step.id)!.has(previous.id) &&
+          previous.paths.some((prior) => pathsOverlap(prior, file))
+        )
           throw new Error(
-            `Step ${step.id} writes outside its declared scope: ${file}`,
+            `Independent DAG steps ${previous.id} and ${step.id} collide at ${file}; add an explicit dependency`,
           );
-        for (const previous of [...checkpoint.completed, ...waveWrites]) {
-          if (
-            !dag.ancestors.get(step.id)!.has(previous.id) &&
-            previous.paths.some((prior) => pathsOverlap(prior, file))
-          )
-            throw new Error(
-              `Independent DAG steps ${previous.id} and ${step.id} collide at ${file}; add an explicit dependency`,
-            );
-        }
       }
-      // Validate every exact-substring precondition before applying the first
-      // member of the wave, so a bad sibling cannot leave a partial wave.
-      await prepareProposal(workspace, proposal, policy);
-      waveWrites.push({ id: step.id, paths });
     }
-    for (let index = 0; index < ready.length; index++) {
-      await options.beforeApply?.(structuredClone(ready[index]));
+    // Validate every exact-substring precondition before this step's patch
+    // is written.
+    await prepareProposal(workspace, proposal, policy);
+    await options.beforeApply?.(structuredClone(step));
+    checkCancelled();
+    if (hash(policy) !== policyHash)
+      throw new DagReconciliationError(
+        "Project policy changed before DAG patch application",
+      );
+    if (
+      (await workspaceFingerprint(workspace, policy)) !==
+      checkpoint.workspaceHash
+    )
+      throw new DagReconciliationError(
+        "Workspace changed before serialized patch application",
+      );
+    checkpoint.pending = {
+      stepId: step.id,
+      proposalHash: hash(proposal),
+      beforeHash: checkpoint.workspaceHash,
+      paths,
+    };
+    // A crash from this point is reconciliation-required: a resume matches
+    // the workspace against the pre-patch and post-patch fingerprints.
+    await save();
+    const originals = await captureOriginals(workspace, paths, policy);
+    let afterHash: string;
+    try {
+      await applyProposal(workspace, proposal, policy);
+      afterHash = await workspaceFingerprint(workspace, policy);
+      checkpoint.pending = { ...checkpoint.pending, afterHash };
+      await save();
+      // Evaluate after application too: this patch may itself change ignore
+      // rules that hide a sibling's earlier output.
+      await assertVerificationPaths(
+        workspace,
+        [...checkpointPaths(checkpoint), ...paths],
+        policy,
+      );
+    } catch (error) {
+      // Undo it, so the run stops cleanly at its pre-step state instead
+      // of leaving a pending marker.
+      await rollBack(checkpoint, originals, error, {
+        workspace,
+        policy,
+        save,
+        event,
+      });
+      throw new Error(
+        `${(error as Error)?.message ?? String(error)} Step ${step.id}'s patch was rolled back; the workspace is at its pre-step state, and resuming with reconciliation acknowledgement runs the step again.`,
+        { cause: error },
+      );
+    }
+    checkpoint = {
+      ...checkpoint,
+      workspaceHash: afterHash,
+      completed: [
+        ...checkpoint.completed,
+        {
+          id: step.id,
+          proposalHash: hash(proposal),
+          paths,
+          completedAt: now(),
+        },
+      ],
+    };
+    delete checkpoint.pending;
+    await save();
+    completed.add(step.id);
+    appliedStepIds.push(step.id);
+    await event("dag.step.completed", step.id, {
+      paths,
+      snapshotHash: checkpoint.workspaceHash,
+    });
+  };
+  try {
+    for (;;) {
       checkCancelled();
       if (hash(policy) !== policyHash)
         throw new DagReconciliationError(
-          "Project policy changed before DAG patch application",
+          "Project policy changed during DAG execution",
         );
-      const step = ready[index],
-        proposal = proposals[index],
-        paths = waveWrites[index].paths;
+      if (!failure) {
+        const ready = dag.steps.filter(
+          (step) =>
+            !started.has(step.id) &&
+            step.dependsOn.every((id) => completed.has(id)),
+        );
+        for (const step of ready)
+          if (!announced.has(step.id)) {
+            announced.add(step.id);
+            await event("dag.step.ready", step.id, { kind: step.kind });
+          }
+        const starting = ready.slice(
+          0,
+          Math.max(0, maxParallel - inflight.size),
+        );
+        if (starting.length) {
+          const before = await workspaceFingerprint(workspace, policy);
+          if (before !== checkpoint.workspaceHash)
+            throw new DagReconciliationError(
+              "Workspace changed outside the DAG scheduler",
+            );
+          for (const step of starting) {
+            started.add(step.id);
+            launch(step, before);
+          }
+        }
+      }
+      if (queued.length) {
+        const next = queued.reduce((least, item) =>
+          order.get(item.step.id)! < order.get(least.step.id)! ? item : least,
+        );
+        queued.splice(queued.indexOf(next), 1);
+        await applyQueued(next);
+        continue;
+      }
+      if (!inflight.size) {
+        if (!failure && completed.size < dag.steps.length)
+          throw new Error("DAG has no runnable steps");
+        break;
+      }
+      const outcome = await Promise.race(inflight.values());
+      inflight.delete(outcome.step.id);
+      checkCancelled();
+      if (!outcome.ok) {
+        failure ??= { error: outcome.reason };
+        continue;
+      }
+      // Charge every fulfilled generation before any patch, even one whose
+      // step will not apply.
+      await options.onUsage?.(outcome.value.usage, outcome.step);
+      checkCancelled();
       if (
         (await workspaceFingerprint(workspace, policy)) !==
         checkpoint.workspaceHash
       )
         throw new DagReconciliationError(
-          "Workspace changed before serialized patch application",
+          "A proposal worker modified the workspace",
         );
-      checkpoint.pending = {
-        stepId: step.id,
-        proposalHash: hash(proposal),
-        beforeHash: checkpoint.workspaceHash,
-        paths,
-      };
-      // A crash from this point is reconciliation-required: a resume matches
-      // the workspace against the pre-patch and post-patch fingerprints.
-      await save();
-      const originals = await captureOriginals(workspace, paths, policy);
-      let afterHash: string;
-      try {
-        await applyProposal(workspace, proposal, policy);
-        afterHash = await workspaceFingerprint(workspace, policy);
-        checkpoint.pending = { ...checkpoint.pending, afterHash };
-        await save();
-        // Evaluate after application too: this patch may itself change ignore
-        // rules that hide a sibling's earlier output.
-        await assertVerificationPaths(
-          workspace,
-          [...checkpointPaths(checkpoint), ...paths],
-          policy,
-        );
-      } catch (error) {
-        // Undo it, so the run stops cleanly at its pre-step state instead
-        // of leaving a pending marker.
-        await rollBack(checkpoint, originals, error, {
-          workspace,
-          policy,
-          save,
-          event,
-        });
-        throw new Error(
-          `${(error as Error)?.message ?? String(error)} Step ${step.id}'s patch was rolled back; the workspace is at its pre-step state, and resuming with reconciliation acknowledgement runs the step again.`,
-          { cause: error },
-        );
-      }
-      checkpoint = {
-        ...checkpoint,
-        workspaceHash: afterHash,
-        completed: [
-          ...checkpoint.completed,
-          {
-            id: step.id,
-            proposalHash: hash(proposal),
-            paths,
-            completedAt: now(),
-          },
-        ],
-      };
-      delete checkpoint.pending;
-      await save();
-      completed.add(step.id);
-      appliedStepIds.push(step.id);
-      await event("dag.step.completed", step.id, {
-        paths,
-        snapshotHash: checkpoint.workspaceHash,
-      });
+      queued.push({ step: outcome.step, result: outcome.value });
     }
+  } catch (error) {
+    failure ??= { error };
+    // Cancel what is still generating: nothing from it can apply now.
+    controller.abort();
+    await Promise.allSettled(inflight.values());
   }
+  if (failure) throw failure.error;
   return { checkpoint: structuredClone(checkpoint), appliedStepIds };
 }
 

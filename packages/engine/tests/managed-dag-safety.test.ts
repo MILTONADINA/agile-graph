@@ -323,9 +323,12 @@ describe("managed DAG safety boundaries", () => {
       worker: async (input) => result(input.objective),
     });
     const event = engine.store.event.bind(engine.store);
+    let edited = false;
     vi.spyOn(engine.store, "event").mockImplementation((...args) => {
       const recorded = event(...args);
-      if (args[1] === "dag.step.completed" && args[3] === "one") {
+      // Siblings apply as they complete, so either may be the first to apply.
+      if (args[1] === "dag.step.completed" && !edited) {
+        edited = true;
         config.policy.excludedPaths.push("second.js");
         // Deterministic simulation of a user policy edit between serialized siblings.
         writeFileSync(path.join(root, PROJECT_FILE), JSON.stringify(config));
@@ -336,17 +339,23 @@ describe("managed DAG safety boundaries", () => {
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).not.toBe("succeeded");
     expect(run.error).toMatch(/Policy changed/i);
+    const applied = engine.store
+      .events(run.id)
+      .filter((entry) => entry.type === "dag.step.completed");
+    expect(applied).toHaveLength(1);
+    // The sibling that applied first is written; the other is never applied.
+    const files = {
+      one: { path: "first.js", written: "= 3", original: "= 1" },
+      two: { path: "second.js", written: "= 4", original: "= 2" },
+    } as const;
+    const first = applied[0]!.stepId as keyof typeof files;
+    const second = first === "one" ? "two" : "one";
     expect(
-      await readFile(path.join(run.workspace!, "first.js"), "utf8"),
-    ).toContain("= 3");
+      await readFile(path.join(run.workspace!, files[first].path), "utf8"),
+    ).toContain(files[first].written);
     expect(
-      await readFile(path.join(run.workspace!, "second.js"), "utf8"),
-    ).toContain("= 2");
-    expect(
-      engine.store
-        .events(run.id)
-        .filter((entry) => entry.type === "dag.step.completed"),
-    ).toHaveLength(1);
+      await readFile(path.join(run.workspace!, files[second].path), "utf8"),
+    ).toContain(files[second].original);
   });
 
   it("shares one durable worker-turn ceiling across parallel siblings and resume attempts", async () => {

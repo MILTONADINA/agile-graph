@@ -15,9 +15,14 @@ Larger changes are made of steps, some independent and some depending on others.
 - AC2: Independent steps are generated concurrently and applied before dependent steps run, and the final combined result is verified.
   - Test: packages/engine/tests/dag.test.ts :: generates independent proposals concurrently and applies them before dependent generation
   - Test: packages/engine/tests/managed-dag.test.ts :: applies independent proposals then dependent work and verifies the final aggregate
-- AC3: Sibling steps that would write the same file (including case aliases) or files they did not declare are rejected before any patch is applied.
-  - Test: packages/engine/tests/dag.test.ts :: rejects sibling collisions before any patch, including case aliases
-  - Test: packages/engine/tests/dag.test.ts :: validates all wave preconditions before the first write
+- AC2a (EARS): WHEN all of a step's dependsOn steps have applied, THE engine SHALL start that step at once, without waiting for other running steps, and SHALL run no more than maxParallel generations at a time.
+  - Test: packages/engine/tests/dag-streaming.test.ts :: starts a step once its own dependency applies, while an independent slower sibling still runs
+  - Test: packages/engine/tests/dag-streaming.test.ts :: never runs more generations than maxParallel and refills a freed slot at once
+- AC2b (EARS): WHEN generated proposals finish in any order, THE engine SHALL apply them one at a time, in the same order for the same plan and completion order, and SHALL apply each step only after every one of its dependsOn steps has applied.
+  - Test: packages/engine/tests/dag-streaming.test.ts :: applies in the same order for the same plan and completion order, and dependents after their dependencies
+- AC3: Sibling steps that would write the same file (including case aliases) or files they did not declare are rejected before the colliding patch is written, and a step's own preconditions are checked before its own write.
+  - Test: packages/engine/tests/dag.test.ts :: rejects a sibling collision before the colliding patch is written, including case aliases
+  - Test: packages/engine/tests/dag.test.ts :: validates a step's preconditions before its own write
   - Test: packages/engine/tests/dag.test.ts :: rejects undeclared writes and collisions in later independent waves
 - AC4: Resuming a plan skips completed steps, runs only unfinished ones and verifies the whole retained result; an interruption between applying a patch and recording it requires reconciliation. A patch that fails a check after application (such as a Git-ignored file) is rolled back so the run stays resumable. An acknowledged resume clears an interrupted patch only when the workspace matches its pre-patch fingerprint (the step runs again) or its post-patch fingerprint (the step is recorded as applied); any other state is refused with instructions to restore the files or start a new plan.
   - Test: packages/engine/tests/dag.test.ts :: resumes completed steps without regenerating or reapplying them
@@ -29,6 +34,8 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/dag.test.ts :: re-runs a pending step when the acknowledged workspace is back at its pre-patch state
   - Test: packages/engine/tests/dag.test.ts :: refuses to reconcile a pending step whose workspace matches neither fingerprint
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: resolves a crash-interrupted patch on an acknowledged resume when the workspace matches its post-patch state
+- AC4a (EARS): WHEN a step's generation fails, THE engine SHALL start no new step, SHALL apply each already-running step that does not depend on the failed step, and SHALL end the run as failed with the first failure's error.
+  - Test: packages/engine/tests/dag-streaming.test.ts :: applies a running independent step when a sibling fails, and fails the run with the first error
 - AC5: When the combined checks fail, a repair step receives the failure as feedback within the attempt budget; a single-attempt plan fails without repair. A resumed plan whose unchanged combined result fails verification or review goes on to repair without checking and reviewing that same snapshot again.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: repairs a multi-step plan whose combined checks failed, with the failure as feedback
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: keeps single-attempt plans failing without repair and reserves the repair step ID
@@ -70,9 +77,12 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: keeps guarding the tester's tests when its saved completion has no event
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: resolves an interrupted repair patch on an acknowledged resume and reviews the files it wrote
 
+- AC13 (EARS): WHILE a multi-step plan's step is ready but has no free slot, THE retro SHALL record the minutes it waited, by step kind, with no step ID or content.
+  - Test: packages/engine/tests/retro.test.ts :: shows how many minutes each step was ready before it started, without its ID
+
 ## Security considerations
 
-Parallelism multiplies spend and write risk, so all steps draw on one durable turn and cost ceiling and every wave's preconditions are checked before the first write. Undeclared writes and path collisions are refused so one step cannot overwrite another's work or reach paths it was not planned for. Policy is re-read between sibling applications, so tightening policy mid-run takes effect. Cloud steps follow the same export rules as single runs, including refusal of mandatory text the run workspace imported.
+Parallelism multiplies spend and write risk, so all steps draw on one durable turn and cost ceiling and every step's preconditions are checked before its own write. Undeclared writes and path collisions are refused so one step cannot overwrite another's work or reach paths it was not planned for. Policy is re-read between sibling applications, so tightening policy mid-run takes effect. Cloud steps follow the same export rules as single runs, including refusal of mandatory text the run workspace imported.
 
 ## Non-goals
 
