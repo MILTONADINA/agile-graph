@@ -2,9 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- A review rejection that raises the same finding again (same file and
+  normalised message signature) now asks the next repair for a structural fix
+  that closes the whole defect class, keeping the earlier cases as regression
+  tests. A third consecutive repeat stops the run as blocked, naming the
+  signature. Each repeat records the minutes of the rounds that raised it.
+
 ### Changed
 
 - The dashboard builds with vite 8 and @vitejs/plugin-react 6.
+
+### Fixed
+
+- An approval from a code review that was given no executed checks no longer
+  passes; the review records `checksRun`.
 
 ## [0.6.0] - 2026-11-07
 

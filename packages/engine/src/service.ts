@@ -118,9 +118,10 @@ import {
   findingSignature,
   rejectionHistory,
   type RejectedFinding,
-  repeatedSignatures,
+  repeatAction,
   reusableFixVerdicts,
   reviewOutcome,
+  structuralFixNotice,
   VERIFY_FIX_LIMIT,
   verifyFixFeedback,
   type PriorFinding,
@@ -3340,28 +3341,63 @@ export class GraphEngine {
         // for stopping when the same finding is raised twice in a row.
         const history = rejectionHistory(this.store.events(run.id));
         // The notice lists every finding raised so far, this round's too.
-        const withEarlier = (feedback: string, current: RejectedFinding[]) => {
+        const withEarlier = (
+          feedback: string,
+          current: RejectedFinding[],
+          structural?: string,
+        ) => {
           const notice = earlierFindingsNotice([...history, current]);
-          return notice ? `${feedback}\n\n${notice}` : feedback;
+          return [feedback, notice, structural]
+            .filter((part) => part)
+            .join("\n\n");
         };
-        const stopOnRepeat = (
+        // The same finding in two rejections in a row asks the next repair
+        // for a structural fix; a third stops the run as blocked. Returns the
+        // structural instruction for the next round, if one is due. The
+        // review record for this round is already stored when this runs.
+        const repeatFor = (
           current: readonly { signature: string }[],
           snapshot: string,
-        ) => {
-          const previous = history.at(-1);
-          const signatures = previous
-            ? repeatedSignatures(previous, current)
-            : [];
-          if (!signatures.length) return;
+        ): string | undefined => {
+          const repeat = repeatAction(history, current);
+          if (!repeat) return undefined;
+          // The cost of the repeat: minutes of every review round in this
+          // run that raised one of the repeated signatures.
+          const streakMinutes = this.store
+            .events(run.id)
+            .reduce((sum, event) => {
+              const findings: unknown[] = Array.isArray(event.data.findings)
+                ? event.data.findings
+                : [];
+              const raised =
+                event.type === "review.completed" &&
+                findings.some((finding) =>
+                  repeat.signatures.includes(
+                    (finding as { signature?: string } | null)?.signature ?? "",
+                  ),
+                );
+              return raised && typeof event.data.minutes === "number"
+                ? sum + event.data.minutes
+                : sum;
+            }, 0);
+          const minutes = Math.round(streakMinutes * 100) / 100;
           this.store.event(
             run.id,
             "review.repeated_finding",
-            { signatures, snapshotHash: snapshot },
+            {
+              action: repeat.action,
+              signatures: repeat.signatures,
+              streak: repeat.streak,
+              minutes,
+              snapshotHash: snapshot,
+            },
             stepId,
           );
-          throw new Error(
-            `Code review raised the same finding on two rounds in a row (${signatures.join(", ")}); the run stopped instead of repeating the same repair. Change the approach: narrow the scope, make a structural fix, or mark the run blocked`,
-          );
+          if (repeat.action === "blocked")
+            throw new Error(
+              `Code review raised the same finding on three rounds in a row (${repeat.signatures.join(", ")}) and a structural fix did not close it; the run is blocked. Narrow the scope or mark the run blocked; a person should decide how to proceed`,
+            );
+          return structuralFixNotice(repeat.signatures);
         };
         const latestReview = this.store
           .events(run.id)
@@ -3459,14 +3495,11 @@ export class GraphEngine {
               finding,
               signature: finding.signature ?? findingSignature(finding),
             }));
-            const feedback = withEarlier(
-              verifyFixFeedback(unfixed, prior.length),
-              signed.map(({ finding, signature }) => ({
-                signature,
-                path: finding.path,
-                text: finding.message,
-              })),
-            );
+            const raised = signed.map(({ finding, signature }) => ({
+              signature,
+              path: finding.path,
+              text: finding.message,
+            }));
             // Recorded as a failed review, so the board, a person's approval
             // and the next retry see where the run stopped; the next retry
             // checks only the findings still listed here.
@@ -3497,7 +3530,12 @@ export class GraphEngine {
               },
               stepId,
             );
-            stopOnRepeat(signed, snapshotHash);
+            const structural = repeatFor(signed, snapshotHash);
+            const feedback = withEarlier(
+              verifyFixFeedback(unfixed, prior.length),
+              raised,
+              structural,
+            );
             return {
               passed: false,
               feedback,
@@ -3577,7 +3615,13 @@ export class GraphEngine {
           );
         }
         run.usage = this.store.usage(run.plan.id);
-        const outcome = reviewOutcome(result.review, run.plan.acceptance);
+        // The checks this review was given, recorded so an approval that
+        // ran none is visible as hollow (see reviewOutcome).
+        const outcome = reviewOutcome(
+          result.review,
+          run.plan.acceptance,
+          checks.length,
+        );
         this.store.event(
           run.id,
           "review.completed",
@@ -3588,6 +3632,7 @@ export class GraphEngine {
             passed: outcome.passed,
             verdict: result.review.verdict,
             snapshotHash,
+            checksRun: checks.length,
             // Whether these findings may go to a non-local reviewer or
             // worker later; a retry or resume reads it from here.
             ...(scanRulings.length ? { scanExportable } : {}),
@@ -3617,25 +3662,19 @@ export class GraphEngine {
           },
           stepId,
         );
-        if (!outcome.passed)
-          stopOnRepeat(
-            result.review.findings
-              .filter((finding) => finding.severity === "blocking")
-              .map((finding) => ({ signature: findingSignature(finding) })),
-            snapshotHash,
-          );
+        const raised = result.review.findings
+          .filter((finding) => finding.severity === "blocking")
+          .map((finding) => ({
+            signature: findingSignature(finding),
+            path: finding.path,
+            text: finding.message,
+          }));
+        const structural = outcome.passed
+          ? undefined
+          : repeatFor(raised, snapshotHash);
         const feedback = outcome.passed
           ? outcome.feedback
-          : withEarlier(
-              outcome.feedback,
-              result.review.findings
-                .filter((finding) => finding.severity === "blocking")
-                .map((finding) => ({
-                  signature: findingSignature(finding),
-                  path: finding.path,
-                  text: finding.message,
-                })),
-            );
+          : withEarlier(outcome.feedback, raised, structural);
         return {
           ...outcome,
           feedback,

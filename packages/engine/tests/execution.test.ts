@@ -4140,7 +4140,7 @@ describe("code review gate", () => {
     );
   });
 
-  it("re-checks earlier blocking findings before reviewing again, skips the full review while one is unfixed, and stops on that repeat", async () => {
+  it("re-checks earlier blocking findings before reviewing again, skips the full review while one is unfixed, and stops on the third repeat", async () => {
     const blocking = {
       severity: "blocking" as const,
       path: "math.test.cjs",
@@ -4167,10 +4167,11 @@ describe("code review gate", () => {
       ],
       fixChecks: [
         { verdict: "still_present", evidence: "Only one sum is tested" },
+        { verdict: "still_present", evidence: "Only one sum is tested" },
       ],
     });
-    // The finding is still present on attempt 2: the same rejection twice
-    // in a row ends the run rather than spending attempt 3.
+    // The finding is still present on attempts 2 and 3: the first repeat
+    // asks for a structural fix, and the third rejection stops the run.
     expect(result.status).toBe("failed");
     expect(classifyError(result.error ?? "")).toBe("repeated-review-finding");
     const id = findingId(blocking);
@@ -4181,23 +4182,25 @@ describe("code review gate", () => {
     expect(completed[0]!.data.findings).toContainEqual(
       expect.objectContaining({ id, severity: "blocking" }),
     );
-    expect(fixChecked.map((check) => check.id)).toEqual([id]);
+    expect(fixChecked.map((check) => check.id)).toEqual([id, id]);
     expect(reviewed).toHaveLength(1);
     expect(completed.map((event) => event.data.stage ?? "review")).toEqual([
       "review",
+      "verify-fix",
       "verify-fix",
     ]);
     expect(completed[1]!.data).toMatchObject({
       passed: false,
       findings: [expect.objectContaining({ id })],
     });
-    expect(feedback).toHaveLength(2);
+    expect(feedback).toHaveLength(3);
     expect(feedback[1]).toContain(
       "Optional advisory findings (not required to pass review):",
     );
+    expect(feedback[2]).toContain("Make a structural fix");
   });
 
-  it("carries earlier rejections' signatures into the next repair round, and stops when the same finding comes back", async () => {
+  it("carries earlier rejections' signatures into the next repair round, asks for a structural fix on the first repeat, and stops as blocked on the third", async () => {
     const finding = {
       severity: "blocking" as const,
       path: "math.test.cjs",
@@ -4213,22 +4216,35 @@ describe("code review gate", () => {
           findings: [finding],
         },
       ],
-      fixChecks: [{ verdict: "still_present", evidence: "Still one sum" }],
+      fixChecks: [
+        { verdict: "still_present", evidence: "Still one sum" },
+        { verdict: "still_present", evidence: "Still one sum" },
+      ],
     });
     const signature = findingSignature(finding);
     expect(feedback[1]).toContain("already raised");
     expect(feedback[1]).toContain(signature);
+    expect(feedback[1]).not.toContain("Make a structural fix");
+    expect(feedback[2]).toContain("Make a structural fix");
+    expect(feedback[2]).toContain(signature);
     expect(result.status).toBe("failed");
-    expect(result.error).toContain("same finding");
+    expect(result.error).toContain(signature);
+    expect(result.error).toContain("three rounds in a row");
     expect(classifyError(result.error ?? "")).toBe("repeated-review-finding");
-    // Never an accept, and no attempt is spent after the second rejection.
-    expect(feedback).toHaveLength(2);
+    // Never an accept, and no attempt is spent after the third rejection.
+    expect(feedback).toHaveLength(3);
     expect(
       events.filter((event) => event.type === "review.completed"),
-    ).toHaveLength(2);
-    expect(
-      events.find((event) => event.type === "review.repeated_finding")?.data,
-    ).toMatchObject({ signatures: [signature] });
+    ).toHaveLength(3);
+    const repeats = events.filter(
+      (event) => event.type === "review.repeated_finding",
+    );
+    expect(repeats.map((event) => event.data)).toMatchObject([
+      { action: "structural-fix", signatures: [signature], streak: 2 },
+      { action: "blocked", signatures: [signature], streak: 3 },
+    ]);
+    // The cost of the repeat: the minutes of the rounds that raised it.
+    expect(repeats[1]!.data.minutes).toEqual(expect.any(Number));
     const completed = events.filter(
       (event) => event.type === "review.completed",
     );
@@ -4236,6 +4252,44 @@ describe("code review gate", () => {
     expect(completed[0]!.data.findings).toContainEqual(
       expect.objectContaining({ signature }),
     );
+  });
+
+  it("continues after a structural fix when the next check passes, and records the check count", async () => {
+    const finding = {
+      severity: "blocking" as const,
+      path: "math.test.cjs",
+      line: 1,
+      message: "Add a test for another sum",
+    };
+    const { result, feedback, events } = await setup({
+      reviews: [
+        {
+          verdict: "request-changes",
+          summary: "Needs a second test",
+          criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "ok" }],
+          findings: [finding],
+        },
+        approve,
+      ],
+      fixChecks: [
+        { verdict: "still_present", evidence: "Still one sum" },
+        { verdict: "fixed", evidence: "Both sums are tested" },
+      ],
+    });
+    expect(result.error ?? "").toBe("");
+    expect(result.status).toBe("succeeded");
+    expect(feedback).toHaveLength(3);
+    expect(feedback[2]).toContain("Make a structural fix");
+    expect(
+      events.find((event) => event.type === "review.repeated_finding")?.data,
+    ).toMatchObject({ action: "structural-fix" });
+    // The approval is recorded with the checks it ran.
+    const approved = events
+      .filter((event) => event.type === "review.completed")
+      .at(-1)!;
+    expect(approved.data).toMatchObject({ passed: true });
+    expect(approved.data.checksRun).toEqual(expect.any(Number));
+    expect(approved.data.checksRun as number).toBeGreaterThan(0);
   });
 
   it("continues when the next rejection raises a different finding", async () => {

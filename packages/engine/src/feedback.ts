@@ -40,9 +40,9 @@ export const ERROR_KINDS = [
   {
     // Before review-gate, whose words its message starts with.
     kind: "repeated-review-finding",
-    pattern: /same finding on two rounds in a row/,
+    pattern: /same finding on (two|three) rounds in a row/,
     description:
-      "The reviewer raised the same finding twice in a row, so the run stopped",
+      "The reviewer raised the same finding again after a structural fix, so the run stopped",
   },
   {
     // Before checks-failed, whose words its message starts with.
