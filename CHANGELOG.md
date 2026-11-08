@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The Java binding analyzer no longer drops its results under machine load. A
+  child that had finished but not yet been reaped, or was in exit teardown, was
+  sampled as an unreadable process (`ps` reports a zero RSS), and three such
+  samples made the memory watcher kill it, so the bindings came back empty.
+  Such a sample now means the child has exited, and the watch stops without
+  killing it. A child whose memory cannot be read is still killed after three
+  failed samples. Fixes #360.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added

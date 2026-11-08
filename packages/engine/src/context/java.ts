@@ -403,18 +403,28 @@ export function validateJavaOutput(
     resolvedImports: updates.filter((edge) => edge.kind === "imports").length,
   };
 }
-/** One resident-set reading in KiB, or undefined when ps gave none. */
-function sampleRss(pid: number): Promise<number | undefined> {
+/**
+ * Parses `ps -o rss=` output. A reading of 0 means the process has released
+ * its memory: it is a zombie or in exit teardown, not a live process (which
+ * always holds resident pages), so it is null. Empty or non-numeric output is
+ * undefined (unreadable); any other value is its RSS in KiB.
+ */
+export function parseRssSample(stdout: string): number | null | undefined {
+  const text = stdout.trim();
+  if (!text) return undefined;
+  const rss = Number(text);
+  if (!Number.isFinite(rss)) return undefined;
+  return rss === 0 ? null : rss;
+}
+/** One resident-set reading in KiB, null for an exited child, or undefined when ps gave none. */
+function sampleRss(pid: number): Promise<number | null | undefined> {
   return new Promise((resolve) => {
     execFile(
       "/bin/ps",
       ["-o", "rss=", "-p", String(pid)],
       { env: {}, timeout: 1000, maxBuffer: 1000 },
       (error, stdout) => {
-        const rss = Number(stdout.trim());
-        resolve(
-          !error && stdout.trim() && Number.isFinite(rss) ? rss : undefined,
-        );
+        resolve(error ? undefined : parseRssSample(stdout));
       },
     );
   });
@@ -425,11 +435,13 @@ function sampleRss(pid: number): Promise<number | undefined> {
  * the limit. A single failed, empty or zero sample is tolerated (ps can fail
  * once under load or as the child exits, and the next tick sees the exit),
  * but INVALID_RSS_LIMIT consecutive invalid samples also report over-limit:
- * a child whose memory cannot be read is not allowed to run uncapped.
+ * a child whose memory cannot be read is not allowed to run uncapped. A child
+ * sampled as exited (null) has finished and is no longer capped: the watch
+ * stops without reporting, and the analyzer's own exit handling settles it.
  */
 export const INVALID_RSS_LIMIT = 3;
 export function watchRss(options: {
-  sample: () => Promise<number | undefined>;
+  sample: () => Promise<number | null | undefined>;
   limitKiB: number;
   onOverLimit: () => void;
   running?: () => boolean;
@@ -441,13 +453,17 @@ export function watchRss(options: {
   const active = () => !stopped && (options.running?.() ?? true);
   const tick = async () => {
     if (!active()) return;
-    let rss: number | undefined;
+    let rss: number | null | undefined;
     try {
       rss = await options.sample();
     } catch {
       rss = undefined;
     }
     if (!active()) return;
+    if (rss === null) {
+      stopped = true;
+      return;
+    }
     const valid = rss !== undefined && Number.isFinite(rss) && rss > 0;
     invalid = valid ? 0 : invalid + 1;
     if ((valid && rss! > options.limitKiB) || invalid >= INVALID_RSS_LIMIT) {
@@ -473,7 +489,7 @@ export function analyze(
   input: string,
   timeoutMs: number,
   maxBytes: number,
-  sample: (pid: number) => Promise<number | undefined> = sampleRss,
+  sample: (pid: number) => Promise<number | null | undefined> = sampleRss,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const started = performance.now(),
