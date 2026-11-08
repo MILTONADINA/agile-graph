@@ -12,9 +12,10 @@
   until the child has really exited. A child whose memory cannot be read is still killed after three
   failed samples. Fixes #360.
 - A verification run that executes no check now stops as blocked, naming "no
-  verification checks selected", before any review and without a retry. The
-  reviewer is not asked to approve an unverified change, and the attempts are
-  not spent repeating the empty verification. #367.
+  verification checks selected", before any review and without a retry.
+  Before, the run retried the worker and the empty verification until it hit
+  its turn limit. The verifier never returns zero checks today, so this is a
+  guard, not a change in normal runs. #367.
 
 ## [0.7.0] - 2026-11-08
 
