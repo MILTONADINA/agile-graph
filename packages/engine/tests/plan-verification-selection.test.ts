@@ -70,6 +70,8 @@ async function fixture(
     worker?: EngineDependencies["worker"];
     verify?: EngineDependencies["verify"];
     review?: EngineDependencies["review"];
+    /** Configures a local reviewer the policy permits. */
+    reviewer?: boolean;
   } = {},
 ) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "graph-plan-checks-"));
@@ -99,6 +101,12 @@ async function fixture(
     kind: "local",
     model: "toy",
   });
+  if (options.reviewer)
+    await configureProvider(projectDataDir(config.projectId), {
+      id: "reviewer",
+      kind: "local",
+      model: "toy",
+    });
   const worker = vi.fn(options.worker ?? (async () => result()));
   const verify = vi.fn(options.verify ?? passing);
   const dockerAvailable = vi.fn(async () => true);
@@ -319,6 +327,29 @@ describe("managed plan verification selection", () => {
       expect(engine.store.events(run.id)).toEqual(events);
     },
   );
+  it("stops as blocked with no verification checks selected, without review or retry, when a reviewer is configured", async () => {
+    const review = vi.fn(async () => {
+      throw new Error("review must not run without checks");
+    });
+    const { engine, verify, worker } = await fixture({
+      reviewer: true,
+      review,
+      verify: async () => [],
+      configure: (config) => {
+        config.policy.providers = ["local", "reviewer"];
+        config.review = { providerId: "reviewer" };
+        config.policy.maxAttempts = 3;
+      },
+    });
+    const run = await start(engine, await plan(engine));
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("no verification checks selected");
+    expect(run.error).toContain("blocked");
+    // Refused at the verification step: no review and no further attempt.
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(worker).toHaveBeenCalledTimes(1);
+    expect(review).not.toHaveBeenCalled();
+  });
   it("refuses changed catalogue at review approval even when retained checks passed", async () => {
     const { engine, root, config } = await fixture({
       configure: (config) => {

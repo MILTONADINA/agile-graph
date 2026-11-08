@@ -4212,6 +4212,13 @@ export class GraphEngine {
             "Verification modified project source; review the retained workspace before retrying",
           );
         checkedHash = after;
+        // No check ran, so nothing verified the change: a review must not
+        // approve it (reviewOutcome refuses that as hollow) and a retry would
+        // only repeat the empty verification. Stop here, as blocked.
+        if (checks.length === 0)
+          throw new Error(
+            "Run blocked: no verification checks selected, so nothing verified this change. No review or retry was attempted; select at least one check and create a new plan",
+          );
         const infrastructureFailure = checks.find(
           (check) =>
             check.code === 125 ||
