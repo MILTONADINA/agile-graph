@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-08
+
 ### Added
 
 - A review rejection that raises the same finding again (same file and
