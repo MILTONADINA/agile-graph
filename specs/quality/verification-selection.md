@@ -62,6 +62,8 @@ weaken checks or approve a plan; no Jev call was used for this design choice.
 - AC6: Verifier/run evidence retains stable named check identity, while anonymous legacy receipt shape stays unchanged. Required checks, container isolation, snapshot verification, tester protections, approval/publication, security review and native-worker controls remain independent and cannot be bypassed by selection. Cloud MCP must not export registered command/image details.
   - Test: packages/engine/tests/verification-check-identity.test.ts :: retains named check identities in verifier results without changing legacy receipts or command order
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: always runs every required check and cannot accept a worker's claim that tests passed
+- AC7: When a verification run executes no check, the system shall stop the run as blocked with an error naming "no verification checks selected", before any review and without a retry, so a reviewer cannot approve an unverified change and the attempts are not spent repeating it.
+  - Test: packages/engine/tests/plan-verification-selection.test.ts :: stops as blocked with no verification checks selected, without review or retry, when a reviewer is configured
 
 ## Security considerations
 

@@ -11,6 +11,10 @@
   A zero sample is no longer counted as unreadable; the watch keeps the cap
   until the child has really exited. A child whose memory cannot be read is still killed after three
   failed samples. Fixes #360.
+- A verification run that executes no check now stops as blocked, naming "no
+  verification checks selected", before any review and without a retry. The
+  reviewer is not asked to approve an unverified change, and the attempts are
+  not spent repeating the empty verification. #367.
 
 ## [0.7.0] - 2026-11-08
 
@@ -57,7 +61,7 @@
 
 - The engine CLI refuses to start on a Node version outside `engines.node`
   (`^22.18.0 || >=24 <27`). It writes one line to stderr, `agile-graph needs
-  Node 22.18+ or 24 to 26; this is <version>`, and exits 1, before any other
+Node 22.18+ or 24 to 26; this is <version>`, and exits 1, before any other
   module loads. Before, Node 22.17 only printed npm's EBADENGINE warning and
   every command ran (#355).
 - `--help` names the binary that was invoked, `agile-graph` or `graph-engine`,
