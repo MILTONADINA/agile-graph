@@ -32,16 +32,35 @@ graph-engine -C /path/to/your/project index --lexical
 graph-engine -C /path/to/your/project serve
 ```
 
-`serve` prints a loopback URL for the dashboard. A new project uses
-local-only inference, no external network, no publication and shadow-mode
-decisions. No model, credential or provider is set up for you: add the ones
-you choose with `graph-engine provider-add`, then plan work with
+`init --cloud-mcp` sets inference and network to allowlisted, with providers
+and allowedHosts empty.
+
+`serve` prints a loopback URL for the dashboard. Without `--cloud-mcp`, a new
+project uses local-only inference, no external network, no publication and
+shadow-mode decisions. No model, credential or provider is set up for you:
+add the ones you choose with `graph-engine provider-add`, then plan work with
 `graph-engine plan`, approve it with `graph-engine plan-approve` and accept
 results with `graph-engine accept`. `graph-engine --help` lists every command.
 
 To give an AI client such as Claude Code, Codex or Cursor the project's
 context, run `graph-engine -C /path/to/your/project mcp` as its MCP server.
 See [connecting an AI client](https://github.com/MILTONADINA/agile-graph/blob/main/docs/mcp-clients.md).
+
+## Try it
+
+Once a project is indexed, query it from the terminal. Each command prints
+JSON:
+
+```sh
+graph-engine -C /path/to/your/project index --lexical
+graph-engine -C /path/to/your/project context "calculateInvoiceTotal"
+graph-engine -C /path/to/your/project symbols calculateInvoice
+graph-engine -C /path/to/your/project summaries
+```
+
+`context` takes `--budget <tokens>` to cap its size. In lexical mode it
+matches names, so a symbol name works better than a plain phrase: "invoice
+total" returned no items in a test project.
 
 ## Optional integrations
 
@@ -75,6 +94,44 @@ project's policy allows network access to `api.github.com`. They carry fixed
 error kinds and platform metadata, never source, paths, prompts or logs, and
 are filed as public GitHub issues under your own GitHub CLI login. Turn them
 off with `graph-engine feedback-config off` or `GRAPH_ENGINE_NO_FEEDBACK=1`.
+
+## Uninstall
+
+Remove the package and any optional integrations you installed. Keep only
+the lines that match what you installed or built:
+
+```sh
+npm uninstall --global @agile-graph/engine
+npm uninstall --global @huggingface/transformers @cursor/sdk
+docker image rm graph-security:local
+```
+
+If a project installed the engine as a dependency, run
+`npm uninstall @agile-graph/engine` in that project too.
+
+Your data stays in the per-user data directory after the package is removed.
+Delete it as well:
+
+- macOS: `~/Library/Application Support/agile-graph`
+- Linux: `~/.local/share/agile-graph`, or `$XDG_DATA_HOME/agile-graph` when set
+- Windows: `%LOCALAPPDATA%\agile-graph\Data`
+
+This folder holds every project's databases and runs. It also holds promotion
+files if you set up promotion (`promotion-keys/` and `promotion-enrollment/`),
+so back up anything you need first. Deleting it cannot be undone. An older
+`graph-engineering` folder beside it can be removed the same way.
+
+Each project also has a `.graph/` folder with its `project.json` and any files
+you added there, such as shared memories in `.graph/knowledge/`. Delete it in
+each project:
+
+```sh
+rm -rf /path/to/your/project/.graph
+```
+
+Check first with `git ls-files .graph` what you committed. Removing `.graph/`
+does not remove that project's databases, which live in the data directory
+above.
 
 ## Documentation
 

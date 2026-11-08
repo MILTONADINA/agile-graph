@@ -31,6 +31,59 @@ export function quickstart(readme) {
   return { commands, sentence };
 }
 
+/**
+ * The help of a subcommand, or undefined when the CLI has no such one. An
+ * unknown subcommand given --help prints the root help and exits 0, so the
+ * help must open with that subcommand's own Usage line.
+ */
+function subcommandHelp(helpOf, subcommand) {
+  let help;
+  try {
+    help = helpOf(subcommand);
+  } catch {
+    return undefined;
+  }
+  return new RegExp(`^Usage: graph-engine ${subcommand}(\\s|$)`).test(help)
+    ? help
+    : undefined;
+}
+
+/**
+ * Problems with the Try it block: each `graph-engine -C <path> ...` line must
+ * name a subcommand and flags the built CLI has, and the block must show
+ * index, context, symbols and summaries.
+ */
+export function checkTryIt(readme, { helpOf }) {
+  const section = /^## Try it\s*$([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(readme);
+  if (!section) return ["README has no Try it section"];
+  const block = /```sh\n([\s\S]*?)```/.exec(section[1])?.[1];
+  if (block === undefined) return ["the Try it section has no sh block"];
+  const problems = [];
+  const subcommands = [];
+  for (const line of block.split("\n")) {
+    const words = line.trim().split(/\s+/);
+    if (words[0] !== "graph-engine") continue;
+    if (words[1] !== "-C" || words.length < 4) {
+      problems.push(`Try it line is not "graph-engine -C <path> ...": ${line}`);
+      continue;
+    }
+    const [subcommand, ...rest] = words.slice(3);
+    subcommands.push(subcommand);
+    const help = subcommandHelp(helpOf, subcommand);
+    if (help === undefined) {
+      problems.push(`${line.trim()}: the CLI has no subcommand ${subcommand}`);
+      continue;
+    }
+    for (const flag of rest.filter((word) => word.startsWith("-")))
+      if (!new RegExp(`(^|[\\s,])${flag}([\\s,<\\[=]|$)`, "m").test(help))
+        problems.push(`${line.trim()}: ${subcommand} has no option ${flag}`);
+  }
+  for (const required of ["index", "context", "symbols", "summaries"])
+    if (!subcommands.includes(required))
+      problems.push(`the Try it block has no ${required} command`);
+  return problems;
+}
+
 /** The README wording of an `engines.node` range such as "^22.18.0 || >=24 <27". */
 export function nodeSentence(range) {
   const match = /^\^(\d+)\.(\d+)\.\d+ \|\| >=(\d+) <(\d+)$/.exec(range);
@@ -53,10 +106,8 @@ export function checkQuickstart(readme, { helpOf, nodeRange }) {
   }
   for (const { line, args } of parsed.commands) {
     const [subcommand, ...rest] = args;
-    let help;
-    try {
-      help = helpOf(subcommand);
-    } catch {
+    const help = subcommandHelp(helpOf, subcommand);
+    if (help === undefined) {
       problems.push(`${line}: the CLI has no subcommand ${subcommand}`);
       continue;
     }
