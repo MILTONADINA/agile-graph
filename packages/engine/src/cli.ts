@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Must stay the first import: it refuses an unsupported Node before other modules load.
+import "./node-gate.js";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
@@ -102,6 +104,7 @@ import {
   assertDockerRunning,
 } from "./security/scan.js";
 import { ENGINE_VERSION } from "./package-layout.js";
+import { usageName } from "./usage-name.js";
 import { runRetro, runsCreatedSince, summarizeRetro } from "./retro.js";
 import {
   LIVE_BASELINE_FILE,
@@ -211,7 +214,7 @@ async function readFlagJson<T>(label: string, file: string): Promise<T> {
 }
 
 const cli = new Command()
-  .name("graph-engine")
+  .name(usageName(process.argv[1]))
   .description("Local context, engineering memory, and controlled coding runs")
   .enablePositionalOptions()
   .version(ENGINE_VERSION)
