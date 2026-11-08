@@ -437,6 +437,8 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
   // with at most maxParallel generations running. Generated proposals wait in
   // `queued` and apply one at a time, the lowest plan position first, so
   // checkpoint ordering and pending-patch reconciliation are unchanged.
+  // KNOWN BLOCKER (not mergeable): a patch can apply while a sibling
+  // generation still reads the live workspace; see the tracking issue.
   const order = new Map(dag.steps.map((step, index) => [step.id, index]));
   const started = new Set<string>(completed);
   const announced = new Set<string>();
