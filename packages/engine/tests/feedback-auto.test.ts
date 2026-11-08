@@ -13,7 +13,10 @@ import Database from "better-sqlite3";
 import { DEFAULT_POLICY, type ProjectPolicy } from "@agile-graph/contracts";
 import {
   automaticFeedbackNotice,
+  automaticFeedbackNoticeMarker,
+  automaticFeedbackNoticeRecorded,
   readAutomaticFeedbackSettings,
+  recordAutomaticFeedbackNotice,
   setAutomaticFeedbackEnabled,
   submitAutomaticFeedback,
   type AutomaticFeedbackInput,
@@ -649,5 +652,27 @@ describe("automatic feedback", () => {
       }),
     ).toEqual({ status: "submitted", issueUrl: ISSUE_URL });
     expect(test.runCommand).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("automatic feedback notice marker", () => {
+  it("records the notice once per data directory and words it with the policy condition", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "graph-feedback-notice-"));
+    directories.push(dir);
+    const feedback = path.join(dir, "feedback");
+    expect(automaticFeedbackNoticeRecorded(feedback)).toBe(false);
+    recordAutomaticFeedbackNotice(feedback);
+    expect(automaticFeedbackNoticeRecorded(feedback)).toBe(true);
+    expect(automaticFeedbackNoticeMarker(feedback)).toBe(
+      path.join(feedback, "notice-shown"),
+    );
+    // Another data directory has its own marker.
+    expect(automaticFeedbackNoticeRecorded(path.join(dir, "other"))).toBe(
+      false,
+    );
+    expect(automaticFeedbackNotice()).toContain(
+      "Reports are sent only when the project policy allows api.github.com",
+    );
+    expect(automaticFeedbackNotice()).toContain("PUBLIC issues");
   });
 });

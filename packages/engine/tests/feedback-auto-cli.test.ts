@@ -405,5 +405,30 @@ describe(
         readFile(path.join(test.data, "feedback/difficulties.json")),
       ).rejects.toMatchObject({ code: "ENOENT" });
     });
+
+    it("prints the notice once per data directory and not at all when opted out", async () => {
+      const test = await fixture();
+      const first = await test.run(["init"]);
+      expect(first.code).toBe(0);
+      expect(first.stderr).toContain("PUBLIC issues");
+      expect(first.stderr).toContain(
+        "Reports are sent only when the project policy allows api.github.com",
+      );
+      await expect(
+        readFile(path.join(test.data, "feedback/notice-shown")),
+      ).resolves.toBeDefined();
+      const second = await test.run(["init"]);
+      expect(second.code).toBe(0);
+      expect(second.stderr).not.toContain("PUBLIC issues");
+      // The opt-out still wins, and prints nothing even in a fresh data dir.
+      const optedOut = await fixture();
+      const silent = await optedOut.run(["init"], {
+        GRAPH_ENGINE_NO_FEEDBACK: "1",
+      });
+      expect(silent.stderr).not.toContain("PUBLIC issues");
+      await expect(
+        readFile(path.join(optedOut.data, "feedback/notice-shown")),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    });
   },
 );
