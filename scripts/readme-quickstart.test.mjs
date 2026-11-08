@@ -6,13 +6,21 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { checkQuickstart, quickstart } from "./readme-quickstart.mjs";
+import {
+  checkQuickstart,
+  checkTryIt,
+  quickstart,
+} from "./readme-quickstart.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const cli = fileURLToPath(
   new URL("../packages/engine/dist/cli.js", import.meta.url),
 );
 const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+const engineReadme = await readFile(
+  new URL("../packages/engine/README.md", import.meta.url),
+  "utf8",
+);
 const { engines } = JSON.parse(
   await readFile(new URL("../packages/engine/package.json", import.meta.url)),
 );
@@ -72,4 +80,36 @@ test("a README without an Install quick start is reported", () => {
     checkQuickstart("# Title\n\nNo install here.\n", options).join("\n"),
     /Install/,
   );
+});
+
+test("every Try it command and flag in the engine README exists in the built CLI", () => {
+  assert.deepEqual(checkTryIt(engineReadme, options), []);
+});
+
+test("an engine README without a Try it section is reported", () => {
+  assert.match(
+    checkTryIt("# Title\n\nNo try it here.\n", options).join("\n"),
+    /Try it/,
+  );
+});
+
+test("a renamed Try it command is reported", () => {
+  const doctored = engineReadme.replace(
+    "graph-engine -C /path/to/your/project symbols calculateInvoice",
+    "graph-engine -C /path/to/your/project symbol calculateInvoice",
+  );
+  assert.notEqual(doctored, engineReadme);
+  assert.match(
+    checkTryIt(doctored, options).join("\n"),
+    /symbol calculateInvoice/,
+  );
+});
+
+test("a Try it block without summaries is reported", () => {
+  const doctored = engineReadme.replace(
+    "graph-engine -C /path/to/your/project summaries\n",
+    "",
+  );
+  assert.notEqual(doctored, engineReadme);
+  assert.match(checkTryIt(doctored, options).join("\n"), /summaries/);
 });
