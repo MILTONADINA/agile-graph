@@ -13,6 +13,7 @@ import {
   resolveJavaBindings,
   validateJavaOutput,
   watchRss,
+  parseRssSample,
   INVALID_RSS_LIMIT,
   analyze,
 } from "../src/context/java.js";
@@ -426,7 +427,7 @@ describe("Java analyzer memory sampling", () => {
   it("tolerates an isolated failed sample but kills on persistent failure or an over-limit reading", async () => {
     vi.useFakeTimers();
     try {
-      const watch = (sample: () => Promise<number | undefined>) => {
+      const watch = (sample: () => Promise<number | null | undefined>) => {
         const onOverLimit = vi.fn();
         const calls = vi.fn(sample);
         const unwatch = watchRss({
@@ -477,6 +478,15 @@ describe("Java analyzer memory sampling", () => {
         broken.unwatch();
       }
 
+      // A child that has exited but is not yet reaped (ps reports a zombie)
+      // is finished, not unreadable: it must not be killed for the samples
+      // taken while the exit is still on its way to this process.
+      const exited = watch(async () => null);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(exited.onOverLimit).not.toHaveBeenCalled();
+      expect(exited.calls).toHaveBeenCalledTimes(1);
+      exited.unwatch();
+
       // An actual reading over the limit stops the analyzer once.
       let rss = 900;
       const growing = watch(async () => rss);
@@ -492,6 +502,16 @@ describe("Java analyzer memory sampling", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+describe("Java analyzer ps sample parsing", () => {
+  it("reads rss and treats a zero reading (zombie or exit teardown) as exited", () => {
+    // ps -o rss= reports 0 for a zombie, and for a child in exit teardown
+    // whose memory is already released (observed on macOS under load).
+    expect(parseRssSample("     0 \n")).toBeNull();
+    expect(parseRssSample("  12345 \n")).toBe(12345);
+    expect(parseRssSample("")).toBeUndefined();
+    expect(parseRssSample("garbage\n")).toBeUndefined();
   });
 });
 describe("Java analyzer memory wiring", () => {
