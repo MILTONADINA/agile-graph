@@ -113,12 +113,17 @@ Each blocking finding gets a signature: a short hash of its file path and its
 text with case, numbers (line numbers included) and whitespace ignored, so the
 same finding keeps its signature when the code moves. A failing review's
 feedback lists the signatures and short texts of every finding raised so far
-and tells the worker not to repeat the same fix. If the next rejection raises
-a finding with the same signature, the run records `review.repeated_finding`
-and stops with the `repeated-review-finding` kind instead of spending another
-attempt on the same repair; change the approach (narrow the scope, make a
-structural fix, or mark it blocked) before resuming. A stop is never an
-acceptance. Each `review.completed` event records the round's `minutes`.
+and tells the worker not to repeat the same fix. If the next rejection raises a finding with the same signature, the run records
+`review.repeated_finding` with `action: "structural-fix"` and does not stop.
+The next repair round is told the same repair already failed: close the whole
+defect class, and keep the earlier cases as regression tests. If a third
+consecutive rejection raises it again, the run records `review.repeated_finding`
+with `action: "blocked"` and stops with the `repeated-review-finding` kind, its
+error naming the signature. Each repeat record carries the `minutes` of the
+review rounds that raised the repeated finding. A stop is never an acceptance.
+Each `review.completed` event records the round's `minutes` and `checksRun`, the
+number of checks the review was given. An approval with `checksRun` of 0 does not
+pass (see AC17 in `specs/quality/code-review-gate.md`).
 
 ## Limits
 

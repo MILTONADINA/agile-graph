@@ -532,7 +532,13 @@ export function rejectionHistory(
   return events.flatMap((event) => {
     const data = event.data;
     // A stop on a repeat is a break: a resume starts a fresh comparison.
-    if (event.type === "review.repeated_finding") return [[]];
+    // A structural-fix round is not a stop: the comparison goes on. Records
+    // from before the action field were all stops.
+    if (
+      event.type === "review.repeated_finding" &&
+      data.action !== "structural-fix"
+    )
+      return [[]];
     if (event.type !== "review.completed" || data.by === "person") return [];
     if (data.passed !== false || !Array.isArray(data.findings)) return [];
     const found = data.findings.flatMap((item: unknown) => {
@@ -576,6 +582,59 @@ export function repeatedSignatures(
   ];
 }
 
+/** Rounds in a row with the same signature before the fix must change. */
+export const STRUCTURAL_FIX_AT = 2;
+/** Rounds in a row with the same signature before the run stops as blocked. */
+export const BLOCKED_AT = 3;
+
+/**
+ * The repeat decision for this round: the signatures that have now been
+ * raised in STRUCTURAL_FIX_AT or more consecutive rejections, and the longest
+ * such streak. The streak counts this round, so a signature also in the
+ * previous round has a streak of two. Undefined when nothing repeats.
+ */
+export function repeatAction(
+  history: readonly (readonly { signature: string }[])[],
+  current: readonly { signature: string }[],
+):
+  | {
+      action: "structural-fix" | "blocked";
+      signatures: string[];
+      streak: number;
+    }
+  | undefined {
+  const repeated = [...new Set(current.map((finding) => finding.signature))]
+    .map((signature) => {
+      let streak = 1;
+      for (let index = history.length - 1; index >= 0; index--) {
+        if (!history[index]!.some((item) => item.signature === signature))
+          break;
+        streak++;
+      }
+      return { signature, streak };
+    })
+    .filter((item) => item.streak >= STRUCTURAL_FIX_AT);
+  if (!repeated.length) return undefined;
+  const streak = Math.max(...repeated.map((item) => item.streak));
+  return {
+    action: streak >= BLOCKED_AT ? "blocked" : "structural-fix",
+    signatures: repeated.map((item) => item.signature),
+    streak,
+  };
+}
+
+/**
+ * The instruction for a repair round after a finding came back in two
+ * rejections in a row: patching the one case again is not accepted.
+ */
+export function structuralFixNotice(signatures: readonly string[]): string {
+  return [
+    `The same finding (${signatures.join(", ")}) was raised in two review rounds in a row, so the same repair has already failed. Do not patch this one case again.`,
+    "Make a structural fix: change the approach so the whole defect class the finding belongs to is closed (for example an allowlist or a grammar in place of a case-by-case denylist), not only the place it was raised.",
+    "Keep each earlier case the reviews raised as a regression test. If the class cannot be closed within this task, say so in your report.",
+  ].join("\n");
+}
+
 /** Tells the next repair round which findings were already raised. */
 export function earlierFindingsNotice(
   history: readonly (readonly RejectedFinding[])[],
@@ -607,6 +666,13 @@ const location = (finding: { path: string | null; line: number | null }) =>
 export function reviewOutcome(
   review: WorkerReview,
   acceptance: readonly string[],
+  /**
+   * Checks actually executed for the snapshot under review. An approval
+   * with none is hollow: it does not pass, and a re-review must follow the
+   * checks. Omitted when the caller does not know, which leaves the verdict
+   * as the reviewer gave it.
+   */
+  executedChecks?: number,
 ): {
   passed: boolean;
   feedback: string;
@@ -632,15 +698,22 @@ export function reviewOutcome(
   const advisory = review.findings.filter(
     (finding) => finding.severity === "advisory",
   );
+  const hollow = review.verdict === "approve" && executedChecks === 0;
   const passed =
     review.verdict === "approve" &&
     answered &&
     !unmet.length &&
-    !blocking.length;
+    !blocking.length &&
+    !hollow;
   const feedback = passed
     ? ""
     : [
         `Code review requested changes: ${review.summary}`,
+        ...(hollow
+          ? [
+              "The reviewer approved, but no check was executed for this snapshot, so the approval does not count as an accept. Run the checks and review again.",
+            ]
+          : []),
         ...(answered
           ? []
           : [

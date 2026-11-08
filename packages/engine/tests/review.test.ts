@@ -6,6 +6,8 @@ import {
   findingSignature,
   rejectionHistory,
   repeatedSignatures,
+  repeatAction,
+  structuralFixNotice,
   invokeReviewWorker,
   invokeVerifyFix,
   priorBlockingFindings,
@@ -35,6 +37,23 @@ const approve: WorkerReview = {
 };
 
 describe("review outcome", () => {
+  it("does not pass an approval that ran no checks, and passes one that did", () => {
+    const hollow = reviewOutcome(approve, ["sum works"], 0);
+    expect(hollow.passed).toBe(false);
+    expect(hollow.feedback).toContain("does not count as an accept");
+    expect(reviewOutcome(approve, ["sum works"], 1).passed).toBe(true);
+    // Not known to the caller: the verdict stands as the reviewer gave it.
+    expect(reviewOutcome(approve, ["sum works"]).passed).toBe(true);
+    // A rejection stays a rejection whatever the check count.
+    expect(
+      reviewOutcome(
+        { ...approve, verdict: "request-changes" as const },
+        ["sum works"],
+        0,
+      ).feedback,
+    ).not.toContain("does not count as an accept");
+  });
+
   it("passes only a clean approval", () => {
     expect(reviewOutcome(approve, ["sum works"])).toEqual({
       passed: true,
@@ -518,6 +537,89 @@ describe("finding signature", () => {
       { type: "review.repeated_finding", data: {} },
     ]);
     expect(repeatedSignatures(resumed.at(-1)!, history[0]!)).toHaveLength(0);
+  });
+
+  it("asks for a structural fix on a repeat and stops as blocked on the third", () => {
+    const sig = (message: string) =>
+      findingSignature({ path: "a.ts", message });
+    const round = (...messages: string[]) =>
+      messages.map((message) => ({ signature: sig(message) }));
+    // Nothing before: no repeat.
+    expect(repeatAction([], round("Fix 1"))).toBeUndefined();
+    // Same finding in the previous round: structural fix.
+    expect(repeatAction([round("Fix 1")], round("Fix 1"))).toEqual({
+      action: "structural-fix",
+      signatures: [sig("Fix 1")],
+      streak: 2,
+    });
+    // Same finding in the two previous rounds: blocked.
+    expect(
+      repeatAction([round("Fix 1"), round("Fix 1")], round("Fix 1")),
+    ).toEqual({
+      action: "blocked",
+      signatures: [sig("Fix 1")],
+      streak: 3,
+    });
+    // A gap in the streak, or a different finding, is not a repeat.
+    expect(
+      repeatAction([round("Fix 1"), round("Other")], round("Fix 1")),
+    ).toBeUndefined();
+    expect(repeatAction([round("Fix 1")], round("Other"))).toBeUndefined();
+    // A line number moved in the message is still the same finding.
+    expect(
+      repeatAction(
+        [
+          [
+            {
+              signature: findingSignature({
+                path: "a.ts",
+                message: "Fix 1 at line 3",
+              }),
+            },
+          ],
+        ],
+        [
+          {
+            signature: findingSignature({
+              path: "a.ts",
+              message: "Fix 1 at line 9",
+            }),
+          },
+        ],
+      )?.action,
+    ).toBe("structural-fix");
+  });
+
+  it("keeps a structural-fix record in the comparison and breaks it on a stop", () => {
+    const rejected = {
+      type: "review.completed",
+      data: {
+        passed: false,
+        findings: [
+          { severity: "blocking", path: "a.ts", line: 1, message: "Same" },
+        ],
+      },
+    };
+    const continued = rejectionHistory([
+      rejected,
+      { type: "review.repeated_finding", data: { action: "structural-fix" } },
+    ]);
+    // The structural round does not end the comparison.
+    expect(continued).toHaveLength(1);
+    const stopped = rejectionHistory([
+      rejected,
+      { type: "review.repeated_finding", data: { action: "blocked" } },
+    ]);
+    expect(stopped).toHaveLength(2);
+    expect(stopped[0]).toHaveLength(1);
+    expect(stopped.at(-1)).toEqual([]);
+  });
+
+  it("names the signatures and the structural fix in the notice", () => {
+    const notice = structuralFixNotice(["Sabc"]);
+    expect(notice).toContain("Sabc");
+    expect(notice).toContain("Make a structural fix");
+    expect(notice).toContain("regression test");
   });
 });
 
