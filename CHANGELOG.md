@@ -8,8 +8,8 @@
   child that had finished but not yet been reaped, or was in exit teardown, was
   sampled as an unreadable process (`ps` reports a zero RSS), and three such
   samples made the memory watcher kill it, so the bindings came back empty.
-  Such a sample now means the child has exited, and the watch stops without
-  killing it. A child whose memory cannot be read is still killed after three
+  A zero sample is no longer counted as unreadable; the watch keeps the cap
+  until the child has really exited. A child whose memory cannot be read is still killed after three
   failed samples. Fixes #360.
 
 ## [0.7.0] - 2026-11-08
@@ -57,7 +57,7 @@
 
 - The engine CLI refuses to start on a Node version outside `engines.node`
   (`^22.18.0 || >=24 <27`). It writes one line to stderr, `agile-graph needs
-  Node 22.18+ or 24 to 26; this is <version>`, and exits 1, before any other
+Node 22.18+ or 24 to 26; this is <version>`, and exits 1, before any other
   module loads. Before, Node 22.17 only printed npm's EBADENGINE warning and
   every command ran (#355).
 - `--help` names the binary that was invoked, `agile-graph` or `graph-engine`,

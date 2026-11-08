@@ -435,9 +435,10 @@ function sampleRss(pid: number): Promise<number | null | undefined> {
  * the limit. A single failed, empty or zero sample is tolerated (ps can fail
  * once under load or as the child exits, and the next tick sees the exit),
  * but INVALID_RSS_LIMIT consecutive invalid samples also report over-limit:
- * a child whose memory cannot be read is not allowed to run uncapped. A child
- * sampled as exited (null) has finished and is no longer capped: the watch
- * stops without reporting, and the analyzer's own exit handling settles it.
+ * a child whose memory cannot be read is not allowed to run uncapped. A zero
+ * sample (null: exit teardown, or a fully swapped-out child) is neither valid
+ * nor counted as unreadable, and the watch continues until the analyzer's own
+ * exit handling stops it.
  */
 export const INVALID_RSS_LIMIT = 3;
 export function watchRss(options: {
@@ -460,8 +461,12 @@ export function watchRss(options: {
       rss = undefined;
     }
     if (!active()) return;
+    // A zero reading (null) is a child in exit teardown or not yet reaped. It
+    // is not counted as unreadable, but the watch goes on: a live process can
+    // also read zero (fully swapped out), and must stay capped. The analyzer's
+    // exit handling stops the watch once the child has really exited.
     if (rss === null) {
-      stopped = true;
+      timer = setTimeout(() => void tick(), options.intervalMs ?? 40);
       return;
     }
     const valid = rss !== undefined && Number.isFinite(rss) && rss > 0;
