@@ -121,6 +121,25 @@ describe("re-check cycles", () => {
     expect(retro.recheckMinutes).toEqual([]);
   });
 
+  it("does not count a reviewer's retry decision as a review re-check", () => {
+    const step = (event: RunEvent) => ({ ...event, stepId: "one" });
+    const retro = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      step(event(1, "review.started")),
+      step(event(2, "review.completed", { passed: true })),
+      step(event(3, "attempt.repeat_decision_started", { attempt: 2 })),
+      step(event(4, "attempt.repeat_decision", { decision: "retry" })),
+      // The one real re-check of the step's review.
+      step(event(5, "review.started")),
+      step(event(6, "review.completed", { passed: true })),
+      event(7, "run.succeeded"),
+    ]);
+    expect(retro.recheckCycles).toBe(1);
+    expect(retro.recheckMinutes).toEqual([{ phase: "review", minutes: 1 }]);
+    // The retry decision still counts as review time, just not as a cycle.
+    expect(retro.minutes.review).toBe(3);
+  });
+
   it("counts a cycle a stop cut short, with no minutes", () => {
     const retro = runRetro(record("failed"), [
       event(0, "run.started"),
@@ -160,6 +179,44 @@ describe("re-check cycles", () => {
       minutes: 11,
       medianPerCycle: 4,
     });
+  });
+
+  it("gives each run's retro its own re-check total and median minutes", () => {
+    const cycles = (id: string, minutes: number[]): [RunRecord, RunEvent[]] => {
+      const events: RunEvent[] = [event(0, "run.started")];
+      let at = 1;
+      for (const [index, length] of minutes.entries()) {
+        events.push(event(at, "verification.started", { n: index }));
+        events.push(
+          event(at + length, "verification.completed", { checks: passing }),
+        );
+        at += length + 1;
+      }
+      events.push(event(at, "run.succeeded"));
+      return [record("succeeded", id), events];
+    };
+    const [runA, eventsA] = cycles("a", [1, 5, 4]);
+    const [runB, eventsB] = cycles("b", [3, 2]);
+    const retros = [runRetro(runA, eventsA), runRetro(runB, eventsB)];
+    // Run A's re-checks take 5 and 4 minutes; run B's take 2.
+    expect(retros[0]).toMatchObject({
+      recheckTotalMinutes: 9,
+      recheckMedianMinutes: 4.5,
+    });
+    expect(retros[1]).toMatchObject({
+      recheckTotalMinutes: 2,
+      recheckMedianMinutes: 2,
+    });
+    // The totals are the same figures over both runs' cycles.
+    const summary = summarizeRetro(retros);
+    expect(summary.recheck).toEqual({
+      cycles: 3,
+      minutes: 11,
+      medianPerCycle: 4,
+    });
+    expect(summary.perRun.map((run) => run.recheckMedianMinutes)).toEqual([
+      4.5, 2,
+    ]);
   });
 
   it("reads a record made before the field existed as zero", () => {
