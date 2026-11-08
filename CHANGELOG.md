@@ -48,8 +48,8 @@
 - The engine README has a "Try it" block for `index --lexical`, `context`,
   `symbols` and `summaries`, an Uninstall section with the per-OS data
   directory and each project's `.graph/`, and states that `init --cloud-mcp`
-  sets inference and network to allowlisted with empty providers and
-  allowedHosts (#356).
+  needs `--export`, only sets up a new project, and sets inference and network
+  to allowlisted with empty providers and allowedHosts (#356).
 
 ## [0.6.0] - 2026-11-07
 

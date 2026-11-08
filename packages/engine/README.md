@@ -32,8 +32,9 @@ graph-engine -C /path/to/your/project index --lexical
 graph-engine -C /path/to/your/project serve
 ```
 
-`init --cloud-mcp` sets inference and network to allowlisted, with providers
-and allowedHosts empty.
+`init --cloud-mcp` needs at least one `--export <glob>` and only sets up a new
+project: it refuses one that already has `.graph/project.json`. It sets
+inference and network to allowlisted, with providers and allowedHosts empty.
 
 `serve` prints a loopback URL for the dashboard. Without `--cloud-mcp`, a new
 project uses local-only inference, no external network, no publication and
@@ -116,9 +117,10 @@ Delete it as well:
 - Linux: `~/.local/share/agile-graph`, or `$XDG_DATA_HOME/agile-graph` when set
 - Windows: `%LOCALAPPDATA%\agile-graph\Data`
 
-This folder holds every project's databases and runs. It also holds promotion
-files if you set up promotion (`promotion-keys/` and `promotion-enrollment/`),
-so back up anything you need first. Deleting it cannot be undone. An older
+This folder holds every project's databases and runs. On macOS and Linux it
+also holds promotion files if you set up promotion (`promotion-keys/` and
+`promotion-enrollment/`). On Windows those are in `~\.local\share\agile-graph`
+instead, so delete that folder too. Back up anything you need first. Deleting it cannot be undone. An older
 `graph-engineering` folder beside it can be removed the same way.
 
 Each project also has a `.graph/` folder with its `project.json` and any files
