@@ -20,9 +20,22 @@ export interface RetroMinutes {
   waiting: number;
 }
 
-/** Why a stop or wait needs the person; a closed set. */
-export type PersonReason =
-  "approval" | "credential" | "spending" | "owner-decision";
+/**
+ * Why a next step needs the person: approval, credential, spending or a
+ * decision only the person can make. A closed set; anything else is the
+ * graph's to schedule.
+ */
+export const PERSON_REASONS = [
+  "approval",
+  "credential",
+  "spending",
+  "decision",
+] as const;
+export type PersonReason = (typeof PERSON_REASONS)[number];
+
+export function isPersonReason(value: unknown): value is PersonReason {
+  return (PERSON_REASONS as readonly unknown[]).includes(value);
+}
 
 /**
  * Who a stop belongs to: a person reason, or `graph` for a defect the graph
@@ -36,9 +49,9 @@ export const STOP_OWNERS = {
   "policy-changed": "approval",
   "worker-unavailable": "credential",
   "cost-cap": "spending",
-  "live-scan": "owner-decision",
-  "workspace-reconciliation": "owner-decision",
-  configuration: "owner-decision",
+  "live-scan": "decision",
+  "workspace-reconciliation": "decision",
+  configuration: "decision",
   "worker-no-progress": "graph",
   "repeated-failure": "graph",
   "checks-failed": "graph",
@@ -59,14 +72,38 @@ export const STOP_OWNERS = {
 
 /** Events where a run waits for a person, with the reason. */
 export const HUMAN_WAIT_REASONS = {
-  "acceptance.pending_review": "owner-decision",
+  "acceptance.pending_review": "decision",
 } as const satisfies Record<string, PersonReason>;
+
+/**
+ * The gates a re-check cycle can repeat: a verification, review or security
+ * scan of the same step that already ran once in this run.
+ */
+export type RecheckPhase = "verification" | "review" | "security";
+
+/** One completed re-check cycle and its wall-clock minutes. */
+export interface RecheckCycle {
+  phase: RecheckPhase;
+  minutes: number;
+}
 
 /** One run's delivery record: counts, minutes, kinds and its ID only. */
 export interface RunRetro {
   runId: string;
   status: RunRecord["status"];
   minutes: RetroMinutes;
+  /**
+   * Re-check cycles started: a verification, review or security scan of a
+   * step that an earlier scan of the same phase in this run already covered
+   * (the same gate, run again after a change or a repeated decision). Absent
+   * in records made before these fields existed.
+   */
+  recheckCycles?: number;
+  /**
+   * Each re-check cycle that finished, in order, with its minutes. A cycle
+   * a stop or a resume cut short is counted above but has no minutes here.
+   */
+  recheckMinutes?: RecheckCycle[];
   /** Worker attempts started, counting the attempts of each resume. */
   attempts: number;
   verifications: number;
@@ -119,7 +156,39 @@ export interface RetroSummary {
   deferredByReason: Partial<Record<PersonReason, number>>;
   graphOwnedStops: number;
   graphOwnedWithoutFollowUp: number;
+  recheck: {
+    cycles: number;
+    /** Minutes of the re-check cycles that finished. */
+    minutes: number;
+    medianPerCycle: number;
+  };
+  /** The estimates the caller supplied, each stated as its text. */
+  estimates: string[];
   perRun: RunRetro[];
+}
+
+/**
+ * A time or effort estimate, stated as what is true once its step elapses.
+ * It never reads as readiness while steps remain: the text always names the
+ * steps still left before the goal.
+ */
+export interface StepEstimate {
+  /** What is true when the step this estimate covers has elapsed. */
+  stateAfterStep: string;
+  /** Steps still needed after that step; a whole number, zero or more. */
+  stepsRemaining: number;
+  /** The goal those steps lead to, named in the text. */
+  goal: string;
+}
+
+/** The estimate as the report prints it; refuses an estimate it cannot state. */
+export function stepEstimateText(estimate: StepEstimate): string {
+  const { stateAfterStep, stepsRemaining, goal } = estimate;
+  if (!stateAfterStep.trim() || !goal.trim())
+    throw new Error("An estimate needs its state and its goal");
+  if (!Number.isInteger(stepsRemaining) || stepsRemaining < 0)
+    throw new Error("An estimate's remaining steps must be a whole number");
+  return `${stateAfterStep.trim()}. after this step: ${stepsRemaining} steps remain before ${goal.trim()}`;
 }
 
 const PHASES = {
@@ -137,6 +206,20 @@ const CLOSERS = new Map<string, Phase>(
   Object.values(PHASES).map(([phase, closer]) => [closer, phase]),
 );
 const ENDS = new Set(["run.succeeded", "run.stopped"]);
+
+const isRecheckPhase = (phase: Phase): phase is RecheckPhase =>
+  phase === "verification" || phase === "review" || phase === "security";
+
+/**
+ * The owner a stop kind routes to. A kind the table does not classify, or a
+ * value that is neither a person reason nor `graph`, is the graph's.
+ */
+function ownerOf(kind: string): StopOwner {
+  const owner: unknown = Object.hasOwn(STOP_OWNERS, kind)
+    ? (STOP_OWNERS as Record<string, unknown>)[kind]
+    : undefined;
+  return isPersonReason(owner) || owner === "graph" ? owner : "graph";
+}
 
 const minutesBetween = (from: string, to: string) =>
   Math.max(0, Date.parse(to) - Date.parse(from)) / 60_000;
@@ -244,10 +327,23 @@ export function runRetro(
     stopped: [],
   };
   // Open spans by phase and step, in the order they opened.
-  const open = new Map<string, { phase: Phase; start: number }>();
-  const close = (key: string, at: number) => {
+  const open = new Map<
+    string,
+    { phase: Phase; start: number; recheck: boolean }
+  >();
+  // Phase and step keys a span has already opened in this run.
+  const opened = new Set<string>();
+  const recheckMinutes: RecheckCycle[] = [];
+  let recheckCycles = 0;
+  // Only a span its finish event closed counts as a finished cycle.
+  const close = (key: string, at: number, completed: boolean) => {
     const span = open.get(key)!;
     spans[span.phase].push([span.start, at]);
+    if (completed && span.recheck && isRecheckPhase(span.phase))
+      recheckMinutes.push({
+        phase: span.phase,
+        minutes: (at - span.start) / 60_000,
+      });
     open.delete(key);
   };
   let stoppedAt: number | undefined;
@@ -266,7 +362,7 @@ export function runRetro(
   const deferredByReason: Partial<Record<PersonReason, number>> = {};
   let graphOwnedStops = 0;
   let terminalOwner: StopOwner | undefined;
-  let humanWait: PersonReason | undefined;
+  let humanWait: StopOwner | undefined;
   const route = (owner: StopOwner) => {
     if (owner === "graph") graphOwnedStops++;
     else deferredByReason[owner] = (deferredByReason[owner] ?? 0) + 1;
@@ -278,8 +374,11 @@ export function runRetro(
     if (opens) {
       const key = `${opens[0]}\u0000${step}`;
       // A new start for a step whose span is still open ends that span.
-      if (open.has(key)) close(key, at);
-      open.set(key, { phase: opens[0], start: at });
+      if (open.has(key)) close(key, at, false);
+      const recheck = opened.has(key);
+      opened.add(key);
+      if (recheck && isRecheckPhase(opens[0])) recheckCycles++;
+      open.set(key, { phase: opens[0], start: at, recheck });
     }
     const closes = CLOSERS.get(event.type);
     if (closes) {
@@ -289,7 +388,7 @@ export function runRetro(
         .filter(([, span]) => span.phase === closes)
         .at(-1)?.[0];
       const match = open.has(key) ? key : step ? undefined : latest;
-      if (match) close(match, at);
+      if (match) close(match, at, true);
     }
     if (event.type === "run.started" && stoppedAt !== undefined) {
       spans.stopped.push([stoppedAt, at]);
@@ -297,22 +396,26 @@ export function runRetro(
     }
     if (event.type === "run.stopped") {
       // A stop ends every open span; time stopped is not phase time.
-      for (const key of [...open.keys()]) close(key, at);
+      for (const key of [...open.keys()]) close(key, at, false);
       // A first verification the stop interrupted stays reached and failed.
       firstVerificationOpen = false;
       stoppedAt = at;
-      if (typeof event.data.error === "string") {
-        const kind = classifyError(event.data.error);
-        stopKinds.push(kind);
-        route(STOP_OWNERS[kind]);
-        terminalOwner = STOP_OWNERS[kind];
-      }
+      // A stop with no reason is the graph's to explain and schedule.
+      const kind =
+        typeof event.data.error === "string"
+          ? classifyError(event.data.error)
+          : "unknown";
+      stopKinds.push(kind);
+      const owner = ownerOf(kind);
+      route(owner);
+      terminalOwner = owner;
     }
     // The wait is recorded before the final gates and publication, so it
     // only counts once the run went on to succeed (below), and once.
     const waitReason =
       HUMAN_WAIT_REASONS[event.type as keyof typeof HUMAN_WAIT_REASONS];
-    if (waitReason) humanWait = waitReason;
+    if (waitReason)
+      humanWait = isPersonReason(waitReason) ? waitReason : "graph";
     if (event.type === "attempt.started") attempts++;
     // A multi-step plan's first worker attempts start as steps.
     if (
@@ -380,6 +483,11 @@ export function runRetro(
     lessonsProposed,
     lessonsApplied,
     stopKinds,
+    recheckCycles,
+    recheckMinutes: recheckMinutes.map(({ phase, minutes }) => ({
+      phase,
+      minutes: round(minutes),
+    })),
     deferredToPerson: Object.values(deferredByReason).reduce(
       (total, n) => total + n,
       0,
@@ -431,8 +539,11 @@ export function runsCreatedSince<Run extends { createdAt: string }>(
   return runs.filter((run) => Date.parse(run.createdAt) >= from);
 }
 
-/** Total run retros. */
-export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
+/** Total run retros; `estimates` are stated, checked and printed as given. */
+export function summarizeRetro(
+  retros: readonly RunRetro[],
+  options: { estimates?: readonly StepEstimate[] } = {},
+): RetroSummary {
   const perRun = [...retros];
   const sum = (pick: (retro: RunRetro) => number) =>
     round(perRun.reduce((total, retro) => total + pick(retro), 0));
@@ -445,6 +556,16 @@ export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
     : totals.length % 2
       ? totals[middle]!
       : (totals[middle - 1]! + totals[middle]!) / 2;
+  const cycles = perRun
+    .flatMap((retro) => retro.recheckMinutes ?? [])
+    .map((cycle) => cycle.minutes)
+    .sort((a, b) => a - b);
+  const cycleMiddle = Math.floor(cycles.length / 2);
+  const cycleMedian = !cycles.length
+    ? 0
+    : cycles.length % 2
+      ? cycles[cycleMiddle]!
+      : (cycles[cycleMiddle - 1]! + cycles[cycleMiddle]!) / 2;
   const count = (values: string[]) =>
     values.reduce<Record<string, number>>(
       (counts, value) => ({ ...counts, [value]: (counts[value] ?? 0) + 1 }),
@@ -491,6 +612,12 @@ export function summarizeRetro(retros: readonly RunRetro[]): RetroSummary {
     graphOwnedWithoutFollowUp: sum(
       (retro) => retro.graphOwnedWithoutFollowUp ?? 0,
     ),
+    recheck: {
+      cycles: sum((retro) => retro.recheckCycles ?? 0),
+      minutes: round(cycles.reduce((total, minutes) => total + minutes, 0)),
+      medianPerCycle: round(cycleMedian),
+    },
+    estimates: (options.estimates ?? []).map(stepEstimateText),
     perRun,
   };
 }

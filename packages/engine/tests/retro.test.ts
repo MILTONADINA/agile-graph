@@ -429,7 +429,7 @@ describe("delivery retro", () => {
 
   describe("deferral to the person", () => {
     const owners = Object.entries(STOP_OWNERS);
-    const PERSON = ["approval", "credential", "spending", "owner-decision"];
+    const PERSON = ["approval", "credential", "spending", "decision"];
 
     it("classifies every stop kind as a person reason or the graph's own", () => {
       const kinds = [...ERROR_KINDS.map(({ kind }) => kind), "unknown"].sort();
@@ -466,7 +466,7 @@ describe("delivery retro", () => {
       expect(retro.deferredToPerson).toBe(2);
       expect(retro.deferredByReason).toEqual({
         spending: 1,
-        "owner-decision": 1,
+        decision: 1,
       });
     });
 
@@ -491,7 +491,7 @@ describe("delivery retro", () => {
         event(3, "acceptance.pending_review", {}),
         event(4, "run.succeeded"),
       ]);
-      expect(resumed.deferredByReason).toEqual({ "owner-decision": 1 });
+      expect(resumed.deferredByReason).toEqual({ decision: 1 });
     });
 
     it("counts a checks-failed stop as graph-owned, not deferred", () => {
