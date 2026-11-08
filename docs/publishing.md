@@ -65,7 +65,11 @@ workflow needs npm 11.5.1 or later, which it installs.
    two-factor authentication on your npm account.
 2. **Protect the release environment.** In the GitHub repository, open
    Settings → Environments → `npm` and add yourself as a required reviewer,
-   so every publish waits for your approval.
+   so every publish waits for your approval. Clear **Allow administrators to
+   bypass configured protection rules**, so no admin can skip that approval
+   (`gh api repos/MILTONADINA/agile-graph/environments/npm --jq .can_admins_bypass`
+   prints `false`). When a second reviewer is added, also turn on **Prevent
+   self-review**.
 3. **Protect the release tags.** Add an active tag ruleset for `refs/tags/v*`
    that restricts creation and blocks updates and deletions, with the
    repository admin role as the only bypass. Then only an admin can create,
