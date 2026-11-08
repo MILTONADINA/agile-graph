@@ -35,8 +35,10 @@ behaviour clauses).
   - Test: packages/engine/tests/run-end-handoff.test.ts :: counts a cycle a stop cut short, with no minutes
 - AC7: While a worker repeats an attempt or a step's first scan runs, the system shall not count them as re-check cycles.
   - Test: packages/engine/tests/run-end-handoff.test.ts :: does not count a worker's repeated attempts or a step's first scan as re-checks
+  - Test: packages/engine/tests/run-end-handoff.test.ts :: does not count a reviewer's retry decision as a review re-check
 - AC8: The report shall give the re-check cycles, their total minutes and their median minutes per cycle, in the totals and in each run's retro.
   - Test: packages/engine/tests/run-end-handoff.test.ts :: totals cycles, minutes and the median minutes per cycle across runs
+  - Test: packages/engine/tests/run-end-handoff.test.ts :: gives each run's retro its own re-check total and median minutes
 - AC9: When a run record was made before the re-check fields existed, the system shall read it as zero re-check cycles.
   - Test: packages/engine/tests/run-end-handoff.test.ts :: reads a record made before the field existed as zero
 - AC10: When the report prints a time or effort estimate, the system shall state what is true after the step and print `after this step: N steps remain before <goal>`, where N is a whole number of zero or more.

@@ -104,6 +104,10 @@ export interface RunRetro {
    * a stop or a resume cut short is counted above but has no minutes here.
    */
   recheckMinutes?: RecheckCycle[];
+  /** Minutes of this run's finished re-check cycles, summed. */
+  recheckTotalMinutes?: number;
+  /** Median minutes per finished re-check cycle of this run; zero for none. */
+  recheckMedianMinutes?: number;
   /** Worker attempts started, counting the attempts of each resume. */
   attempts: number;
   verifications: number;
@@ -202,10 +206,22 @@ const PHASES = {
   "security.scan_started": ["security", "security.scan_completed"],
 } as const;
 type Phase = (typeof PHASES)[keyof typeof PHASES][0];
-const CLOSERS = new Map<string, Phase>(
-  Object.values(PHASES).map(([phase, closer]) => [closer, phase]),
+// Spans are keyed by their opening event, so a repeat decision (which shares
+// the review phase's minutes) never closes or re-opens a review re-check.
+const CLOSERS = new Map<string, keyof typeof PHASES>(
+  Object.entries(PHASES).map(([opener, [, closer]]) => [
+    closer,
+    opener as keyof typeof PHASES,
+  ]),
 );
 const ENDS = new Set(["run.succeeded", "run.stopped"]);
+
+// The scans a re-check cycle can repeat. A repeat decision is not one.
+const RECHECK_OPENERS = new Set<string>([
+  "verification.started",
+  "review.started",
+  "security.scan_started",
+]);
 
 const isRecheckPhase = (phase: Phase): phase is RecheckPhase =>
   phase === "verification" || phase === "review" || phase === "security";
@@ -219,6 +235,27 @@ function ownerOf(kind: string): StopOwner {
     ? (STOP_OWNERS as Record<string, unknown>)[kind]
     : undefined;
   return isPersonReason(owner) || owner === "graph" ? owner : "graph";
+}
+
+/** The median of the values; zero for none. Shared by runs and totals. */
+function medianOf(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (!sorted.length) return 0;
+  return sorted.length % 2
+    ? sorted[middle]!
+    : (sorted[middle - 1]! + sorted[middle]!) / 2;
+}
+
+/** Total and median minutes of re-check cycles; the same for a run or all runs. */
+function recheckTotals(minutes: readonly number[]): {
+  total: number;
+  median: number;
+} {
+  return {
+    total: minutes.reduce((total, value) => total + value, 0),
+    median: medianOf(minutes),
+  };
 }
 
 const minutesBetween = (from: string, to: string) =>
@@ -326,12 +363,17 @@ export function runRetro(
     security: [],
     stopped: [],
   };
-  // Open spans by phase and step, in the order they opened.
+  // Open spans by opening event and step, in the order they opened.
   const open = new Map<
     string,
-    { phase: Phase; start: number; recheck: boolean }
+    {
+      opener: keyof typeof PHASES;
+      phase: Phase;
+      start: number;
+      recheck: boolean;
+    }
   >();
-  // Phase and step keys a span has already opened in this run.
+  // Opening event and step keys a span has already opened in this run.
   const opened = new Set<string>();
   const recheckMinutes: RecheckCycle[] = [];
   let recheckCycles = 0;
@@ -372,20 +414,25 @@ export function runRetro(
     const step = event.stepId ?? "";
     const opens = PHASES[event.type as keyof typeof PHASES];
     if (opens) {
-      const key = `${opens[0]}\u0000${step}`;
+      const key = `${event.type}\u0000${step}`;
       // A new start for a step whose span is still open ends that span.
       if (open.has(key)) close(key, at, false);
-      const recheck = opened.has(key);
+      const recheck = RECHECK_OPENERS.has(event.type) && opened.has(key);
       opened.add(key);
-      if (recheck && isRecheckPhase(opens[0])) recheckCycles++;
-      open.set(key, { phase: opens[0], start: at, recheck });
+      if (recheck) recheckCycles++;
+      open.set(key, {
+        opener: event.type as keyof typeof PHASES,
+        phase: opens[0],
+        start: at,
+        recheck,
+      });
     }
     const closes = CLOSERS.get(event.type);
     if (closes) {
       const key = `${closes}\u0000${step}`;
-      // A finish without the start's step closes that phase's latest span.
+      // A finish without the start's step closes that opener's latest span.
       const latest = [...open]
-        .filter(([, span]) => span.phase === closes)
+        .filter(([, span]) => span.opener === closes)
         .at(-1)?.[0];
       const match = open.has(key) ? key : step ? undefined : latest;
       if (match) close(match, at, true);
@@ -455,6 +502,10 @@ export function runRetro(
     inRun.at(-1)?.type === "run.stopped" &&
     !ordered.slice(inRun.length).some((e) => e.type === "run.started");
   if (humanWait && inRun.at(-1)?.type === "run.succeeded") route(humanWait);
+  const cycles: RecheckCycle[] = recheckMinutes.map(({ phase, minutes }) => ({
+    phase,
+    minutes: round(minutes),
+  }));
   const minutes: RetroMinutes = {
     total:
       inRun.length > 1 ? minutesBetween(inRun[0]!.at, inRun.at(-1)!.at) : 0,
@@ -469,6 +520,7 @@ export function runRetro(
     0,
     minutes.total - unionMinutes(Object.values(spans).flat()),
   );
+  const cycleTotals = recheckTotals(cycles.map((cycle) => cycle.minutes));
   return {
     runId: run.id,
     status: run.status,
@@ -484,10 +536,9 @@ export function runRetro(
     lessonsApplied,
     stopKinds,
     recheckCycles,
-    recheckMinutes: recheckMinutes.map(({ phase, minutes }) => ({
-      phase,
-      minutes: round(minutes),
-    })),
+    recheckMinutes: cycles,
+    recheckTotalMinutes: round(cycleTotals.total),
+    recheckMedianMinutes: round(cycleTotals.median),
     deferredToPerson: Object.values(deferredByReason).reduce(
       (total, n) => total + n,
       0,
@@ -547,25 +598,10 @@ export function summarizeRetro(
   const perRun = [...retros];
   const sum = (pick: (retro: RunRetro) => number) =>
     round(perRun.reduce((total, retro) => total + pick(retro), 0));
-  const totals = perRun
-    .map((retro) => retro.minutes.total)
-    .sort((a, b) => a - b);
-  const middle = Math.floor(totals.length / 2);
-  const median = !totals.length
-    ? 0
-    : totals.length % 2
-      ? totals[middle]!
-      : (totals[middle - 1]! + totals[middle]!) / 2;
-  const cycles = perRun
-    .flatMap((retro) => retro.recheckMinutes ?? [])
-    .map((cycle) => cycle.minutes)
-    .sort((a, b) => a - b);
-  const cycleMiddle = Math.floor(cycles.length / 2);
-  const cycleMedian = !cycles.length
-    ? 0
-    : cycles.length % 2
-      ? cycles[cycleMiddle]!
-      : (cycles[cycleMiddle - 1]! + cycles[cycleMiddle]!) / 2;
+  const median = medianOf(perRun.map((retro) => retro.minutes.total));
+  const cycleTotals = recheckTotals(
+    perRun.flatMap((retro) => retro.recheckMinutes ?? []).map((c) => c.minutes),
+  );
   const count = (values: string[]) =>
     values.reduce<Record<string, number>>(
       (counts, value) => ({ ...counts, [value]: (counts[value] ?? 0) + 1 }),
@@ -614,8 +650,8 @@ export function summarizeRetro(
     ),
     recheck: {
       cycles: sum((retro) => retro.recheckCycles ?? 0),
-      minutes: round(cycles.reduce((total, minutes) => total + minutes, 0)),
-      medianPerCycle: round(cycleMedian),
+      minutes: round(cycleTotals.total),
+      medianPerCycle: round(cycleTotals.median),
     },
     estimates: (options.estimates ?? []).map(stepEstimateText),
     perRun,
