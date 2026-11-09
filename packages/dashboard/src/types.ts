@@ -59,7 +59,12 @@ export interface OverviewCard {
   status: string;
   column: OverviewColumn;
   phase: string;
-  steps: { id: string; state: "waiting" | "working" | "done" }[] | null;
+  steps:
+    | {
+        id: string;
+        state: "waiting" | "working" | "done" | "failed" | "skipped";
+      }[]
+    | null;
   gates: {
     checks: "passed" | "failed" | "pending" | "not-run";
     review:

@@ -384,6 +384,74 @@ describe("delivery retro", () => {
     expect(notAnnounced.stepWaits).toEqual([]);
   });
 
+  it("measures how long a step waited on setup, from blocked to ready, without its ID", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const retro = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      step(
+        event(0, "dag.step.blocked", { kind: "worker", waitingOnSetup: true }),
+        "step-private-zq",
+      ),
+      step(
+        event(3, "dag.step.ready", { kind: "worker", afterSetup: true }),
+        "step-private-zq",
+      ),
+      event(6, "run.succeeded"),
+    ]);
+    expect(retro.setupWaits).toEqual([{ kind: "worker", minutes: 3 }]);
+    expect(retro.setupWaitTotalMinutes).toBe(3);
+    expect(retro.setupWaitMedianMinutes).toBe(3);
+    expect(summarizeRetro([retro]).setupWait).toEqual({
+      steps: 1,
+      minutes: 3,
+      medianPerStep: 3,
+    });
+    expect(JSON.stringify(summarizeRetro([retro]))).not.toContain(
+      "step-private-zq",
+    );
+  });
+
+  it("does not count a stop between blocked and ready, or a step blocked only on a product step, as setup wait", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const stopped = event(2, "run.stopped", { error: "Docker is not running" });
+    const retro = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      step(
+        event(0, "dag.step.blocked", { kind: "worker", waitingOnSetup: true }),
+        "one",
+      ),
+      stopped,
+      event(20, "run.started"),
+      step(event(22, "dag.step.ready", { kind: "worker" }), "one"),
+      step(
+        event(22, "dag.step.blocked", {
+          kind: "worker",
+          waitingOnSetup: false,
+        }),
+        "two",
+      ),
+      step(event(25, "dag.step.ready", { kind: "worker" }), "two"),
+      event(26, "run.succeeded"),
+    ]);
+    expect(retro.setupWaits).toEqual([]);
+    expect(summarizeRetro([retro]).setupWait.steps).toBe(0);
+  });
+
+  it("drops a blocked step that failed or was skipped", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const retro = runRetro(record("failed"), [
+      event(0, "run.started"),
+      step(
+        event(0, "dag.step.blocked", { kind: "worker", waitingOnSetup: true }),
+        "one",
+      ),
+      step(event(1, "dag.step.skipped", { kind: "worker" }), "one"),
+      step(event(4, "dag.step.ready", { kind: "worker" }), "one"),
+      event(5, "run.failed"),
+    ]);
+    expect(retro.setupWaits).toEqual([]);
+  });
+
   it("tells unnamed checks with the same command in different images apart", () => {
     const failingIn = (image: string) => [
       { argv: ["npm", "test"], image, code: 1, stdout: "", stderr: "" },

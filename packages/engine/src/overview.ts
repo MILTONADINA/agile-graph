@@ -5,7 +5,7 @@ export type OverviewColumn = "needs-you" | "in-progress" | "done";
 
 export interface OverviewStep {
   id: string;
-  state: "waiting" | "working" | "done";
+  state: "waiting" | "working" | "done" | "failed" | "skipped";
 }
 
 export interface OverviewCard {
@@ -52,6 +52,10 @@ const PHASES: [string, string][] = [
   ["dag.repair_started", "Repairing the combined result"],
   ["patch.applied", "Change applied; checking it"],
   ["worker.dispatched", "Implementing"],
+  [
+    "dag.step.failed",
+    "A step failed; finishing the steps that do not depend on it",
+  ],
   ["dag.step.started", "Implementing"],
   ["attempt.started", "Implementing"],
   ["context.memories", "Gathering context"],
@@ -463,13 +467,28 @@ function card(
         .filter((event) => event.type === "dag.step.started")
         .map((event) => event.stepId),
     );
+    // Failed and skipped steps are this attempt's: a resume runs them again.
+    const failed = new Set(
+      attempt
+        .filter((event) => event.type === "dag.step.failed")
+        .map((event) => event.stepId),
+    );
+    const skipped = new Set(
+      attempt
+        .filter((event) => event.type === "dag.step.skipped")
+        .map((event) => event.stepId),
+    );
     steps = run.plan.steps.map((step) => ({
       id: step.id,
       state: done.has(step.id)
         ? "done"
-        : active && started.has(step.id)
-          ? "working"
-          : "waiting",
+        : failed.has(step.id)
+          ? "failed"
+          : skipped.has(step.id)
+            ? "skipped"
+            : active && started.has(step.id)
+              ? "working"
+              : "waiting",
     }));
   }
 

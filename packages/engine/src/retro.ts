@@ -122,6 +122,16 @@ export interface RunRetro {
    * applied) to starting, in start order. Empty for runs without steps.
    */
   stepWaits?: StepWait[];
+  /**
+   * Each step that waited on a setup step (the configured tester), from its
+   * blocked announcement to becoming ready, in ready order: kind and minutes
+   * only. A stop ends a wait without counting it.
+   */
+  setupWaits?: StepWait[];
+  /** Minutes of this run's setup waits, summed. */
+  setupWaitTotalMinutes?: number;
+  /** Median minutes per setup wait of this run; zero for none. */
+  setupWaitMedianMinutes?: number;
   /** Minutes of this run's step waits, summed. */
   stepWaitTotalMinutes?: number;
   /** Median minutes per step wait of this run; zero for none. */
@@ -186,6 +196,8 @@ export interface RetroSummary {
   };
   /** Multi-step plan steps' waits to start, across the runs. */
   stepWait: { steps: number; minutes: number; medianPerStep: number };
+  /** Product steps' waits on a setup step, across the runs. */
+  setupWait: { steps: number; minutes: number; medianPerStep: number };
   /** The estimates the caller supplied, each stated as its text. */
   estimates: string[];
   perRun: RunRetro[];
@@ -399,6 +411,12 @@ export function runRetro(
   // Steps ready and not yet started, by ID, with their kind and when they became ready.
   const readySteps = new Map<string, { kind: StepWait["kind"]; at: number }>();
   const stepWaits: StepWait[] = [];
+  // Steps blocked on an unapplied setup step, by ID and in memory only.
+  const blockedSteps = new Map<
+    string,
+    { kind: StepWait["kind"]; at: number }
+  >();
+  const setupWaits: StepWait[] = [];
   let recheckCycles = 0;
   // Only a span its finish event closed counts as a finished cycle.
   const close = (key: string, at: number, completed: boolean) => {
@@ -491,7 +509,29 @@ export function runRetro(
     // starts. Only the step's kind and minutes are kept. A stop ends every
     // open wait, and a resumed run announces its ready steps again, so time
     // stopped is never counted as wait.
-    if (event.type === "run.stopped") readySteps.clear();
+    if (event.type === "run.stopped") {
+      readySteps.clear();
+      blockedSteps.clear();
+    }
+    if (
+      event.type === "dag.step.blocked" &&
+      step &&
+      event.data.waitingOnSetup === true &&
+      (event.data.kind === "worker" || event.data.kind === "generator")
+    )
+      blockedSteps.set(step, { kind: event.data.kind, at });
+    if (event.type === "dag.step.ready" && blockedSteps.has(step)) {
+      const blocked = blockedSteps.get(step)!;
+      blockedSteps.delete(step);
+      setupWaits.push({
+        kind: blocked.kind,
+        minutes: round(Math.max(0, at - blocked.at) / 60_000),
+      });
+    }
+    if (event.type === "dag.step.failed" || event.type === "dag.step.skipped") {
+      readySteps.delete(step);
+      blockedSteps.delete(step);
+    }
     if (
       event.type === "dag.step.ready" &&
       step &&
@@ -587,6 +627,13 @@ export function runRetro(
     ),
     stepWaitMedianMinutes: round(
       medianOf(stepWaits.map((wait) => wait.minutes)),
+    ),
+    setupWaits,
+    setupWaitTotalMinutes: round(
+      setupWaits.reduce((total, wait) => total + wait.minutes, 0),
+    ),
+    setupWaitMedianMinutes: round(
+      medianOf(setupWaits.map((wait) => wait.minutes)),
     ),
     deferredToPerson: Object.values(deferredByReason).reduce(
       (total, n) => total + n,
@@ -712,6 +759,20 @@ export function summarizeRetro(
         medianOf(
           perRun.flatMap((retro) =>
             (retro.stepWaits ?? []).map((wait) => wait.minutes),
+          ),
+        ),
+      ),
+    },
+    setupWait: {
+      steps: perRun.reduce(
+        (total, retro) => total + (retro.setupWaits?.length ?? 0),
+        0,
+      ),
+      minutes: sum((retro) => retro.setupWaitTotalMinutes ?? 0),
+      medianPerStep: round(
+        medianOf(
+          perRun.flatMap((retro) =>
+            (retro.setupWaits ?? []).map((wait) => wait.minutes),
           ),
         ),
       ),
