@@ -110,6 +110,47 @@ describe("dependency DAG execution", () => {
     });
     expect(result.appliedStepIds).toEqual(["hide"]);
   });
+  it("resumes a run that failed on one step by generating only that step", async () => {
+    const workspace = await fixture();
+    let saved: DagCheckpoint | undefined;
+    const options = {
+      workspace,
+      policy: DEFAULT_POLICY,
+      maxParallel: 1,
+      steps: [step("h"), step("p"), step("q", ["h"])],
+      saveCheckpoint: async (value: DagCheckpoint) => {
+        saved = structuredClone(value);
+      },
+    };
+    await expect(
+      runDag({
+        ...options,
+        generate: async (current) => {
+          if (current.id === "h") throw new Error("h failed");
+          return proposal(`${current.id}.txt`, current.id);
+        },
+      }),
+    ).rejects.toThrow("h failed");
+    // p applied after the failure; q never started.
+    expect(saved?.completed.map((item) => item.id)).toEqual(["p"]);
+    const generated: string[] = [];
+    const result = await runDag({
+      ...options,
+      checkpoint: saved,
+      reconcilePending: true,
+      generate: async (current) => {
+        generated.push(current.id);
+        return proposal(`${current.id}.txt`, current.id);
+      },
+    });
+    expect(generated).toEqual(["h", "q"]);
+    expect(result.appliedStepIds).toEqual(["h", "q"]);
+    expect(result.checkpoint.completed.map((item) => item.id)).toEqual([
+      "p",
+      "h",
+      "q",
+    ]);
+  });
   it("rolls back a Git-ignored new file and the directories its patch created", async () => {
     const workspace = await fixture();
     await writeFile(path.join(workspace, ".gitignore"), "*.log\n");
