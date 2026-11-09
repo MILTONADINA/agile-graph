@@ -378,6 +378,23 @@ describe("frozen generation snapshots", () => {
     expect((error as Error).message).toMatch(/modified the workspace/);
   });
 
+  it("ends needs-reconciliation when the workspace changes while the last generation fails", async () => {
+    const workspace = await fixture();
+    const error = await runDag({
+      workspace,
+      policy: DEFAULT_POLICY,
+      steps: [step("a")],
+      saveCheckpoint: async () => {},
+      generate: async () => {
+        // An outside edit lands, then the only generation fails.
+        await writeFile(path.join(workspace, "outside.txt"), "edited");
+        throw new Error("generation failed");
+      },
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(DagReconciliationError);
+    expect((error as DagReconciliationError).workspaceState).toBe(true);
+  });
+
   it("still ends failed, not needs-reconciliation, when a policy change follows a plain failure", async () => {
     const workspace = await fixture();
     const policy = structuredClone(DEFAULT_POLICY);
@@ -449,6 +466,21 @@ describe("frozen generation snapshots", () => {
         expect(result.appliedStepIds).toEqual(["a"]);
         expect(events).toContain("dag.snapshot.cleanup_failed");
         expect(await exists(snapshot)).toBe(true);
+        // A leftover that still cannot be removed is reported by the next
+        // run, which goes on and applies its step.
+        const next: string[] = [];
+        const again = await runDag({
+          workspace,
+          policy: DEFAULT_POLICY,
+          steps: [step("c")],
+          saveCheckpoint: async () => {},
+          onEvent: (current) => {
+            next.push(current.type);
+          },
+          generate: async () => proposal("c.txt", "c"),
+        });
+        expect(again.appliedStepIds).toEqual(["c"]);
+        expect(next).toContain("dag.snapshot.cleanup_failed");
       } finally {
         if (snapshot) await chmod(locked(), 0o700).catch(() => {});
       }
