@@ -201,8 +201,11 @@ describe("dependency DAG execution", () => {
       },
     });
     expect(providers).toEqual(["first", "second", "third"]);
-    expect(charged).toEqual(["a", "b", "c"]);
-    expect(result.appliedStepIds).toEqual(["a", "b", "c"]);
+    // a and b finish together, so their order is a tie; c always follows both.
+    expect(charged.slice(0, 2).sort()).toEqual(["a", "b"]);
+    expect(charged[2]).toBe("c");
+    expect(result.appliedStepIds.slice(0, 2).sort()).toEqual(["a", "b"]);
+    expect(result.appliedStepIds[2]).toBe("c");
   });
   it("rejects a sibling collision before the colliding patch is written, including case aliases", async () => {
     const workspace = await fixture();
