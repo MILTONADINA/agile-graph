@@ -680,7 +680,7 @@ describe("frozen generation snapshots", () => {
         },
         { maxParallel: 1, onIncomplete: (value) => (summary = value) },
       );
-      expect(summary).toEqual({ applied: 1, skipped: 1, total: 3 });
+      expect(summary).toEqual({ applied: 1, failed: 1, skipped: 1, total: 3 });
     });
 
     it("labels ready, blocked and failed events without error text or extra keys", async () => {
@@ -721,12 +721,12 @@ describe("frozen generation snapshots", () => {
         [step("a"), step("b", ["a"])],
         async (current) => proposal(`${current.id}.txt`, current.id),
       );
-      expect(
-        events.filter((event) => event.type === "dag.step.ready"),
-      ).toEqual([
-        { type: "dag.step.ready", stepId: "a", data: { kind: "worker" } },
-        { type: "dag.step.ready", stepId: "b", data: { kind: "worker" } },
-      ]);
+      expect(events.filter((event) => event.type === "dag.step.ready")).toEqual(
+        [
+          { type: "dag.step.ready", stepId: "a", data: { kind: "worker" } },
+          { type: "dag.step.ready", stepId: "b", data: { kind: "worker" } },
+        ],
+      );
       expect(events.map((event) => event.type)).not.toContain(
         "dag.step.blocked",
       );

@@ -5299,9 +5299,11 @@ describe("a failed generation in a managed plan", () => {
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).toBe("failed");
     expect(run.error).toContain("worker exploded");
-    expect(run.error).toContain("1 of 2 steps applied");
+    expect(run.error).toContain(
+      "1 of 2 steps applied, 1 failed and 0 never started",
+    );
     expect(run.error).toContain("not verified");
-    expect(run.error).toContain(`resume ${run.id} --reconciled`);
+    expect(run.error).toContain("resume RUN_ID --reconciled");
     expect(verify).not.toHaveBeenCalled();
     // No repair worker: one call per step, none after the failure.
     expect(worker).toHaveBeenCalledTimes(2);
