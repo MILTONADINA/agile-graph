@@ -242,6 +242,12 @@ export class ContextEngine {
   private watchers = new Set<{ close(): Promise<void> }>();
   readonly projectId: string;
   readonly root: string;
+  /**
+   * Where `.graph/knowledge` is read from. It is the root, except for a
+   * frozen snapshot of a workspace: policy never lets a patch write that
+   * folder, so the live workspace's copy cannot change under a generation.
+   */
+  readonly knowledgeRoot: string;
   readonly dataDir: string;
   readonly policy: ProjectPolicy;
   // Wall clock for memory expiry, in epoch milliseconds; tests inject one.
@@ -249,6 +255,7 @@ export class ContextEngine {
   constructor(options: {
     projectId: string;
     root: string;
+    knowledgeRoot?: string;
     dataDir: string;
     policy: ProjectPolicy;
     now?: () => number;
@@ -256,6 +263,7 @@ export class ContextEngine {
     this.now = options.now ?? Date.now;
     this.projectId = options.projectId;
     this.root = resolve(options.root);
+    this.knowledgeRoot = resolve(options.knowledgeRoot ?? options.root);
     this.dataDir = resolve(options.dataDir);
     this.policy = structuredClone(options.policy);
     this.embeddings = new LocalEmbeddings(this.dataDir);
@@ -2053,12 +2061,12 @@ export class ContextEngine {
   }
   async importSharedMemories(): Promise<number> {
     await this.ready;
-    const directory = join(this.root, ".graph", "knowledge");
+    const directory = join(this.knowledgeRoot, ".graph", "knowledge");
     let entries: string[];
     try {
       if (
         !(await realpath(directory)).startsWith(
-          (await realpath(this.root)) + sep,
+          (await realpath(this.knowledgeRoot)) + sep,
         )
       )
         throw new Error("Shared knowledge directory escapes the project");
