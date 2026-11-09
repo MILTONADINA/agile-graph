@@ -165,6 +165,17 @@ export interface ProjectPolicy {
    * in DEFAULT_POLICY, so policies without it keep their hash.
    */
   decisionMaxCostUsd?: number | null;
+  /**
+   * An optional, off-by-default batched typed-decision call after each
+   * review round that scores whether the findings repeat one class, were
+   * already ruled on, are substantive or need the owner. The scores are
+   * recorded priors only: they never change a verdict or satisfy a check.
+   * It runs only when `enabled` is true, the decision cost cap is a number
+   * above 0 and `exportAuthorized` is true (the operator allows the review
+   * text to go to the decision provider). Absent means off; not in
+   * DEFAULT_POLICY, so policies without it keep their hash.
+   */
+  reviewPrior?: { enabled: boolean; exportAuthorized?: boolean };
   decisionMode: "shadow" | "promoted";
   promotedCategories: string[];
 }
@@ -891,6 +902,15 @@ export const policySchema = {
     },
     decisionMaxCostUsd: {
       anyOf: [{ type: "null" }, { type: "number", minimum: 0 }],
+    },
+    reviewPrior: {
+      type: "object",
+      additionalProperties: false,
+      required: ["enabled"],
+      properties: {
+        enabled: { type: "boolean" },
+        exportAuthorized: { type: "boolean" },
+      },
     },
     decisionMode: { enum: ["shadow", "promoted"] },
     promotedCategories: strings,

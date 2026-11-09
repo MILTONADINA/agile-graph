@@ -3432,6 +3432,10 @@ describe("code review gate", () => {
     configure?: (config: ProjectConfig, root: string) => Promise<void>;
     /** Runs as the worker is called for the given (1-based) round. */
     beforeWorker?: (round: number, data: string) => Promise<void>;
+    /** The decision client for the optional review-round priors. */
+    reviewPriorDecide?: NonNullable<
+      Parameters<typeof GraphEngine.open>[1]
+    >["reviewPriorDecide"];
     /** Builds the review from the scan findings the reviewer was given. */
     reviewFrom?: (given: { id: string; status: string }[]) => unknown;
     securityScan?: Parameters<typeof GraphEngine.open>[1] extends infer D
@@ -3506,6 +3510,9 @@ describe("code review gate", () => {
         };
       }),
       verify: passingVerify,
+      ...(options.reviewPriorDecide
+        ? { reviewPriorDecide: options.reviewPriorDecide }
+        : {}),
       ...(options.securityScan ? { securityScan: options.securityScan } : {}),
       review: async (input) => {
         reviewed.push(input.diff);
@@ -4321,6 +4328,160 @@ describe("code review gate", () => {
     summary: "Needs more tests",
     criteria: [{ criterion: "2 + 3 is 5", met: "yes", evidence: "ok" }],
     findings,
+  });
+
+  describe("review-round priors (policy.reviewPrior)", () => {
+    const enable = (
+      reviewPrior: { enabled: boolean; exportAuthorized?: boolean },
+      cap: number | null = 1,
+      exportPaths = ["math.cjs", "math.test.cjs"],
+    ) => ({
+      configure: async (config: ProjectConfig) => {
+        config.policy.reviewPrior = reviewPrior;
+        config.policy.exportPaths = exportPaths;
+        if (cap !== null) config.policy.decisionMaxCostUsd = cap;
+      },
+    });
+    // Reads as "accept": not substantive, already ruled, no owner needed.
+    const acceptish = (id: string) =>
+      id === "substantive"
+        ? { choice: "no", confidence: 0.99 }
+        : id === "already_ruled"
+          ? { choice: "yes", confidence: 0.99 }
+          : id === "owner_needed"
+            ? { choice: "no", confidence: 0.99 }
+            : { choice: "yes", confidence: 0.95 };
+    let recordCount = 0;
+    const fakeJev = () =>
+      vi.fn(async (options: { questions: { id: string }[] }) => ({
+        selections: {},
+        usage: [],
+        records: options.questions.map((question) => {
+          const answer = acceptish(question.id);
+          return {
+            version: "1.0.0",
+            id: `rec-${question.id}-${recordCount++}`,
+            projectId: "unit",
+            category: "review_prior",
+            candidates: ["no", "yes"],
+            selected: answer.choice,
+            baseline: "no",
+            provider: "jev",
+            modelVersion: "fake",
+            policyVersion: "p",
+            confidence: answer.confidence,
+            mode: "shadow" as const,
+            action: "review" as const,
+            createdAt: new Date().toISOString(),
+            evidence: { questionId: question.id },
+          };
+        }),
+      }));
+    const rejections = () => [
+      requestChanges([blockingFinding("Reject dot-dot segments")]),
+      requestChanges([blockingFinding("Reject encoded dot-dot too")]),
+      requestChanges([blockingFinding("Reject backslash separators")]),
+    ];
+
+    it("makes no decision call when the option is absent or disabled", async () => {
+      for (const configure of [undefined, enable({ enabled: false })]) {
+        const decide = fakeJev();
+        const fetch = vi.fn();
+        vi.stubGlobal("fetch", fetch);
+        const { events } = await setup({
+          reviews: rejections(),
+          reviewPriorDecide: decide as never,
+          ...(configure ?? {}),
+        });
+        vi.unstubAllGlobals();
+        expect(decide).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+        expect(
+          events.filter((event) => event.type.startsWith("review.prior")),
+        ).toEqual([]);
+      }
+    });
+
+    it("refuses without a numeric cap or an export authorization, sending nothing", async () => {
+      for (const configured of [
+        enable({ enabled: true, exportAuthorized: true }, null),
+        enable({ enabled: true, exportAuthorized: true }, 0),
+        enable({ enabled: true }),
+        enable({ enabled: true, exportAuthorized: false }),
+        // Authorized, but the changed files are outside exportPaths.
+        enable({ enabled: true, exportAuthorized: true }, 1, []),
+      ]) {
+        const decide = fakeJev();
+        const { events } = await setup({
+          reviews: rejections(),
+          reviewPriorDecide: decide as never,
+          ...configured,
+        });
+        expect(decide).not.toHaveBeenCalled();
+        const skipped = events.filter(
+          (event) => event.type === "review.prior_skipped",
+        );
+        expect(skipped.length).toBeGreaterThan(0);
+        expect(events.some((event) => event.type === "review.prior")).toBe(
+          false,
+        );
+      }
+    });
+
+    it("records advisory scores and never turns a rejection into an accept", async () => {
+      const decide = fakeJev();
+      const { result, events, reviewed } = await setup({
+        reviews: rejections(),
+        reviewPriorDecide: decide as never,
+        ...enable({ enabled: true, exportAuthorized: true }),
+      });
+      // The first review has no earlier one to compare with.
+      expect(decide).toHaveBeenCalledTimes(2);
+      const priors = events.filter((event) => event.type === "review.prior");
+      expect(priors).toHaveLength(2);
+      expect(priors[0]!.data).toMatchObject({
+        advisory: true,
+        flagged: true,
+        scores: {
+          same_class: 0.95,
+          substantive: expect.closeTo(0.01),
+          already_ruled: 0.99,
+        },
+      });
+      // Every verdict stays the reviewer's: no round passed, no attempt
+      // was cut short, and the run did not succeed.
+      const completed = events.filter(
+        (event) => event.type === "review.completed",
+      );
+      expect(completed.map((event) => event.data.passed)).toEqual([
+        false,
+        false,
+        false,
+      ]);
+      expect(reviewed).toHaveLength(3);
+      expect(result.status).toBe("failed");
+    });
+
+    it("fails open to no prior when the decision call fails, and says so", async () => {
+      const decide = vi.fn(async () => {
+        throw new Error("Decision provider HTTP 503");
+      });
+      const { result, events } = await setup({
+        reviews: rejections(),
+        reviewPriorDecide: decide as never,
+        ...enable({ enabled: true, exportAuthorized: true }),
+      });
+      expect(decide).toHaveBeenCalled();
+      expect(
+        events.filter((event) => event.type === "review.prior_failed")[0]!.data,
+      ).toMatchObject({ advisory: true, reason: "Decision provider HTTP 503" });
+      expect(events.some((event) => event.type === "review.prior")).toBe(false);
+      // The review ran as it would without the feature.
+      expect(
+        events.filter((event) => event.type === "review.completed"),
+      ).toHaveLength(3);
+      expect(result.status).toBe("failed");
+    });
   });
 
   it("checks at most 20 earlier findings and records the rest inconclusive, which blocks", async () => {

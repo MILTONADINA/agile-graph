@@ -52,6 +52,7 @@ import {
   writeJson,
 } from "./util.js";
 import { decide, decisionProviders } from "./decisions.js";
+import { reviewPrior } from "./review-prior.js";
 import { loadPromotionAuthority } from "./promotion-authority.js";
 import {
   invokeApiWorker,
@@ -286,6 +287,13 @@ export interface EngineDependencies {
     model: string;
     usage: Usage;
   }>;
+  /**
+   * The decision client for the optional review-round priors
+   * (`policy.reviewPrior`); defaults to the typed decision batch client.
+   */
+  reviewPriorDecide?: (
+    options: DecisionBatchOptions,
+  ) => Promise<DecisionBatchResult>;
   /** Proposes plan steps; defaults to the planner provider's API. */
   planner?: (input: PlanInput) => Promise<{
     decomposition: Decomposition;
@@ -695,6 +703,83 @@ export class GraphEngine {
       input.stepId,
     );
     return survivors.length ? mutationFeedback(survivors) : undefined;
+  }
+  /**
+   * The optional prior after a rejected review round: scores recorded as
+   * `review.prior` events, advisory only. It never changes a verdict, the
+   * feedback or any check, and a failure is reported and otherwise ignored.
+   */
+  private async reviewPriorRound(input: {
+    run: RunRecord;
+    stepId: string;
+    snapshotHash: string;
+    exportable: boolean;
+    withState: (
+      state: Record<string, unknown>,
+    ) => Omit<DecisionBatchOptions, "questions">;
+    signal: AbortSignal;
+  }): Promise<void> {
+    if (this.config.policy.reviewPrior?.enabled !== true) return;
+    const { run, stepId, snapshotHash } = input;
+    const report = (type: string, data: Record<string, unknown>) =>
+      this.store.event(
+        run.id,
+        type,
+        { advisory: true, snapshotHash, ...data },
+        stepId,
+      );
+    try {
+      const rounds = this.store
+        .events(run.id)
+        .filter(
+          (event) =>
+            event.type === "review.completed" &&
+            event.data.by !== "person" &&
+            Array.isArray(event.data.findings),
+        )
+        .map((event) => ({
+          summary: String(event.data.summary ?? ""),
+          findings: (event.data.findings as Record<string, unknown>[])
+            .filter((finding) => typeof finding?.message === "string")
+            .map((finding) => ({
+              severity:
+                finding.severity === "blocking"
+                  ? ("blocking" as const)
+                  : ("advisory" as const),
+              path: typeof finding.path === "string" ? finding.path : null,
+              message: String(finding.message),
+            })),
+        }));
+      const outcome = await reviewPrior({
+        session: {
+          ...input.withState({}),
+          providers: await decisionProviders(this.dataDir),
+          budget: this.decisionBudget(run.plan.id),
+          signal: input.signal,
+        },
+        rounds,
+        exportable: input.exportable,
+        ...(this.deps.reviewPriorDecide
+          ? { decide: this.deps.reviewPriorDecide }
+          : {}),
+      });
+      if (outcome.status === "off") return;
+      if (outcome.status === "skipped")
+        return void report("review.prior_skipped", { reason: outcome.reason });
+      if (outcome.result)
+        this.captureDecision(run, "review_prior", outcome.result);
+      if (outcome.status === "failed")
+        return void report("review.prior_failed", { reason: outcome.reason });
+      report("review.prior", {
+        round: rounds.length,
+        scores: outcome.scores,
+        flagged: outcome.flagged,
+        note: "Priors only: they never grant ACCEPT, change the verdict or satisfy a merge check.",
+      });
+    } catch (error) {
+      if (input.signal.aborted) throw error;
+      report("review.prior_failed", { reason: redact(errorMessage(error)) });
+    }
   }
   private captureDecision(
     run: RunRecord,
@@ -3700,6 +3785,17 @@ export class GraphEngine {
             path: finding.path,
             text: finding.message,
           }));
+        // Advisory priors after a rejection, before the repeat rule can stop
+        // the run; they never alter `outcome` or the feedback.
+        if (!outcome.passed)
+          await this.reviewPriorRound({
+            run,
+            stepId,
+            snapshotHash,
+            exportable: exportable && scanExportable && historyExportable,
+            withState,
+            signal,
+          });
         const structural = outcome.passed
           ? undefined
           : repeatFor(raised, snapshotHash);
