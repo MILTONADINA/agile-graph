@@ -233,8 +233,10 @@ import {
   validateDag,
   writeScope,
   DagReconciliationError,
+  DagRunStop,
   DAG_REPAIR_STEP,
   type DagCheckpoint,
+  type DagIncomplete,
   type DagEvent,
 } from "./execution/dag.js";
 import {
@@ -1143,12 +1145,19 @@ export class GraphEngine {
     stepId: string,
     onReserved?: () => void,
   ): Promise<WorkerResult> {
+    // These hold for the whole run, so a DAG start no further step on them.
     const validateIdentity = async () => {
       await this.refresh();
       if (hash(this.config.policy) !== run.plan.policyHash)
-        throw new Error("Policy changed during execution; dispatch stopped");
-      this.assertPlanVerification(run.plan);
-      return this.assertDispatchIdentity(run.plan, input.provider);
+        throw new DagRunStop(
+          "Policy changed during execution; dispatch stopped",
+        );
+      try {
+        this.assertPlanVerification(run.plan);
+        return this.assertDispatchIdentity(run.plan, input.provider);
+      } catch (error) {
+        throw new DagRunStop(errorMessage(error), { cause: error });
+      }
     };
     const installedBinding = await validateIdentity();
     const beforeInstalledCommand = async () => {
@@ -1206,18 +1215,23 @@ export class GraphEngine {
       // Slot acquisition can await another process. Refuse drift before the
       // reservation, and again in the adapter immediately before each probe.
       await beforeInstalledCommand();
-      this.store.reserveCall(
-        run.plan.id,
-        callId,
-        input.provider.id,
-        estimateRequestCost(
-          input.provider,
-          input.policy.maxContextTokens,
-          input.policy.maxOutputTokens,
-        ),
-        input.policy.maxCostUsd,
-        input.policy.maxTurns,
-      );
+      try {
+        this.store.reserveCall(
+          run.plan.id,
+          callId,
+          input.provider.id,
+          estimateRequestCost(
+            input.provider,
+            input.policy.maxContextTokens,
+            input.policy.maxOutputTokens,
+          ),
+          input.policy.maxCostUsd,
+          input.policy.maxTurns,
+        );
+      } catch (error) {
+        // The cost cap and the shared turn budget bound the whole run.
+        throw new DagRunStop(errorMessage(error), { cause: error });
+      }
       onReserved?.();
       let result: WorkerResult;
       try {
@@ -2954,6 +2968,8 @@ export class GraphEngine {
     // Whether this attempt has started publishing and not finished. An
     // earlier attempt's unfinished publication was acknowledged on resume.
     let publishing = false;
+    // Set when a plan's generation failed and its other steps ran on (AC4c).
+    let dagIncomplete: DagIncomplete | undefined;
     try {
       await this.assertCurrentPlanVerification(run.plan);
       const priorEvents = this.store.events(run.id);
@@ -4321,6 +4337,15 @@ export class GraphEngine {
           workspace,
           policy: this.config.policy,
           signal,
+          // Test-first (AC4a-4): withTester makes every step depend on the
+          // tester, so a failing tester skips them all. testerWrittenFiles
+          // below reads what it applied.
+          setupStepIds: run.plan.steps.some((s) => s.id === TESTER_STEP_ID)
+            ? [TESTER_STEP_ID]
+            : undefined,
+          onIncomplete: (summary) => {
+            dagIncomplete = summary;
+          },
           checkpoint,
           workerProviderKind: workerKinds
             ? (step) => workerKinds.get(step.providerId!)
@@ -4353,11 +4378,22 @@ export class GraphEngine {
             // a sibling's patch may apply to the live workspace meanwhile.
             const frozen = state.workspace;
             await this.refresh();
+            // A failed check below holds for the whole run: DagRunStop makes
+            // the scheduler start no further step (AC4a-1).
+            const runWide = <T>(check: () => T): T => {
+              try {
+                return check();
+              } catch (error) {
+                throw new DagRunStop(errorMessage(error), { cause: error });
+              }
+            };
             if (hash(this.config.policy) !== run.plan.policyHash)
-              throw new Error("Policy changed during DAG execution");
-            this.assertPlanVerification(run.plan);
+              throw new DagRunStop("Policy changed during DAG execution");
+            runWide(() => this.assertPlanVerification(run.plan));
             if (step.kind === "generator") {
-              this.assertLiveGenerators(run.plan, new Set([step.id]));
+              runWide(() =>
+                this.assertLiveGenerators(run.plan, new Set([step.id])),
+              );
               const registration = this.plannedGenerators(run.plan).find(
                 (value) => value.id === step.generatorId,
               )!;
@@ -4391,9 +4427,9 @@ export class GraphEngine {
               (provider) => provider.id === step.providerId,
             );
             if (!provider)
-              throw new Error("DAG worker is no longer configured");
+              throw new DagRunStop("DAG worker is no longer configured");
             if (workerKinds && provider.kind !== state.workerProviderKind)
-              throw new Error(
+              throw new DagRunStop(
                 "DAG worker kind changed after its deadline was selected; create a new plan",
               );
             assertOnPlanSide(
@@ -4437,7 +4473,7 @@ export class GraphEngine {
             for (let turn = 0; turn < this.config.policy.maxTurns; turn++) {
               await this.refresh();
               if (hash(this.config.policy) !== run.plan.policyHash)
-                throw new Error("Policy changed during DAG execution");
+                throw new DagRunStop("Policy changed during DAG execution");
               const stepFeedback = [patchFeedback, readNotice(patchFeedback)]
                 .filter(Boolean)
                 .join("\n\n");
@@ -5592,6 +5628,10 @@ export class GraphEngine {
     } catch (error) {
       run.usage = this.store.usage(run.plan.id);
       run.error = redact(errorMessage(error));
+      // Steps that did not depend on the failure were applied, but nothing was
+      // verified: say so, and how a resume finishes the plan.
+      if (dagIncomplete)
+        run.error += ` ${dagIncomplete.applied} of ${dagIncomplete.total} steps applied and ${dagIncomplete.skipped} never started; the applied steps are not verified. Resuming with \`graph-engine resume ${run.id} --reconciled\` reruns the failed and skipped steps and then verifies the whole result.`;
       // Only a succeeded run awaits a person's acceptance.
       delete run.completion;
       // Publication may have committed, pushed or opened a PR before a

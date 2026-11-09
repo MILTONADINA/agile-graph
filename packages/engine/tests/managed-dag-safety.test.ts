@@ -40,6 +40,7 @@ import {
   type WorkerInput,
   type WorkerResult,
 } from "../src/workers/api.js";
+import { projectOverview } from "../src/overview.js";
 import * as installedWorkers from "../src/workers/installed.js";
 import { viewingEdits } from "./worker-view.js";
 
@@ -5282,5 +5283,134 @@ describe("a cloud client's plan when its run starts", () => {
       "but step two (helper) now runs on a non-local provider",
     );
     expect(dispatched).toEqual(["local:local"]);
+  });
+});
+
+describe("a failed generation in a managed plan", () => {
+  it("applies the independent step, fails the run with counts and never verifies or repairs", async () => {
+    const { root } = await fixture();
+    const verify = vi.fn(passing);
+    const worker = vi.fn(async (input: WorkerInput) => {
+      if (input.objective === "one") throw new Error("worker exploded");
+      return result(input.objective);
+    });
+    const engine = await open(root, { worker, verify });
+    const planned = await plan(engine);
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("worker exploded");
+    expect(run.error).toContain("1 of 2 steps applied");
+    expect(run.error).toContain("not verified");
+    expect(run.error).toContain(`resume ${run.id} --reconciled`);
+    expect(verify).not.toHaveBeenCalled();
+    // No repair worker: one call per step, none after the failure.
+    expect(worker).toHaveBeenCalledTimes(2);
+    expect(
+      await readFile(path.join(run.workspace!, "second.js"), "utf8"),
+    ).toContain("= 4");
+    expect(
+      await readFile(path.join(run.workspace!, "first.js"), "utf8"),
+    ).toContain("= 1");
+    const failed = engine.store
+      .events(run.id)
+      .find((event) => event.type === "dag.step.failed");
+    expect(failed?.data).toEqual({ kind: "worker" });
+  });
+
+  it("generates no product step when the tester fails, and shows them as skipped", async () => {
+    const { root, config } = await fixture((value) => {
+      value.policy.providers = ["local", "tester"];
+      value.tester = { providerId: "tester" };
+    });
+    await configureProvider(projectDataDir(config.projectId), {
+      id: "tester",
+      kind: "local",
+      model: "tester-fixture",
+    });
+    const seen: string[] = [];
+    const engine = await open(root, {
+      worker: vi.fn(async (input: WorkerInput) => {
+        seen.push(input.provider.id);
+        throw new Error("tester exploded");
+      }),
+    });
+    const planned = await plan(engine, [step("one")]);
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("tester exploded");
+    expect(seen).toEqual(["tester"]);
+    const events = engine.store.events(run.id);
+    expect(
+      events.find((event) => event.type === "dag.step.failed")?.data,
+    ).toEqual({ kind: "worker", setup: true });
+    const card = projectOverview(
+      [run],
+      () => events,
+      () => [],
+      {
+        reviewerConfigured: false,
+      },
+    ).cards[0]!;
+    expect(card.steps).toEqual([
+      { id: "tester", state: "failed" },
+      { id: "one", state: "skipped" },
+    ]);
+  });
+
+  it("starts no further step once the shared turn budget is spent", async () => {
+    const { root } = await fixture((config) => {
+      config.policy.maxTurns = 1;
+    });
+    const stopped = (() => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => (resolve = done));
+      return { promise, resolve };
+    })();
+    const worker = vi.fn(async (input: WorkerInput) => {
+      // The step that holds the turn finishes only after its sibling failed
+      // on the budget, so a freed slot could otherwise start the third step.
+      await stopped.promise;
+      const base = result(input.objective);
+      return {
+        ...base,
+        proposal: {
+          ...base.proposal,
+          changes: [
+            {
+              path: `${input.objective}-notes.js`,
+              before: null,
+              after: "export const note = 1;\n",
+            },
+          ],
+        },
+      };
+    });
+    const engine = await open(root, { worker }, false);
+    const record = engine.store.event.bind(engine.store);
+    vi.spyOn(engine.store, "event").mockImplementation((...args) => {
+      const recorded = record(...args);
+      if (args[1] === "dag.step.failed") stopped.resolve();
+      return recorded;
+    });
+    const planned = await plan(engine, [
+      step("one"),
+      step("two"),
+      step("three"),
+    ]);
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatch(/shared worker-turn budget/);
+    expect(worker).toHaveBeenCalledTimes(1);
+    const started = engine.store
+      .events(run.id)
+      .filter((event) => event.type === "dag.step.started")
+      .map((event) => event.stepId);
+    expect(started).toHaveLength(2);
+    expect(started).not.toContain("three");
+    expect(
+      engine.store
+        .events(run.id)
+        .find((event) => event.type === "dag.step.failed")?.data,
+    ).toEqual({ kind: "worker", runStop: true });
   });
 });
