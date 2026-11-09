@@ -172,7 +172,7 @@ describe("workspace snapshot", () => {
     await mkdir(path.join(parent, "ws2"));
     await writeFile(path.join(parent, "ws-snapshot-file"), "not a dir");
     await symlink(outside, path.join(parent, "ws-snapshot-link"));
-    await removeStaleSnapshots(workspace);
+    expect(await removeStaleSnapshots(workspace)).toBe(0);
     expect(await exists(path.join(parent, "ws-snapshot-old1"))).toBe(false);
     expect(await exists(path.join(parent, "other-snapshot-old2"))).toBe(true);
     expect(await exists(path.join(parent, "ws2"))).toBe(true);

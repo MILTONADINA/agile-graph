@@ -316,8 +316,9 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
     policy,
     writeScopes: options.writeScopes ?? {},
   });
-  // Snapshots a crashed earlier run of this workspace left beside it.
-  await removeStaleSnapshots(workspace);
+  // Snapshots a crashed earlier run of this workspace left beside it. One
+  // that cannot be removed is reported below, never a reason to fail.
+  const staleLeft = await removeStaleSnapshots(workspace);
   const snapshotHash = await workspaceFingerprint(workspace, policy);
   let checkpoint: DagCheckpoint = options.checkpoint
     ? checkpointSchema.parse(options.checkpoint)
@@ -337,6 +338,12 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
     stepId: string | undefined,
     data: Record<string, unknown>,
   ) => options.onEvent?.({ type, stepId, data });
+  if (staleLeft)
+    try {
+      await event("dag.snapshot.cleanup_failed", undefined, {
+        count: staleLeft,
+      });
+    } catch {}
   if (checkpoint.pending) {
     const pending = checkpoint.pending;
     // A repair patch follows every completed step and is recorded in
@@ -716,6 +723,16 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       checkCancelled();
       if (!outcome.ok) {
         failure ??= { error: outcome.reason };
+        // A failed generation must not hide an outside edit: the same check
+        // a fulfilled one gets, so the run still ends needing reconciliation.
+        if (
+          (await workspaceFingerprint(workspace, policy)) !==
+          checkpoint.workspaceHash
+        )
+          throw new DagReconciliationError(
+            "The workspace changed while a step was generating",
+            { workspaceState: true },
+          );
         continue;
       }
       // Charge every fulfilled generation before any patch, even one whose

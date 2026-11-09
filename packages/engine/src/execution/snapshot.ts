@@ -30,17 +30,19 @@ const snapshotPrefix = (workspace: string) =>
 /**
  * Removes snapshots of this workspace an earlier crash left behind: only
  * real directories (never a symlink or file) with this workspace's prefix.
+ * Never throws: returns how many it could not remove, so a snapshot that
+ * survives (say a non-writable folder inside it) cannot stop later runs.
  */
-export async function removeStaleSnapshots(workspace: string): Promise<void> {
+export async function removeStaleSnapshots(workspace: string): Promise<number> {
   const parent = path.dirname(workspace),
     prefix = snapshotPrefix(workspace);
   let names: string[];
   try {
     names = await readdir(parent);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? 0 : 1;
   }
+  let failed = 0;
   for (const name of names) {
     if (!name.startsWith(prefix)) continue;
     const target = path.join(parent, name);
@@ -48,9 +50,10 @@ export async function removeStaleSnapshots(workspace: string): Promise<void> {
       if ((await lstat(target)).isDirectory())
         await rm(target, { recursive: true, force: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") failed++;
     }
   }
+  return failed;
 }
 
 /** A private copy of exactly the regular files included in the fingerprint. */
