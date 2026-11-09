@@ -4,6 +4,30 @@ import { devNull } from "node:os";
 import path from "node:path";
 import { command, type CommandResult, subprocessEnvironment } from "../util.js";
 
+/** Variables that point Git at a repository other than the one in `cwd`. */
+const REPOSITORY_VARIABLES = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_NAMESPACE",
+];
+/**
+ * The environment for a managed Git call: the process environment, without
+ * any variable that relocates the repository, so an operator's `GIT_DIR`
+ * never redirects a call meant for `cwd`. `extra` is added last.
+ */
+export function gitEnvironment(
+  extra: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  for (const name of REPOSITORY_VARIABLES) delete environment[name];
+  return { ...environment, ...extra };
+}
+
 /** Git is metadata plumbing, never a way to execute repository hooks or filters. */
 export async function managedGit(
   cwd: string,
@@ -13,8 +37,11 @@ export async function managedGit(
     timeoutMs?: number;
     maxBytes?: number;
     input?: string;
+    /** Added to the sanitized environment, e.g. to ignore global config. */
+    env?: NodeJS.ProcessEnv;
   } = {},
 ): Promise<CommandResult> {
+  const env = gitEnvironment(options.env);
   const configured = await command(
     "git",
     [
@@ -24,7 +51,7 @@ export async function managedGit(
       "--get-regexp",
       "^filter\\..*\\.(clean|smudge|process|required)$",
     ],
-    { cwd, signal: options.signal, timeoutMs: options.timeoutMs },
+    { cwd, signal: options.signal, timeoutMs: options.timeoutMs, env },
   );
   if (configured.code !== 0 && configured.code !== 1)
     throw new Error("Cannot inspect Git filter configuration");
@@ -57,7 +84,7 @@ export async function managedGit(
       ...filters,
       ...argv,
     ],
-    { cwd, ...options },
+    { cwd, ...options, env },
   );
 }
 export async function checkedGit(cwd: string, argv: string[]): Promise<string> {
