@@ -2545,6 +2545,14 @@ input::placeholder {
 .overview-step.step-working {
   border-color: #c9892f;
 }
+.overview-step.step-failed {
+  border-color: #9b3b2c;
+  color: #9b3b2c;
+}
+.overview-step.step-skipped {
+  color: var(--muted);
+  border-style: dashed;
+}
 .overview-gates {
   display: flex;
   flex-wrap: wrap;
