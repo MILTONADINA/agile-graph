@@ -66,6 +66,27 @@ const answers =
   });
 
 describe("reviewPrior", () => {
+  it("takes the first usable answer per question when one provider fails", async () => {
+    const outcome = await reviewPrior({
+      session: session(),
+      rounds: [round("a"), round("b")],
+      exportable: true,
+      decide: async (options) => ({
+        selections: {},
+        usage: [],
+        records: options.questions.flatMap((question) => [
+          { ...record(question.id, null, "refused"), provider: "first" },
+          { ...record(question.id, 0.9), provider: "second" },
+        ]),
+      }),
+    });
+    expect(outcome).toMatchObject({
+      status: "scored",
+      flagged: true,
+      scores: { same_class: 0.9, substantive: 0.9 },
+    });
+  });
+
   it("makes no call unless on, capped by a number, export-authorized and exportable", async () => {
     const rounds = [round("a"), round("b")];
     const cases: [string, Parameters<typeof session>[0], boolean][] = [

@@ -3646,6 +3646,19 @@ export class GraphEngine {
               },
               stepId,
             );
+            // A verify-fix rejection is a review round too: score it before
+            // the repeat rule can stop the run. Advisory only.
+            await this.reviewPriorRound({
+              run,
+              stepId,
+              snapshotHash,
+              exportable:
+                exportable &&
+                historyExportable &&
+                (!priorSawScan || priorExportable),
+              withState,
+              signal,
+            });
             const structural = repeatFor(signed, snapshotHash);
             const feedback = withEarlier(
               verifyFixFeedback(unfixed, prior.length),
