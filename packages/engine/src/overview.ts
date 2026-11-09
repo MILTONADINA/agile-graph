@@ -503,6 +503,12 @@ function card(
       label: "Waiting to start",
       type: "",
     });
+    // A run-wide stop starts nothing more, whatever the label says.
+    if (
+      current.type === "dag.step.failed" &&
+      attempt[current.index]?.data.runStop === true
+    )
+      current.label = "A step failed; no new steps will start";
     const stepId = attempt[current.index]?.stepId;
     phase =
       current.label === "Implementing" && stepId && steps

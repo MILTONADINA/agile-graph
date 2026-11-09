@@ -253,6 +253,20 @@ describe("failed and skipped steps", () => {
       { id: "c", state: "done" },
     ]);
   });
+  it("says no new step will start when the failure was a run-wide stop", () => {
+    const active = run("h", "running", {}, steps);
+    const label = (data: Record<string, unknown>) =>
+      overview(
+        [active],
+        [event("h", "run.started"), event("h", "dag.step.failed", data, "a")],
+      ).cards[0]!.phase;
+    expect(label({ kind: "worker" })).toBe(
+      "A step failed; finishing the steps that do not depend on it",
+    );
+    expect(label({ kind: "worker", runStop: true })).toBe(
+      "A step failed; no new steps will start",
+    );
+  });
   it("resets failed and skipped states when the run is resumed", () => {
     const resumed = run("g", "running", {}, steps);
     const result = overview(
