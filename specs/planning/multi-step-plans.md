@@ -15,10 +15,10 @@ Larger changes are made of steps, some independent and some depending on others.
 - AC2: Independent steps are generated concurrently and applied before dependent steps run, and the final combined result is verified.
   - Test: packages/engine/tests/dag.test.ts :: generates independent proposals concurrently and applies them before dependent generation
   - Test: packages/engine/tests/managed-dag.test.ts :: applies independent proposals then dependent work and verifies the final aggregate
-- AC2a (EARS): WHEN all of a step's dependsOn steps have applied, THE engine SHALL start that step at once, without waiting for other running steps, and SHALL run no more than maxParallel generations at a time.
+- AC2a: WHEN all of a step's dependsOn steps have applied, THE engine SHALL start that step at once, without waiting for other running steps, and SHALL run no more than maxParallel generations at a time.
   - Test: packages/engine/tests/dag-streaming.test.ts :: starts a step once its own dependency applies, while an independent slower sibling still runs
   - Test: packages/engine/tests/dag-streaming.test.ts :: never runs more generations than maxParallel and refills a freed slot at once
-- AC2b (EARS): WHEN generated proposals finish in any order, THE engine SHALL apply them one at a time, in the same order for the same plan and completion order, and SHALL apply each step only after every one of its dependsOn steps has applied.
+- AC2b: WHEN generated proposals finish in any order, THE engine SHALL apply them one at a time, in the same order for the same plan and completion order, and SHALL apply each step only after every one of its dependsOn steps has applied.
   - Test: packages/engine/tests/dag-streaming.test.ts :: applies in the same order for the same plan and completion order, and dependents after their dependencies
 - AC3: Sibling steps that would write the same file (including case aliases) or files they did not declare are rejected before the colliding patch is written, and a step's own preconditions are checked before its own write.
   - Test: packages/engine/tests/dag.test.ts :: rejects a sibling collision before the colliding patch is written, including case aliases
@@ -34,9 +34,9 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/dag.test.ts :: re-runs a pending step when the acknowledged workspace is back at its pre-patch state
   - Test: packages/engine/tests/dag.test.ts :: refuses to reconcile a pending step whose workspace matches neither fingerprint
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: resolves a crash-interrupted patch on an acknowledged resume when the workspace matches its post-patch state
-- AC4a (EARS): WHEN a step's generation fails, THE engine SHALL start no new step, SHALL apply each already-running step that does not depend on the failed step, and SHALL end the run as failed with the first failure's error.
+- AC4a: WHEN a step's generation fails, THE engine SHALL start no new step, SHALL apply each already-running step that does not depend on the failed step, and SHALL end the run as failed with the first failure's error.
   - Test: packages/engine/tests/dag-streaming.test.ts :: applies a running independent step when a sibling fails, and fails the run with the first error
-- AC4b (EARS): WHILE a step's generation is running, THE engine SHALL give it a read-only frozen copy of the workspace at the generation's snapshot hash, taken before any further patch applies, so that a patch from another step applying meanwhile never changes what the generation reads, and SHALL remove the copy when the generation succeeds, fails, is cancelled or times out. The copy SHALL be made in the folder that holds the run workspace, where container views are also made, never in the system temp folder; a copy an earlier crash left there SHALL be removed when the run starts; a copy that cannot be removed SHALL be reported as an event and SHALL NOT change the step's outcome or fail the run.
+- AC4b: WHILE a step's generation is running, THE engine SHALL give it a read-only frozen copy of the workspace at the generation's snapshot hash, taken before any further patch applies, so that a patch from another step applying meanwhile never changes what the generation reads, and SHALL remove the copy when the generation succeeds, fails, is cancelled or times out. The copy SHALL be made in the folder that holds the run workspace, where container views are also made, never in the system temp folder; a copy an earlier crash left there SHALL be removed when the run starts; a copy that cannot be removed SHALL be reported as an event and SHALL NOT change the step's outcome or fail the run.
   - Test: packages/engine/tests/dag-streaming.test.ts :: keeps a running generation on the pre-patch content while a sibling's patch applies (#373)
   - Test: packages/engine/tests/dag-streaming.test.ts :: gives each generation an existing private copy and removes it after success, failure and abort
   - Test: packages/engine/tests/snapshot.test.ts :: equals the fingerprint, keeps executable bits and lists its files through Git
@@ -45,7 +45,7 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/snapshot.test.ts :: never touches a repository GIT_DIR points at
   - Test: packages/engine/tests/dag-streaming.test.ts :: keeps a step's outcome and reports, not fails, when a snapshot cannot be removed
   - Test: packages/engine/tests/dag-snapshot-mismatch.test.ts :: ends needing reconciliation, like any outside change to the workspace
-- AC4c (EARS): WHEN the workspace itself is found in a state the scheduler did not produce (a worker modified it, or a patch could not be rolled back) after an earlier plain failure, THE engine SHALL end the run as needing reconciliation; WHEN the later error is a project policy change, THE engine SHALL still end the run as failed with the first failure's error.
+- AC4c: WHEN the workspace itself is found in a state the scheduler did not produce (a worker modified it, or a patch could not be rolled back) after an earlier plain failure, THE engine SHALL end the run as needing reconciliation; WHEN the later error is a project policy change, THE engine SHALL still end the run as failed with the first failure's error.
   - Test: packages/engine/tests/dag-streaming.test.ts :: ends needs-reconciliation when a worker dirties the workspace after an earlier plain failure
   - Test: packages/engine/tests/dag-streaming.test.ts :: still ends failed, not needs-reconciliation, when a policy change follows a plain failure
 - AC5: When the combined checks fail, a repair step receives the failure as feedback within the attempt budget; a single-attempt plan fails without repair. A resumed plan whose unchanged combined result fails verification or review goes on to repair without checking and reviewing that same snapshot again.
@@ -89,9 +89,9 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: keeps guarding the tester's tests when its saved completion has no event
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: resolves an interrupted repair patch on an acknowledged resume and reviews the files it wrote
 
-- AC13 (EARS): WHILE a multi-step plan's step is ready but has no free slot, THE retro SHALL record the minutes it waited, by step kind, with no step ID or content.
+- AC13: WHILE a multi-step plan's step is ready but has no free slot, THE retro SHALL record the minutes it waited, by step kind, with no step ID or content.
   - Test: packages/engine/tests/retro.test.ts :: shows how many minutes each step was ready before it started, without its ID
-- AC13a (EARS): WHEN a run stops while a step is ready but not started, THE retro SHALL end that wait at the stop, so the time the run was stopped is never counted as a step's wait.
+- AC13a: WHEN a run stops while a step is ready but not started, THE retro SHALL end that wait at the stop, so the time the run was stopped is never counted as a step's wait.
   - Test: packages/engine/tests/retro.test.ts :: does not count the time a run was stopped as a step's wait
 
 ## Security considerations
