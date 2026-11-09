@@ -50,7 +50,7 @@ worker's patch.
   collision, secret, verification-inventory, checkpoint, rollback, required
   checks, security and review gates. The original checkout is untouched.
   - Test: packages/engine/tests/generator.test.ts :: uses the pinned offline sandbox and captures a scoped proposal without changing the workspace
-  - Test: packages/engine/tests/dag.test.ts :: rejects sibling collisions before any patch, including case aliases
+  - Test: packages/engine/tests/dag.test.ts :: rejects a sibling collision before the colliding patch is written, including case aliases
   - Test: packages/engine/tests/dag.test.ts :: rolls back a patch whose ignore-rule edit hides an earlier generated file and stays resumable
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: refuses a generator proposal that changes the tester's test
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: always runs every required check and cannot accept a worker's claim that tests passed
