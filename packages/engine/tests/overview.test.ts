@@ -234,6 +234,47 @@ describe("project overview", () => {
   });
 });
 
+describe("failed and skipped steps", () => {
+  const steps = [step("a"), step("b", ["a"]), step("c")];
+  it("shows a failed step, its skipped dependent and an applied independent step for the current attempt", () => {
+    const stopped = run("f", "failed", {}, steps);
+    const result = overview(
+      [stopped],
+      [
+        event("f", "run.started"),
+        event("f", "dag.step.failed", { kind: "worker" }, "a"),
+        event("f", "dag.step.completed", {}, "c"),
+        event("f", "dag.step.skipped", { kind: "worker" }, "b"),
+      ],
+    );
+    expect(result.cards[0]!.steps).toEqual([
+      { id: "a", state: "failed" },
+      { id: "b", state: "skipped" },
+      { id: "c", state: "done" },
+    ]);
+  });
+  it("resets failed and skipped states when the run is resumed", () => {
+    const resumed = run("g", "running", {}, steps);
+    const result = overview(
+      [resumed],
+      [
+        event("g", "run.started"),
+        event("g", "dag.step.failed", { kind: "worker" }, "a"),
+        event("g", "dag.step.skipped", { kind: "worker" }, "b"),
+        event("g", "dag.step.completed", {}, "c"),
+        event("g", "run.stopped"),
+        event("g", "run.started"),
+        event("g", "dag.step.started", {}, "a"),
+      ],
+    );
+    expect(result.cards[0]!.steps).toEqual([
+      { id: "a", state: "working" },
+      { id: "b", state: "waiting" },
+      { id: "c", state: "done" },
+    ]);
+  });
+});
+
 describe("project overview regressions", () => {
   it("never shows an earlier attempt's error on a working run", () => {
     const resumed = run("g", "running");
