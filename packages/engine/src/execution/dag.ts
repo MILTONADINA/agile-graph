@@ -104,16 +104,48 @@ export interface DagOptions {
       workerProviderKind?: ProviderKind;
     },
   ) => Promise<WorkerResult>;
+  /**
+   * Plan step IDs that are setup for the others (the configured tester).
+   * Not hashed or checkpointed; it only labels events (AC13b).
+   */
+  setupStepIds?: readonly string[];
+  /**
+   * Called once when a run ends because a generation failed and no other
+   * error outranks it, with step counts for the operator's message.
+   */
+  onIncomplete?: (summary: DagIncomplete) => void;
   /** Recheck live authorization before each step's validation and each serialized write. */
   beforeApply?: (step: ExecutionStep) => Promise<void>;
   /** Called for every fulfilled generation, including siblings of a failed step. */
   onUsage?: (usage: Usage, step: ExecutionStep) => Promise<void> | void;
   onEvent?: (event: DagEvent) => Promise<void> | void;
 }
+export interface DagIncomplete {
+  applied: number;
+  /** Steps that never started. */
+  skipped: number;
+  total: number;
+}
 export interface DagResult {
   checkpoint: DagCheckpoint;
   appliedStepIds: string[];
 }
+/**
+ * A generation failed for a reason that holds for the whole run, not just
+ * that step (a changed policy or provider, a revoked generator, the cost or
+ * turn budget). The scheduler starts no further step after one. The name is
+ * set so the check survives a structured clone.
+ */
+export class DagRunStop extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "DagRunStop";
+  }
+}
+const isRunStop = (error: unknown) =>
+  error instanceof DagRunStop ||
+  error instanceof DagReconciliationError ||
+  (error as { name?: unknown } | null)?.name === "DagRunStop";
 export class DagReconciliationError extends Error {
   /**
    * The workspace itself is in a state the scheduler did not produce (a
@@ -475,10 +507,20 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
   const announced = new Set<string>();
   const inflight = new Map<string, Promise<GenerationOutcome>>();
   const queued: QueuedProposal[] = [];
-  // The first failure ends the run: no step starts after it, but generations
-  // already running that do not depend on the failed step still finish and
-  // apply. Any error during validation or application stops at once.
+  // A failed generation blocks only the steps that depend on it, directly or
+  // through other steps (AC4a): independent steps keep starting, generate and
+  // apply, and the run still ends failed with the first error. A run-wide
+  // error (see DagRunStop) or any error during validation, application or
+  // cancellation starts nothing further. Nothing is verified after a failure.
   let failure: { error: unknown } | undefined;
+  const failed = new Set<string>();
+  let stopStarts = false;
+  const setupIds = new Set(options.setupStepIds ?? []);
+  const setupAncestors = (id: string) =>
+    [...dag.ancestors.get(id)!].filter((ancestor) => setupIds.has(ancestor));
+  const hasFailedAncestor = (id: string) =>
+    [...dag.ancestors.get(id)!].some((ancestor) => failed.has(ancestor));
+  const blockedAnnounced = new Set<string>();
   // A workspace-state reconciliation error outranks an earlier plain failure.
   let workspaceError: DagReconciliationError | undefined;
   const snapshots = new Set<{ dispose(): Promise<void> }>();
@@ -647,16 +689,38 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
         throw new DagReconciliationError(
           "Project policy changed during DAG execution",
         );
-      if (!failure) {
+      if (!stopStarts) {
         const ready = dag.steps.filter(
           (step) =>
             !started.has(step.id) &&
             step.dependsOn.every((id) => completed.has(id)),
         );
+        // A step waiting, directly or transitively, on an unapplied setup
+        // step is announced once per call (AC13b).
+        if (setupIds.size)
+          for (const step of dag.steps) {
+            if (
+              started.has(step.id) ||
+              blockedAnnounced.has(step.id) ||
+              step.dependsOn.every((id) => completed.has(id)) ||
+              hasFailedAncestor(step.id) ||
+              !setupAncestors(step.id).some((id) => !completed.has(id))
+            )
+              continue;
+            blockedAnnounced.add(step.id);
+            await event("dag.step.blocked", step.id, {
+              kind: step.kind,
+              waitingOnSetup: true,
+            });
+          }
         for (const step of ready)
           if (!announced.has(step.id)) {
             announced.add(step.id);
-            await event("dag.step.ready", step.id, { kind: step.kind });
+            await event("dag.step.ready", step.id, {
+              kind: step.kind,
+              ...(setupIds.has(step.id) ? { setup: true } : {}),
+              ...(setupAncestors(step.id).length ? { afterSetup: true } : {}),
+            });
           }
         const starting = ready.slice(
           0,
@@ -723,6 +787,15 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       checkCancelled();
       if (!outcome.ok) {
         failure ??= { error: outcome.reason };
+        failed.add(outcome.step.id);
+        const runStop = isRunStop(outcome.reason);
+        if (runStop) stopStarts = true;
+        // Only labels: never the error's text, which may name content.
+        await event("dag.step.failed", outcome.step.id, {
+          kind: outcome.step.kind,
+          ...(setupIds.has(outcome.step.id) ? { setup: true } : {}),
+          ...(runStop ? { runStop: true } : {}),
+        });
         // A failed generation must not hide an outside edit: the same check
         // a fulfilled one gets, so the run still ends needing reconciliation.
         if (
@@ -771,7 +844,23 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       });
     } catch {}
   if (workspaceError) throw workspaceError;
-  if (failure) throw failure.error;
+  if (failure) {
+    if (failed.size) {
+      const skipped = dag.steps.filter(
+        (step) => !started.has(step.id) && hasFailedAncestor(step.id),
+      );
+      try {
+        for (const step of skipped)
+          await event("dag.step.skipped", step.id, { kind: step.kind });
+      } catch {}
+      options.onIncomplete?.({
+        applied: completed.size,
+        skipped: dag.steps.filter((step) => !started.has(step.id)).length,
+        total: dag.steps.length,
+      });
+    }
+    throw failure.error;
+  }
   return { checkpoint: structuredClone(checkpoint), appliedStepIds };
 }
 
