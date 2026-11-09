@@ -9,6 +9,17 @@
   The run record gives the waits and their median, and the summary gives the
   step count, total minutes and median per step. Runs from before this read
   as no waits. #365.
+- An optional, off-by-default review-round prior (`policy.reviewPrior`). After
+  a rejected review that has an earlier one, a single batched decision call
+  (Jev) scores `same_class`, `already_ruled`, `substantive` and `owner_needed`
+  over the current and previous reviews and records them as an advisory
+  `review.prior` event, flagging `same_class` of 0.7 or more. The scores never
+  grant ACCEPT, change a verdict or satisfy a check. It needs
+  `reviewPrior.enabled`, a numeric decision cost cap above 0 and
+  `reviewPrior.exportAuthorized`; with the option off no call is made, and a
+  failed call fails open and is recorded as `review.prior_failed`. A synthetic
+  backtest shows it flagging a patch-by-case loop a round or more before the
+  repeated-signature rule. Follows up #211. #364.
 
 ### Changed
 

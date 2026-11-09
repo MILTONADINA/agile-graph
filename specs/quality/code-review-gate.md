@@ -95,6 +95,19 @@ A team does not call work done because its author says so or because tests pass;
 - AC17: An approval given when the review was handed no executed checks (`checksRun` of 0) never passes: the verdict is recorded as given, the run does not accept it, and the next repair round is told to run the checks and review again. A review handed checks passes or fails as before, and its `checksRun` is recorded.
   - Test: packages/engine/tests/review.test.ts :: does not pass an approval that ran no checks, and passes one that did
   - Test: packages/engine/tests/execution.test.ts :: continues after a structural fix when the next check passes, and records the check count
+- AC18: Where `policy.reviewPrior.enabled` is true, a rejected review round that has an earlier review shall ask the decision provider one batch of four yes/no questions over the current and previous reviews (`same_class`, `already_ruled`, `substantive`, `owner_needed`) and record the probabilities of yes as a `review.prior` event marked `advisory`, with `flagged` true when `same_class` is at least 0.7. The call is off by default and, when off, makes no call and no network request. It shall run only when the decision cost cap (`policy.decisionMaxCostUsd`, or `maxCostUsd` when that is absent) is a number above 0, `policy.reviewPrior.exportAuthorized` is true and every path in the review text is exportable; otherwise it sends nothing and records `review.prior_skipped` with the reason. It goes through the existing decision batch client, so its calls use the decision provider's reviewed pricing, reservation and ledger, carry no promotion evidence and stay in shadow. A prior never grants ACCEPT, changes a verdict or the repair feedback, or satisfies a merge check. A failed, refused or timed-out call fails open: the review proceeds unchanged and `review.prior_failed` records the reason.
+  - Test: packages/engine/tests/review-prior.test.ts :: makes no call unless on, capped by a number, export-authorized and exportable
+  - Test: packages/engine/tests/review-prior.test.ts :: scores the four priors as the probability of yes and flags same_class
+  - Test: packages/engine/tests/review-prior.test.ts :: never sends promotion evidence, so no answer is promoted
+  - Test: packages/engine/tests/review-prior.test.ts :: fails open when the call throws or answers nothing
+  - Test: packages/engine/tests/review-prior.test.ts :: sends redacted, bounded text and withholds paths outside exportPaths
+  - Test: packages/engine/tests/execution.test.ts :: makes no decision call when the option is absent or disabled
+  - Test: packages/engine/tests/execution.test.ts :: refuses without a numeric cap or an export authorization, sending nothing
+  - Test: packages/engine/tests/execution.test.ts :: records advisory scores and never turns a rejection into an accept
+  - Test: packages/engine/tests/execution.test.ts :: fails open to no prior when the decision call fails, and says so
+- AC19: A backtest on a synthetic review sequence whose rounds each fix one case of one defect class with differently worded findings shall show the `same_class` prior flagging the loop at least one round before the repeated-signature rule does: at round 2 where the signature rule never flags, and at least a round earlier where a finding finally recurs.
+  - Test: packages/engine/tests/review-prior.test.ts :: flags a loop of differently worded findings that the signature rule never flags
+  - Test: packages/engine/tests/review-prior.test.ts :: flags at least one round before the signature rule when a finding finally recurs
 
 ## Security considerations
 
@@ -104,4 +117,4 @@ The diff shown to the reviewer is built from raw bytes outside the repository, w
 
 The review gate does not replace human acceptance, required checks or security scanning. Installed agents cannot act as reviewers yet, and large changes are failed rather than summarized or truncated.
 
-- Scoring a review round with a second model (System One or Jev) for same-class or substantive judgements, as #211 suggests. The structural-fix and hollow-accept rules here are deterministic and need no model call; a scoring step would be a later extension point.
+- Letting a model score decide a review. The optional prior (AC18) is advisory data only; the structural-fix and hollow-accept rules stay deterministic.
