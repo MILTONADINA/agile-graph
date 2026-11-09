@@ -14,6 +14,7 @@ import {
   safePath,
   validGlobEntry,
 } from "../policy.js";
+import { isRunWide } from "./run-wide.js";
 import {
   proposalSchema,
   type WorkerProposal,
@@ -145,6 +146,7 @@ export class DagRunStop extends Error {
 }
 const isRunStop = (error: unknown) =>
   error instanceof DagRunStop ||
+  isRunWide(error) ||
   error instanceof DagReconciliationError ||
   (error as { name?: unknown } | null)?.name === "DagRunStop";
 export class DagReconciliationError extends Error {
@@ -522,6 +524,12 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
   const hasFailedAncestor = (id: string) =>
     [...dag.ancestors.get(id)!].some((ancestor) => failed.has(ancestor));
   const blockedAnnounced = new Set<string>();
+  // An error validating or applying a step's patch outranks an earlier
+  // generation failure; a workspace-state error outranks both.
+  let applyFailure: { error: unknown } | undefined;
+  // Whether any error ended the loop early (cancellation, an apply or
+  // reconciliation error), rather than every step settling.
+  let ended = false;
   // A workspace-state reconciliation error outranks an earlier plain failure.
   let workspaceError: DagReconciliationError | undefined;
   const snapshots = new Set<{ dispose(): Promise<void> }>();
@@ -775,7 +783,28 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
           order.get(item.step.id)! < order.get(least.step.id)! ? item : least,
         );
         queued.splice(queued.indexOf(next), 1);
-        await applyQueued(next);
+        try {
+          await applyQueued(next);
+        } catch (error) {
+          // A policy-change reconciliation error keeps an earlier plain
+          // failure; cancellation and a step that did apply are not this
+          // step's failure.
+          if (
+            !(error instanceof DagReconciliationError) &&
+            !signal.aborted &&
+            !completed.has(next.step.id)
+          ) {
+            applyFailure ??= { error };
+            failed.add(next.step.id);
+            try {
+              await event("dag.step.failed", next.step.id, {
+                kind: next.step.kind,
+                ...(setupIds.has(next.step.id) ? { setup: true } : {}),
+              });
+            } catch {}
+          }
+          throw error;
+        }
         continue;
       }
       if (!inflight.size) {
@@ -824,6 +853,7 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       queued.push({ step: outcome.step, result: outcome.value });
     }
   } catch (error) {
+    ended = true;
     failure ??= { error };
     if (error instanceof DagReconciliationError && error.workspaceState)
       workspaceError ??= error;
@@ -844,24 +874,29 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
         count: undisposed,
       });
     } catch {}
+  if (failed.size) {
+    const skipped = dag.steps.filter(
+      (step) => !started.has(step.id) && hasFailedAncestor(step.id),
+    );
+    try {
+      for (const step of skipped)
+        await event("dag.step.skipped", step.id, { kind: step.kind });
+    } catch {}
+  }
   if (workspaceError) throw workspaceError;
   if (failure) {
-    if (failed.size) {
-      const skipped = dag.steps.filter(
-        (step) => !started.has(step.id) && hasFailedAncestor(step.id),
-      );
-      try {
-        for (const step of skipped)
-          await event("dag.step.skipped", step.id, { kind: step.kind });
-      } catch {}
+    // Resume advice only for a run that ended under AC4a: every step
+    // settled, and the error thrown is the first, step-local generation
+    // failure. A run-wide stop, cancellation, apply or reconciliation error
+    // gets none.
+    if (failed.size && !ended && !stopStarts && !applyFailure)
       options.onIncomplete?.({
         applied: completed.size,
         failed: failed.size,
         skipped: dag.steps.filter((step) => !started.has(step.id)).length,
         total: dag.steps.length,
       });
-    }
-    throw failure.error;
+    throw applyFailure?.error ?? failure.error;
   }
   return { checkpoint: structuredClone(checkpoint), appliedStepIds };
 }
