@@ -356,18 +356,23 @@ describe("frozen generation snapshots", () => {
   it("ends needs-reconciliation when a worker dirties the workspace after an earlier plain failure", async () => {
     const workspace = await fixture();
     const failed = deferred();
+    let firstCopy = "";
     const error = await runDag({
       workspace,
       policy: DEFAULT_POLICY,
       maxParallel: 2,
       steps: [step("a"), step("b")],
       saveCheckpoint: async () => {},
-      generate: async (current) => {
+      generate: async (current, state) => {
         if (current.id === "a") {
+          firstCopy = state.workspace;
           setTimeout(failed.resolve, 0);
           throw new Error("first failure");
         }
         await failed.promise;
+        // a's rejection reaches the scheduler only after its snapshot is
+        // removed; wait for that, so a slow runner cannot reorder them.
+        while (await exists(firstCopy)) await guard(5);
         await guard(20);
         await writeFile(path.join(workspace, "dirty.txt"), "worker wrote me");
         return proposal("b.txt", "b");
@@ -375,7 +380,11 @@ describe("frozen generation snapshots", () => {
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(DagReconciliationError);
     expect((error as DagReconciliationError).workspaceState).toBe(true);
-    expect((error as Error).message).toMatch(/modified the workspace/);
+    // Caught after a's failure or after b's generation: both are the same
+    // workspace-state condition.
+    expect((error as Error).message).toMatch(
+      /modified the workspace|workspace changed while a step was generating/,
+    );
   });
 
   it("ends needs-reconciliation when the workspace changes while the last generation fails", async () => {
@@ -399,18 +408,23 @@ describe("frozen generation snapshots", () => {
     const workspace = await fixture();
     const policy = structuredClone(DEFAULT_POLICY);
     const failed = deferred();
+    let firstCopy = "";
     const error = await runDag({
       workspace,
       policy,
       maxParallel: 2,
       steps: [step("a"), step("b")],
       saveCheckpoint: async () => {},
-      generate: async (current) => {
+      generate: async (current, state) => {
         if (current.id === "a") {
+          firstCopy = state.workspace;
           setTimeout(failed.resolve, 0);
           throw new Error("first failure");
         }
         await failed.promise;
+        // a's rejection reaches the scheduler only after its snapshot is
+        // removed; wait for that, so a slow runner cannot reorder them.
+        while (await exists(firstCopy)) await guard(5);
         await guard(20);
         policy.maxTurns = policy.maxTurns + 1;
         return proposal("b.txt", "b");
