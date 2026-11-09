@@ -70,7 +70,6 @@ function deferred() {
   return { promise, resolve };
 }
 const guard = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
-const settle = () => guard(10);
 
 describe("streaming DAG scheduler", () => {
   it("starts a step once its own dependency applies, while an independent slower sibling still runs", async () => {
@@ -182,9 +181,11 @@ describe("streaming DAG scheduler", () => {
       const workspace = await fixture();
       const gates: Record<string, ReturnType<typeof deferred>> = {};
       const started: Record<string, ReturnType<typeof deferred>> = {};
+      const applied: Record<string, ReturnType<typeof deferred>> = {};
       for (const id of ["a", "b", "c", "d"]) {
         gates[id] = deferred();
         started[id] = deferred();
+        applied[id] = deferred();
       }
       const run = runDag({
         workspace,
@@ -192,16 +193,23 @@ describe("streaming DAG scheduler", () => {
         maxParallel: 2,
         steps: [step("a"), step("b"), step("c", ["a"]), step("d", ["b"])],
         saveCheckpoint: async () => {},
+        onEvent: (current) => {
+          if (current.type === "dag.step.completed" && current.stepId)
+            applied[current.stepId]?.resolve();
+        },
         generate: async (current) => {
           started[current.id]!.resolve();
           await gates[current.id]!.promise;
           return proposal(`${current.id}.txt`, current.id);
         },
       });
+      // Release each generation only once it has started, and the next one
+      // only once this one has applied: a slow runner (snapshot copies,
+      // fingerprints) must not let two finished proposals queue together.
       for (const id of completion) {
-        await Promise.race([started[id]!.promise, guard(1000)]);
+        await started[id]!.promise;
         gates[id]!.resolve();
-        await settle();
+        await applied[id]!.promise;
       }
       return (await run).appliedStepIds;
     };
