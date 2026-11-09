@@ -1,11 +1,58 @@
 import type { ProjectPolicy } from "@agile-graph/contracts";
 import { constants } from "node:fs";
-import { chmod, copyFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
-import os from "node:os";
+import {
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  stat,
+} from "node:fs/promises";
+import { devNull } from "node:os";
 import path from "node:path";
 import { isAllowedPath, safePath, wholeRepository } from "../policy.js";
-import { checkedGit, managedGit } from "./git.js";
+import { managedGit } from "./git.js";
 import { gitFiles, workspaceFingerprint } from "./workspace.js";
+
+/** The copy no longer matches the hash it was taken for: the workspace changed. */
+export class SnapshotMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SnapshotMismatchError";
+  }
+}
+// Snapshots sit beside the run workspace, not in the system temp folder: the
+// container views for generators and checks are made in the same parent, and
+// VM-backed Docker shares only the home folder.
+const snapshotPrefix = (workspace: string) =>
+  `${path.basename(workspace)}-snapshot-`;
+/**
+ * Removes snapshots of this workspace an earlier crash left behind: only
+ * real directories (never a symlink or file) with this workspace's prefix.
+ */
+export async function removeStaleSnapshots(workspace: string): Promise<void> {
+  const parent = path.dirname(workspace),
+    prefix = snapshotPrefix(workspace);
+  let names: string[];
+  try {
+    names = await readdir(parent);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  for (const name of names) {
+    if (!name.startsWith(prefix)) continue;
+    const target = path.join(parent, name);
+    try {
+      if ((await lstat(target)).isDirectory())
+        await rm(target, { recursive: true, force: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+}
 
 /** A private copy of exactly the regular files included in the fingerprint. */
 export async function createWorkspaceSnapshot(
@@ -13,7 +60,9 @@ export async function createWorkspaceSnapshot(
   policy: ProjectPolicy,
   expectedHash: string,
 ): Promise<{ path: string; dispose(): Promise<void> }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "agile-graph-snapshot-"));
+  const root = await mkdtemp(
+    path.join(path.dirname(workspace), snapshotPrefix(workspace)),
+  );
   const dispose = async () => {
     await rm(root, { recursive: true, force: true });
   };
@@ -37,7 +86,11 @@ export async function createWorkspaceSnapshot(
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
     }
-    await checkedGit(root, ["init", "-q"]);
+    // No hooks, and no global or system configuration of the operator's.
+    const env = { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" };
+    const init = await managedGit(root, ["init", "-q"], { env });
+    if (init.code !== 0)
+      throw new Error(`Snapshot git init failed: ${init.stderr.trim()}`);
     if (copied.length) {
       const added = await managedGit(
         root,
@@ -48,14 +101,14 @@ export async function createWorkspaceSnapshot(
           "--pathspec-from-file=-",
           "--pathspec-file-nul",
         ],
-        { input: copied.join("\0") + "\0" },
+        { input: copied.join("\0") + "\0", env },
       );
       if (added.code !== 0)
         throw new Error(`Snapshot git add failed: ${added.stderr}`);
     }
     const actual = await workspaceFingerprint(root, policy);
     if (actual !== expectedHash)
-      throw new Error(
+      throw new SnapshotMismatchError(
         `Workspace snapshot hash mismatch: expected ${expectedHash}, got ${actual}`,
       );
     return { path: root, dispose };
