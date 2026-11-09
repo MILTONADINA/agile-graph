@@ -29,6 +29,7 @@ import {
   type Originals,
   workspaceFingerprint,
 } from "./workspace.js";
+import { createWorkspaceSnapshot } from "./snapshot.js";
 
 /** The engine's repair step after a plan's combined checks fail; plans may not use its ID. */
 export const DAG_REPAIR_STEP = "dag-repair";
@@ -88,6 +89,13 @@ export interface DagOptions {
     step: ExecutionStep,
     state: {
       snapshotHash: string;
+      /**
+       * Read-only frozen copy of the workspace at `snapshotHash`; never the
+       * live workspace. Read sources from here: patches from sibling steps
+       * may apply to the live workspace while this generation runs. The
+       * scheduler removes it when the generation settles.
+       */
+      workspace: string;
       signal: AbortSignal;
       workerProviderKind?: ProviderKind;
     },
@@ -103,9 +111,19 @@ export interface DagResult {
   appliedStepIds: string[];
 }
 export class DagReconciliationError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  /**
+   * The workspace itself is in a state the scheduler did not produce (a
+   * worker dirtied it, a rollback could not restore it). Such an error ends
+   * the run as needing reconciliation even after an earlier plain failure.
+   */
+  readonly workspaceState: boolean;
+  constructor(
+    message: string,
+    options?: ErrorOptions & { workspaceState?: boolean },
+  ) {
     super(message, options);
     this.name = "DagReconciliationError";
+    this.workspaceState = options?.workspaceState === true;
   }
 }
 
@@ -437,8 +455,8 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
   // with at most maxParallel generations running. Generated proposals wait in
   // `queued` and apply one at a time, the lowest plan position first, so
   // checkpoint ordering and pending-patch reconciliation are unchanged.
-  // KNOWN BLOCKER (not mergeable): a patch can apply while a sibling
-  // generation still reads the live workspace; see the tracking issue.
+  // Each generation reads a frozen snapshot taken here, inside the serialized
+  // loop, so no apply can run between the fingerprint check and the copy.
   const order = new Map(dag.steps.map((step, index) => [step.id, index]));
   const started = new Set<string>(completed);
   const announced = new Set<string>();
@@ -448,24 +466,40 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
   // already running that do not depend on the failed step still finish and
   // apply. Any error during validation or application stops at once.
   let failure: { error: unknown } | undefined;
-  const launch = (step: ExecutionStep, snapshotHash: string) => {
+  // A workspace-state reconciliation error outranks an earlier plain failure.
+  let workspaceError: DagReconciliationError | undefined;
+  const snapshots = new Set<{ dispose(): Promise<void> }>();
+  const launch = (
+    step: ExecutionStep,
+    snapshotHash: string,
+    snapshot: { path: string; dispose(): Promise<void> },
+  ) => {
+    snapshots.add(snapshot);
     const generation = (async () => {
-      await event("dag.step.started", step.id, {
-        providerId: step.providerId ?? null,
-      });
-      // Each step's generation has its own policy timeout, so a long plan
-      // is not bounded by a single step's allowance.
-      const workerProviderKind =
-        step.kind === "worker" ? options.workerProviderKind?.(step) : undefined;
-      const timeoutMs = workerTimeoutMs(policy, workerProviderKind);
-      return options.generate(structuredClone(step), {
-        snapshotHash,
-        workerProviderKind,
-        signal:
-          timeoutMs === null
-            ? signal
-            : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
-      });
+      try {
+        await event("dag.step.started", step.id, {
+          providerId: step.providerId ?? null,
+        });
+        // Each step's generation has its own policy timeout, so a long plan
+        // is not bounded by a single step's allowance.
+        const workerProviderKind =
+          step.kind === "worker"
+            ? options.workerProviderKind?.(step)
+            : undefined;
+        const timeoutMs = workerTimeoutMs(policy, workerProviderKind);
+        return await options.generate(structuredClone(step), {
+          snapshotHash,
+          workspace: snapshot.path,
+          workerProviderKind,
+          signal:
+            timeoutMs === null
+              ? signal
+              : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
+        });
+      } finally {
+        snapshots.delete(snapshot);
+        await snapshot.dispose();
+      }
     })();
     inflight.set(
       step.id,
@@ -528,6 +562,7 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
     )
       throw new DagReconciliationError(
         "Workspace changed before serialized patch application",
+        { workspaceState: true },
       );
     checkpoint.pending = {
       stepId: step.id,
@@ -615,10 +650,16 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
           if (before !== checkpoint.workspaceHash)
             throw new DagReconciliationError(
               "Workspace changed outside the DAG scheduler",
+              { workspaceState: true },
             );
           for (const step of starting) {
+            const snapshot = await createWorkspaceSnapshot(
+              workspace,
+              policy,
+              before,
+            );
             started.add(step.id);
-            launch(step, before);
+            launch(step, before, snapshot);
           }
         }
       }
@@ -652,15 +693,21 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       )
         throw new DagReconciliationError(
           "A proposal worker modified the workspace",
+          { workspaceState: true },
         );
       queued.push({ step: outcome.step, result: outcome.value });
     }
   } catch (error) {
     failure ??= { error };
+    if (error instanceof DagReconciliationError && error.workspaceState)
+      workspaceError ??= error;
     // Cancel what is still generating: nothing from it can apply now.
     controller.abort();
     await Promise.allSettled(inflight.values());
+    await Promise.allSettled([...snapshots].map((item) => item.dispose()));
+    snapshots.clear();
   }
+  if (workspaceError) throw workspaceError;
   if (failure) throw failure.error;
   return { checkpoint: structuredClone(checkpoint), appliedStepIds };
 }
@@ -787,6 +834,7 @@ async function rollBack(
   } catch (error) {
     throw new DagReconciliationError(
       `Step ${pending.stepId} failed after patch application (${reason}) and could not be rolled back (${(error as Error).message}); inspect the retained workspace, then resume with reconciliation acknowledgement or create a new plan`,
+      { workspaceState: true },
     );
   }
   await context.event("dag.step.rolled_back", pending.stepId, {
