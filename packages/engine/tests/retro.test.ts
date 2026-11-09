@@ -355,6 +355,35 @@ describe("delivery retro", () => {
     );
   });
 
+  it("does not count the time a run was stopped as a step's wait", () => {
+    const step = (event: RunEvent, stepId: string) => ({ ...event, stepId });
+    const stopped = { error: "Docker daemon is not running" };
+    const resumedAndAnnounced = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      step(event(0, "dag.step.ready", { kind: "worker" }), "one"),
+      event(3, "run.stopped", stopped),
+      event(20, "run.started"),
+      step(event(20, "dag.step.ready", { kind: "worker" }), "one"),
+      step(event(22, "dag.step.started", { providerId: "local" }), "one"),
+      step(event(24, "dag.step.completed"), "one"),
+      event(25, "run.succeeded"),
+    ]);
+    // Only the two minutes after the resume, not the 22 since the first ready.
+    expect(resumedAndAnnounced.stepWaits).toEqual([
+      { kind: "worker", minutes: 2 },
+    ]);
+    const notAnnounced = runRetro(record("succeeded"), [
+      event(0, "run.started"),
+      step(event(0, "dag.step.ready", { kind: "worker" }), "one"),
+      event(3, "run.stopped", stopped),
+      event(20, "run.started"),
+      step(event(22, "dag.step.started", { providerId: "local" }), "one"),
+      event(25, "run.succeeded"),
+    ]);
+    // A wait that a stop ended is dropped, never stretched across the stop.
+    expect(notAnnounced.stepWaits).toEqual([]);
+  });
+
   it("tells unnamed checks with the same command in different images apart", () => {
     const failingIn = (image: string) => [
       { argv: ["npm", "test"], image, code: 1, stdout: "", stderr: "" },
