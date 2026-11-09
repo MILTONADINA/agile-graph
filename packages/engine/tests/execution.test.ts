@@ -4383,6 +4383,33 @@ describe("code review gate", () => {
       requestChanges([blockingFinding("Reject backslash separators")]),
     ];
 
+    it("scores verify-fix rejections too, before the repeat rule stops the run", async () => {
+      const decide = fakeJev();
+      const { result, events } = await setup({
+        reviews: [requestChanges([blockingFinding("Reject dot-dot segments")])],
+        fixChecks: [
+          { verdict: "still_present", evidence: "Still accepts ../" },
+          { verdict: "still_present", evidence: "Still accepts ../" },
+        ],
+        reviewPriorDecide: decide as never,
+        ...enable({ enabled: true, exportAuthorized: true }),
+      });
+      const completed = events.filter(
+        (event) => event.type === "review.completed",
+      );
+      expect(completed.map((event) => event.data.stage ?? "review")).toEqual([
+        "review",
+        "verify-fix",
+        "verify-fix",
+      ]);
+      // The first round has nothing earlier; both verify-fix rounds score.
+      expect(decide).toHaveBeenCalledTimes(2);
+      expect(
+        events.filter((event) => event.type === "review.prior"),
+      ).toHaveLength(2);
+      expect(result.status).toBe("failed");
+    });
+
     it("makes no decision call when the option is absent or disabled", async () => {
       for (const configure of [undefined, enable({ enabled: false })]) {
         const decide = fakeJev();

@@ -200,10 +200,14 @@ export async function reviewPrior(input: {
   }
   const scores = Object.fromEntries(
     REVIEW_PRIOR_SCORES.map((id) => {
-      const record = result.records.find(
-        (item) => item.evidence.questionId === id,
-      );
-      return [id, record ? priorScore(record) : null];
+      // Several providers can answer one question (shadow answers resolve
+      // nothing): take the first usable answer in provider order, so one
+      // provider's failure does not discard another's paid answer.
+      const usable = result.records
+        .filter((item) => item.evidence.questionId === id)
+        .map(priorScore)
+        .find((score) => score !== null);
+      return [id, usable ?? null];
     }),
   ) as Record<ReviewPriorScore, number | null>;
   if (REVIEW_PRIOR_SCORES.every((id) => scores[id] === null))
