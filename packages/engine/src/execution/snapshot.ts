@@ -10,7 +10,6 @@ import {
   rm,
   stat,
 } from "node:fs/promises";
-import { devNull } from "node:os";
 import path from "node:path";
 import { isAllowedPath, safePath, wholeRepository } from "../policy.js";
 import { managedGit } from "./git.js";
@@ -87,7 +86,12 @@ export async function createWorkspaceSnapshot(
       }
     }
     // No hooks, and no global or system configuration of the operator's.
-    const env = { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" };
+    // The global file is a path that never exists (Git ignores a missing
+    // one); the null device is refused as a config file on Windows.
+    const env = {
+      GIT_CONFIG_GLOBAL: path.join(root, ".git", "no-global-config"),
+      GIT_CONFIG_NOSYSTEM: "1",
+    };
     const init = await managedGit(root, ["init", "-q"], { env });
     if (init.code !== 0)
       throw new Error(`Snapshot git init failed: ${init.stderr.trim()}`);
