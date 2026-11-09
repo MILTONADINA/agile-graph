@@ -984,13 +984,15 @@ export class RunStore {
    * with its event and terminal outcome in one transaction, so a reader in
    * another process never sees the final status without its last event.
    */
-  stopRun(run: RunRecord): void {
+  stopRun(run: RunRecord, eventError: string | undefined = run.error): void {
     this.db
       .transaction(() => {
         this.saveRun(run);
+        // `eventError` is the error without any advice appended to the run's
+        // own, so retro and feedback classify the cause, not the advice.
         this.event(run.id, "run.stopped", {
           status: run.status,
-          error: run.error,
+          error: eventError,
         });
         this.recordOutcome(this.outcomeFor(run, "terminal"));
       })

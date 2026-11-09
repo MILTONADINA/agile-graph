@@ -205,6 +205,7 @@ import {
   WORKFLOWS,
 } from "./planning.js";
 import { dagParallelism } from "./scale.js";
+import { isRunWide, markRunWide } from "./execution/run-wide.js";
 import { passedChecksSnapshot, stoppedAtReview } from "./overview.js";
 import { writeRunProvenance } from "./run-provenance.js";
 import { DEFAULT_TEST_FILES, TESTER_STEP_ID, testerStep } from "./tester.js";
@@ -1145,18 +1146,19 @@ export class GraphEngine {
     stepId: string,
     onReserved?: () => void,
   ): Promise<WorkerResult> {
-    // These hold for the whole run, so a DAG start no further step on them.
+    // These hold for the whole run: each error is tagged (the same object
+    // is thrown) so a DAG's generate callback can stop all starts on it.
     const validateIdentity = async () => {
       await this.refresh();
       if (hash(this.config.policy) !== run.plan.policyHash)
-        throw new DagRunStop(
-          "Policy changed during execution; dispatch stopped",
+        throw markRunWide(
+          new Error("Policy changed during execution; dispatch stopped"),
         );
       try {
         this.assertPlanVerification(run.plan);
         return this.assertDispatchIdentity(run.plan, input.provider);
       } catch (error) {
-        throw new DagRunStop(errorMessage(error), { cause: error });
+        throw markRunWide(error);
       }
     };
     const installedBinding = await validateIdentity();
@@ -1230,7 +1232,7 @@ export class GraphEngine {
         );
       } catch (error) {
         // The cost cap and the shared turn budget bound the whole run.
-        throw new DagRunStop(errorMessage(error), { cause: error });
+        throw markRunWide(error);
       }
       onReserved?.();
       let result: WorkerResult;
@@ -1266,7 +1268,9 @@ export class GraphEngine {
   async refresh(): Promise<ProjectConfig> {
     const config = await loadProject(this.root);
     if (config.projectId !== this.config.projectId)
-      throw new Error("Project identity changed; restart the engine");
+      throw markRunWide(
+        new Error("Project identity changed; restart the engine"),
+      );
     // A running DAG holds this object, so it keeps its identity, but its
     // contents become the file's exactly: a key removed from the file is
     // removed here, and keys keep the file's order, which the policy hash
@@ -4373,335 +4377,342 @@ export class GraphEngine {
             );
           },
           onEvent: recordDagEvent,
-          generate: async (step, state) => {
-            // Every read below uses this frozen copy at state.snapshotHash:
-            // a sibling's patch may apply to the live workspace meanwhile.
-            const frozen = state.workspace;
-            await this.refresh();
-            // A failed check below holds for the whole run: DagRunStop makes
-            // the scheduler start no further step (AC4a-1).
-            const runWide = <T>(check: () => T): T => {
-              try {
-                return check();
-              } catch (error) {
-                throw new DagRunStop(errorMessage(error), { cause: error });
-              }
-            };
-            if (hash(this.config.policy) !== run.plan.policyHash)
-              throw new DagRunStop("Policy changed during DAG execution");
-            runWide(() => this.assertPlanVerification(run.plan));
-            if (step.kind === "generator") {
-              runWide(() =>
-                this.assertLiveGenerators(run.plan, new Set([step.id])),
-              );
-              const registration = this.plannedGenerators(run.plan).find(
-                (value) => value.id === step.generatorId,
-              )!;
-              const result: GeneratorResult = await (
-                this.deps.generator ?? generateInContainer
-              )(
-                frozen,
-                registration,
-                this.config.policy,
-                state.snapshotHash,
-                state.signal,
-              );
-              const testerFeedback = testFirstFeedback(
-                step,
-                result.proposal,
-                testerWrittenFiles(),
-              );
-              if (testerFeedback)
-                throw new Error(
-                  `Generator ${step.generatorId}: ${testerFeedback}`,
-                );
-              this.store.event(
-                run.id,
-                "generator.generated",
-                { ...result.provenance },
-                step.id,
-              );
-              return result;
-            }
-            const provider = (await this.providers()).find(
-              (provider) => provider.id === step.providerId,
-            );
-            if (!provider)
-              throw new DagRunStop("DAG worker is no longer configured");
-            if (workerKinds && provider.kind !== state.workerProviderKind)
-              throw new DagRunStop(
-                "DAG worker kind changed after its deadline was selected; create a new plan",
-              );
-            assertOnPlanSide(
-              run.plan,
-              provider,
-              stepRole(step.id, provider.id),
-            );
-            let stepPacket: ContextPacket = await currentContext(
-              step.id === TESTER_STEP_ID
-                ? {
-                    writes: step.writes ?? [],
-                    exportOnly: provider.kind !== "local",
-                  }
-                : undefined,
-              frozen,
-            );
-            const supplied = new SuppliedLines();
-            const shown = new SuppliedLines();
-            let patchFeedback = "";
-            let repeatedRequests = 0;
-            let repeatedReads = 0;
-            let unexportablePatches = 0;
-            let unusableOutputs = 0;
-            let mutationRoundsLeft =
-              step.id === TESTER_STEP_ID
-                ? (this.config.policy.mutationRounds ?? 0)
-                : 0;
-            // Tests the tester wrote earlier in this plan, which implementing
-            // steps must make pass and may not change.
-            const testsWritten =
-              step.id === TESTER_STEP_ID ? [] : testerWrittenFiles();
-            // A cloud worker is told only of the tests it may request: the
-            // others' names were chosen by a tester that may have seen
-            // private context, and requesting them is refused.
-            const testsListed =
-              provider.kind === "local"
-                ? testsWritten
-                : testsWritten.filter((file) =>
-                    isAllowedPath(file, this.config.policy, true),
-                  );
-            for (let turn = 0; turn < this.config.policy.maxTurns; turn++) {
+          // A run-wide error from anywhere in a generation (tagged where it
+          // is thrown) stops every start; any other error is this step's.
+          generate: (step, state) =>
+            runWideAsStop(async () => {
+              // Every read below uses this frozen copy at state.snapshotHash:
+              // a sibling's patch may apply to the live workspace meanwhile.
+              const frozen = state.workspace;
               await this.refresh();
+              // A failed check below holds for the whole run: DagRunStop makes
+              // the scheduler start no further step (AC4a-1).
+              const runWide = <T>(check: () => T): T => {
+                try {
+                  return check();
+                } catch (error) {
+                  throw new DagRunStop(errorMessage(error), { cause: error });
+                }
+              };
               if (hash(this.config.policy) !== run.plan.policyHash)
                 throw new DagRunStop("Policy changed during DAG execution");
-              const stepFeedback = [patchFeedback, readNotice(patchFeedback)]
-                .filter(Boolean)
-                .join("\n\n");
-              const stepInput: WorkerInput = {
-                provider,
-                policy: this.config.policy,
-                context: stepPacket,
-                objective: testsListed.length
-                  ? `${step.objective}\n\nThe tester has written tests for the acceptance criteria in ${testsListed.join(", ")}. Request them, and make them pass without changing them.`
-                  : step.objective,
-                acceptance: run.plan.acceptance,
-                effort: step.effort,
-                ...(stepFeedback ? { feedback: stepFeedback } : {}),
-                signal: state.signal,
-              };
-              recordShown(shown, fitWorkerContext(stepInput).context);
-              let result: WorkerResult;
-              try {
-                result = await this.invokeWorker(
-                  stepInput,
-                  frozen,
-                  run,
-                  step.id,
+              runWide(() => this.assertPlanVerification(run.plan));
+              if (step.kind === "generator") {
+                runWide(() =>
+                  this.assertLiveGenerators(run.plan, new Set([step.id])),
                 );
-              } catch (error) {
-                // Cut-off or malformed structured output goes back to the
-                // worker once in a row, within the turn budget.
-                if (
-                  !(error instanceof StructuredOutputError) ||
-                  ++unusableOutputs > 1
-                )
-                  throw error;
-                run.usage = this.store.usage(run.plan.id);
-                save("running");
-                returned(step.id, error.reason);
-                patchFeedback = structuredOutputRetryFeedback(
-                  error,
-                  patchFeedback,
-                );
-                continue;
-              }
-              unusableOutputs = 0;
-              run.usage = this.store.usage(run.plan.id);
-              save("running");
-              this.store.event(
-                run.id,
-                "worker.completed",
-                { model: result.model, usage: result.usage },
-                step.id,
-              );
-              await this.refresh();
-              if (hash(this.config.policy) !== run.plan.policyHash)
-                throw new Error("Policy changed before DAG patch application");
-              if (refuseRead(step.id, result.proposal, ++repeatedReads)) {
-                patchFeedback = READ_BUDGET_REFUSAL;
-                continue;
-              }
-              repeatedReads = 0;
-              // Once the read budget is spent, a request with changes is a
-              // proposal and its requests go unanswered.
-              if (result.proposal.requests.length && readTurns < readBudget) {
-                countRead(step.id, result.proposal);
-                try {
-                  stepPacket = await requestedSourcePacket({
-                    workspace: frozen,
-                    input: stepInput,
-                    requests: result.proposal.requests,
-                    snapshotId: stepPacket.snapshotId,
-                    supplied,
-                    worker: "DAG worker",
-                    routedBudget: run.plan.routing?.contextBudgetTokens,
-                  });
-                  patchFeedback = "";
-                  repeatedRequests = 0;
-                  unexportablePatches = 0;
-                  continue;
-                } catch (error) {
-                  // A repeated or unexportable request with changes is a
-                  // proposal; a bare one is told so once before it stops the
-                  // step.
-                  const refused = refusedRequest(error);
-                  if (!refused) throw error;
-                  if (!result.proposal.changes.length) {
-                    if (++repeatedRequests > 1) throw error;
-                    returned(step.id, refused.reason);
-                    patchFeedback = refused.feedback;
-                    continue;
-                  }
-                }
-              }
-              {
-                // Before anything reads the files it names (below, or
-                // prepareProposal): see assertExportablePatch.
-                const unexportable = await this.unexportablePatch(
+                const registration = this.plannedGenerators(run.plan).find(
+                  (value) => value.id === step.generatorId,
+                )!;
+                const result: GeneratorResult = await (
+                  this.deps.generator ?? generateInContainer
+                )(
                   frozen,
-                  result.proposal,
-                  provider,
-                  ++unexportablePatches,
-                );
-                if (unexportable) {
-                  returned(step.id, "not-exportable");
-                  patchFeedback = unexportable;
-                  continue;
-                }
-                unexportablePatches = 0;
-                const unseen = await unseenPatchLocation(
-                  frozen,
-                  result.proposal,
-                  shown,
+                  registration,
                   this.config.policy,
+                  state.snapshotHash,
+                  state.signal,
                 );
-                // A step limited to some files (a tester writes only tests)
-                // gets its out-of-scope edits back as feedback.
-                const outside = outsideWriteScope(step, result.proposal);
-                if (outside.length) {
-                  returned(step.id, "outside-write-scope");
-                  patchFeedback = writeScopeFeedback(step, outside);
-                  continue;
-                }
                 const testerFeedback = testFirstFeedback(
                   step,
                   result.proposal,
-                  testsWritten,
+                  testerWrittenFiles(),
                 );
-                if (testerFeedback) {
-                  returned(step.id, "test-first");
-                  patchFeedback = testerFeedback;
+                if (testerFeedback)
+                  throw new Error(
+                    `Generator ${step.generatorId}: ${testerFeedback}`,
+                  );
+                this.store.event(
+                  run.id,
+                  "generator.generated",
+                  { ...result.provenance },
+                  step.id,
+                );
+                return result;
+              }
+              const provider = (await this.providers()).find(
+                (provider) => provider.id === step.providerId,
+              );
+              if (!provider)
+                throw new DagRunStop("DAG worker is no longer configured");
+              if (workerKinds && provider.kind !== state.workerProviderKind)
+                throw new DagRunStop(
+                  "DAG worker kind changed after its deadline was selected; create a new plan",
+                );
+              runWide(() =>
+                assertOnPlanSide(
+                  run.plan,
+                  provider,
+                  stepRole(step.id, provider.id),
+                ),
+              );
+              let stepPacket: ContextPacket = await currentContext(
+                step.id === TESTER_STEP_ID
+                  ? {
+                      writes: step.writes ?? [],
+                      exportOnly: provider.kind !== "local",
+                    }
+                  : undefined,
+                frozen,
+              );
+              const supplied = new SuppliedLines();
+              const shown = new SuppliedLines();
+              let patchFeedback = "";
+              let repeatedRequests = 0;
+              let repeatedReads = 0;
+              let unexportablePatches = 0;
+              let unusableOutputs = 0;
+              let mutationRoundsLeft =
+                step.id === TESTER_STEP_ID
+                  ? (this.config.policy.mutationRounds ?? 0)
+                  : 0;
+              // Tests the tester wrote earlier in this plan, which implementing
+              // steps must make pass and may not change.
+              const testsWritten =
+                step.id === TESTER_STEP_ID ? [] : testerWrittenFiles();
+              // A cloud worker is told only of the tests it may request: the
+              // others' names were chosen by a tester that may have seen
+              // private context, and requesting them is refused.
+              const testsListed =
+                provider.kind === "local"
+                  ? testsWritten
+                  : testsWritten.filter((file) =>
+                      isAllowedPath(file, this.config.policy, true),
+                    );
+              for (let turn = 0; turn < this.config.policy.maxTurns; turn++) {
+                await this.refresh();
+                if (hash(this.config.policy) !== run.plan.policyHash)
+                  throw new DagRunStop("Policy changed during DAG execution");
+                const stepFeedback = [patchFeedback, readNotice(patchFeedback)]
+                  .filter(Boolean)
+                  .join("\n\n");
+                const stepInput: WorkerInput = {
+                  provider,
+                  policy: this.config.policy,
+                  context: stepPacket,
+                  objective: testsListed.length
+                    ? `${step.objective}\n\nThe tester has written tests for the acceptance criteria in ${testsListed.join(", ")}. Request them, and make them pass without changing them.`
+                    : step.objective,
+                  acceptance: run.plan.acceptance,
+                  effort: step.effort,
+                  ...(stepFeedback ? { feedback: stepFeedback } : {}),
+                  signal: state.signal,
+                };
+                recordShown(shown, fitWorkerContext(stepInput).context);
+                let result: WorkerResult;
+                try {
+                  result = await this.invokeWorker(
+                    stepInput,
+                    frozen,
+                    run,
+                    step.id,
+                  );
+                } catch (error) {
+                  // Cut-off or malformed structured output goes back to the
+                  // worker once in a row, within the turn budget.
+                  if (
+                    !(error instanceof StructuredOutputError) ||
+                    ++unusableOutputs > 1
+                  )
+                    throw error;
+                  run.usage = this.store.usage(run.plan.id);
+                  save("running");
+                  returned(step.id, error.reason);
+                  patchFeedback = structuredOutputRetryFeedback(
+                    error,
+                    patchFeedback,
+                  );
                   continue;
                 }
-                if (!unseen) {
-                  // A patch that cannot apply goes back to the worker, as in
-                  // single-step runs, instead of failing the whole plan.
-                  let staged: Awaited<ReturnType<typeof prepareProposal>>;
+                unusableOutputs = 0;
+                run.usage = this.store.usage(run.plan.id);
+                save("running");
+                this.store.event(
+                  run.id,
+                  "worker.completed",
+                  { model: result.model, usage: result.usage },
+                  step.id,
+                );
+                await this.refresh();
+                if (hash(this.config.policy) !== run.plan.policyHash)
+                  throw new Error(
+                    "Policy changed before DAG patch application",
+                  );
+                if (refuseRead(step.id, result.proposal, ++repeatedReads)) {
+                  patchFeedback = READ_BUDGET_REFUSAL;
+                  continue;
+                }
+                repeatedReads = 0;
+                // Once the read budget is spent, a request with changes is a
+                // proposal and its requests go unanswered.
+                if (result.proposal.requests.length && readTurns < readBudget) {
+                  countRead(step.id, result.proposal);
                   try {
-                    staged = await prepareProposal(
-                      frozen,
-                      result.proposal,
-                      this.config.policy,
-                    );
-                  } catch (error) {
-                    const returnedPatch = patchErrorFeedback(
-                      errorMessage(error),
-                      step.id,
-                    );
-                    if (!returnedPatch) throw error;
-                    returned(step.id, returnedPatch.reason);
-                    patchFeedback = patchFeedbackFor(
-                      returnedPatch.feedback +
-                        (returnedPatch.reason === "missing-file"
-                          ? await similarFilesNote(
-                              frozen,
-                              errorMessage(error),
-                              provider,
-                              this.config.policy,
-                            )
-                          : ""),
-                      result.proposal,
-                      provider,
-                      this.config.policy,
-                    );
+                    stepPacket = await requestedSourcePacket({
+                      workspace: frozen,
+                      input: stepInput,
+                      requests: result.proposal.requests,
+                      snapshotId: stepPacket.snapshotId,
+                      supplied,
+                      worker: "DAG worker",
+                      routedBudget: run.plan.routing?.contextBudgetTokens,
+                    });
+                    patchFeedback = "";
+                    repeatedRequests = 0;
+                    unexportablePatches = 0;
                     continue;
-                  }
-                  // Mutation analysis (policy.mutationRounds): surviving
-                  // mutants send the tester's tests back for another round.
-                  if (step.id === TESTER_STEP_ID && mutationRoundsLeft > 0) {
-                    const round =
-                      (this.config.policy.mutationRounds ?? 0) -
-                      mutationRoundsLeft +
-                      1;
-                    // Another round needs a model call within maxTurns; a
-                    // skipped round is not counted as used.
-                    if (turn + 1 >= this.config.policy.maxTurns) {
-                      this.store.event(
-                        run.id,
-                        "mutation.analyzed",
-                        { round, status: "turn-budget" },
-                        step.id,
-                      );
-                      return result;
-                    }
-                    mutationRoundsLeft--;
-                    let feedback: string | undefined;
-                    try {
-                      feedback = await this.mutationRound({
-                        run,
-                        stepId: step.id,
-                        round,
-                        workspace: frozen,
-                        staged,
-                        targets: testerTargets,
-                        snapshotHash: state.snapshotHash,
-                        signal: state.signal,
-                        withState,
-                      });
-                    } catch (error) {
-                      if (state.signal?.aborted) throw error;
-                      // Advisory: a failed analysis never fails the step.
-                      // No error text, which could quote source.
-                      this.store.event(
-                        run.id,
-                        "mutation.analyzed",
-                        { round, status: "error" },
-                        step.id,
-                      );
-                      return result;
-                    }
-                    if (feedback) {
-                      returned(step.id, "mutation-survivors");
-                      patchFeedback = feedback;
+                  } catch (error) {
+                    // A repeated or unexportable request with changes is a
+                    // proposal; a bare one is told so once before it stops the
+                    // step.
+                    const refused = refusedRequest(error);
+                    if (!refused) throw error;
+                    if (!result.proposal.changes.length) {
+                      if (++repeatedRequests > 1) throw error;
+                      returned(step.id, refused.reason);
+                      patchFeedback = refused.feedback;
                       continue;
                     }
                   }
-                  return result;
                 }
-                returned(step.id, "unseen-or-ambiguous-edit");
-                patchFeedback = patchFeedbackFor(
-                  unseen,
-                  result.proposal,
-                  provider,
-                  this.config.policy,
-                );
-                continue;
+                {
+                  // Before anything reads the files it names (below, or
+                  // prepareProposal): see assertExportablePatch.
+                  const unexportable = await this.unexportablePatch(
+                    frozen,
+                    result.proposal,
+                    provider,
+                    ++unexportablePatches,
+                  );
+                  if (unexportable) {
+                    returned(step.id, "not-exportable");
+                    patchFeedback = unexportable;
+                    continue;
+                  }
+                  unexportablePatches = 0;
+                  const unseen = await unseenPatchLocation(
+                    frozen,
+                    result.proposal,
+                    shown,
+                    this.config.policy,
+                  );
+                  // A step limited to some files (a tester writes only tests)
+                  // gets its out-of-scope edits back as feedback.
+                  const outside = outsideWriteScope(step, result.proposal);
+                  if (outside.length) {
+                    returned(step.id, "outside-write-scope");
+                    patchFeedback = writeScopeFeedback(step, outside);
+                    continue;
+                  }
+                  const testerFeedback = testFirstFeedback(
+                    step,
+                    result.proposal,
+                    testsWritten,
+                  );
+                  if (testerFeedback) {
+                    returned(step.id, "test-first");
+                    patchFeedback = testerFeedback;
+                    continue;
+                  }
+                  if (!unseen) {
+                    // A patch that cannot apply goes back to the worker, as in
+                    // single-step runs, instead of failing the whole plan.
+                    let staged: Awaited<ReturnType<typeof prepareProposal>>;
+                    try {
+                      staged = await prepareProposal(
+                        frozen,
+                        result.proposal,
+                        this.config.policy,
+                      );
+                    } catch (error) {
+                      const returnedPatch = patchErrorFeedback(
+                        errorMessage(error),
+                        step.id,
+                      );
+                      if (!returnedPatch) throw error;
+                      returned(step.id, returnedPatch.reason);
+                      patchFeedback = patchFeedbackFor(
+                        returnedPatch.feedback +
+                          (returnedPatch.reason === "missing-file"
+                            ? await similarFilesNote(
+                                frozen,
+                                errorMessage(error),
+                                provider,
+                                this.config.policy,
+                              )
+                            : ""),
+                        result.proposal,
+                        provider,
+                        this.config.policy,
+                      );
+                      continue;
+                    }
+                    // Mutation analysis (policy.mutationRounds): surviving
+                    // mutants send the tester's tests back for another round.
+                    if (step.id === TESTER_STEP_ID && mutationRoundsLeft > 0) {
+                      const round =
+                        (this.config.policy.mutationRounds ?? 0) -
+                        mutationRoundsLeft +
+                        1;
+                      // Another round needs a model call within maxTurns; a
+                      // skipped round is not counted as used.
+                      if (turn + 1 >= this.config.policy.maxTurns) {
+                        this.store.event(
+                          run.id,
+                          "mutation.analyzed",
+                          { round, status: "turn-budget" },
+                          step.id,
+                        );
+                        return result;
+                      }
+                      mutationRoundsLeft--;
+                      let feedback: string | undefined;
+                      try {
+                        feedback = await this.mutationRound({
+                          run,
+                          stepId: step.id,
+                          round,
+                          workspace: frozen,
+                          staged,
+                          targets: testerTargets,
+                          snapshotHash: state.snapshotHash,
+                          signal: state.signal,
+                          withState,
+                        });
+                      } catch (error) {
+                        if (state.signal?.aborted) throw error;
+                        // Advisory: a failed analysis never fails the step.
+                        // No error text, which could quote source.
+                        this.store.event(
+                          run.id,
+                          "mutation.analyzed",
+                          { round, status: "error" },
+                          step.id,
+                        );
+                        return result;
+                      }
+                      if (feedback) {
+                        returned(step.id, "mutation-survivors");
+                        patchFeedback = feedback;
+                        continue;
+                      }
+                    }
+                    return result;
+                  }
+                  returned(step.id, "unseen-or-ambiguous-edit");
+                  patchFeedback = patchFeedbackFor(
+                    unseen,
+                    result.proposal,
+                    provider,
+                    this.config.policy,
+                  );
+                  continue;
+                }
               }
-            }
-            throw new Error(
-              "DAG worker exhausted its context-request turn budget",
-            );
-          },
+              throw new Error(
+                "DAG worker exhausted its context-request turn budget",
+              );
+            }),
         });
         if (await verify("dag")) singleSteps = [];
         else {
@@ -5628,6 +5639,7 @@ export class GraphEngine {
     } catch (error) {
       run.usage = this.store.usage(run.plan.id);
       run.error = redact(errorMessage(error));
+      const stoppedBy = run.error;
       // Steps that did not depend on the failure were applied, but nothing was
       // verified: say so, and how a resume finishes the plan.
       if (dagIncomplete)
@@ -5643,7 +5655,7 @@ export class GraphEngine {
             ? "cancelled"
             : "failed";
       run.updatedAt = now();
-      this.store.stopRun(run);
+      this.store.stopRun(run, stoppedBy);
     }
   }
   // The run store closes last: a command that Ctrl-C closes while it waits
@@ -5660,6 +5672,17 @@ export class GraphEngine {
         this.store.close();
       }
     })());
+  }
+}
+// Runs one DAG generation, turning an error tagged run-wide where it was
+// thrown into a DagRunStop with the same message and the cause kept.
+async function runWideAsStop<T>(generation: () => Promise<T>): Promise<T> {
+  try {
+    return await generation();
+  } catch (error) {
+    if (isRunWide(error) && !(error instanceof DagRunStop))
+      throw new DagRunStop(errorMessage(error), { cause: error });
+    throw error;
   }
 }
 const unfinished = (status: RunRecord["status"]) =>
