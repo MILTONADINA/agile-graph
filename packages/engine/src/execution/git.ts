@@ -8,7 +8,12 @@ import { command, type CommandResult, subprocessEnvironment } from "../util.js";
 export async function managedGit(
   cwd: string,
   argv: string[],
-  options: { signal?: AbortSignal; timeoutMs?: number; maxBytes?: number } = {},
+  options: {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    maxBytes?: number;
+    input?: string;
+  } = {},
 ): Promise<CommandResult> {
   const configured = await command(
     "git",
