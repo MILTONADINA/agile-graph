@@ -412,48 +412,52 @@ describe("frozen generation snapshots", () => {
     expect((error as DagReconciliationError).workspaceState).toBe(false);
   });
 
-  it("keeps a step's outcome and reports, not fails, when a snapshot cannot be removed", async () => {
-    const workspace = await fixture();
-    const events: string[] = [];
-    let snapshot = "";
-    const locked = () => path.join(snapshot, "locked");
-    try {
-      const result = await runDag({
+  // A read-only folder blocks removal only on POSIX; Windows removes it.
+  it.skipIf(process.platform === "win32")(
+    "keeps a step's outcome and reports, not fails, when a snapshot cannot be removed",
+    async () => {
+      const workspace = await fixture();
+      const events: string[] = [];
+      let snapshot = "";
+      const locked = () => path.join(snapshot, "locked");
+      try {
+        const result = await runDag({
+          workspace,
+          policy: DEFAULT_POLICY,
+          steps: [step("a")],
+          saveCheckpoint: async () => {},
+          onEvent: (current) => {
+            events.push(current.type);
+          },
+          generate: async (_current, state) => {
+            snapshot = state.workspace;
+            // A read-only folder with a file in it makes removal fail.
+            await mkdir(locked());
+            await writeFile(path.join(locked(), "f"), "x");
+            await chmod(locked(), 0o500);
+            return proposal("a.txt", "a");
+          },
+        });
+        expect(result.appliedStepIds).toEqual(["a"]);
+        expect(events).toContain("dag.snapshot.cleanup_failed");
+        expect(await exists(snapshot)).toBe(true);
+      } finally {
+        if (snapshot) await chmod(locked(), 0o700).catch(() => {});
+      }
+      // The next run of this workspace clears what a failed cleanup left.
+      await runDag({
         workspace,
         policy: DEFAULT_POLICY,
-        steps: [step("a")],
+        steps: [step("b")],
         saveCheckpoint: async () => {},
-        onEvent: (current) => {
-          events.push(current.type);
-        },
-        generate: async (_current, state) => {
-          snapshot = state.workspace;
-          // A read-only folder with a file in it makes removal fail.
-          await mkdir(locked());
-          await writeFile(path.join(locked(), "f"), "x");
-          await chmod(locked(), 0o500);
-          return proposal("a.txt", "a");
-        },
+        generate: async () => proposal("b.txt", "b"),
       });
-      expect(result.appliedStepIds).toEqual(["a"]);
-      expect(events).toContain("dag.snapshot.cleanup_failed");
-      expect(await exists(snapshot)).toBe(true);
-    } finally {
-      if (snapshot) await chmod(locked(), 0o700).catch(() => {});
-    }
-    // The next run of this workspace clears what a failed cleanup left.
-    await runDag({
-      workspace,
-      policy: DEFAULT_POLICY,
-      steps: [step("b")],
-      saveCheckpoint: async () => {},
-      generate: async () => proposal("b.txt", "b"),
-    });
-    expect(await exists(snapshot)).toBe(false);
-    expect(
-      (await readdir(path.dirname(workspace))).filter((name) =>
-        name.startsWith("ws-snapshot-"),
-      ),
-    ).toEqual([]);
-  });
+      expect(await exists(snapshot)).toBe(false);
+      expect(
+        (await readdir(path.dirname(workspace))).filter((name) =>
+          name.startsWith("ws-snapshot-"),
+        ),
+      ).toEqual([]);
+    },
+  );
 });
