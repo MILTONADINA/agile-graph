@@ -34,8 +34,13 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/dag.test.ts :: re-runs a pending step when the acknowledged workspace is back at its pre-patch state
   - Test: packages/engine/tests/dag.test.ts :: refuses to reconcile a pending step whose workspace matches neither fingerprint
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: resolves a crash-interrupted patch on an acknowledged resume when the workspace matches its post-patch state
-- AC4a: WHEN a step's generation fails, THE engine SHALL start no new step, SHALL apply each already-running step that does not depend on the failed step, and SHALL end the run as failed with the first failure's error.
+- AC4a: WHEN a step's generation fails with a step-local error, THE engine SHALL keep starting ready steps that do not depend on the failed step, directly or through other steps, within maxParallel, SHALL apply them serially in plan order, SHALL generate no step that depends on a failed step, and SHALL end the run as failed with the first failure's error once nothing is running and nothing can start. It SHALL NOT verify or repair the partial result. Spending after a failure stays bounded by the run's cost and turn budgets (#365, #164).
   - Test: packages/engine/tests/dag-streaming.test.ts :: applies a running independent step when a sibling fails, and fails the run with the first error
+  - Test: packages/engine/tests/dag-streaming.test.ts :: keeps starting independent steps after a failure when one generation runs at a time
+  - Test: packages/engine/tests/dag-streaming.test.ts :: starts a step whose dependency applied after a sibling failed
+  - Test: packages/engine/tests/dag-streaming.test.ts :: never generates a step that depends on a failed step, directly or through another, and records it as skipped
+  - Test: packages/engine/tests/dag-streaming.test.ts :: keeps the first error when two independent steps fail
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: applies the independent step, fails the run with counts and never verifies or repairs
 - AC4b: WHILE a step's generation is running, THE engine SHALL give it a read-only frozen copy of the workspace at the generation's snapshot hash, taken before any further patch applies, so that a patch from another step applying meanwhile never changes what the generation reads, and SHALL remove the copy when the generation succeeds, fails, is cancelled or times out. The copy SHALL be made in the folder that holds the run workspace, where container views are also made, never in the system temp folder; a copy an earlier crash left there SHALL be removed when the run starts; a copy that cannot be removed SHALL be reported as an event and SHALL NOT change the step's outcome or fail the run.
   - Test: packages/engine/tests/dag-streaming.test.ts :: keeps a running generation on the pre-patch content while a sibling's patch applies (#373)
   - Test: packages/engine/tests/dag-streaming.test.ts :: gives each generation an existing private copy and removes it after success, failure and abort
@@ -48,6 +53,24 @@ Larger changes are made of steps, some independent and some depending on others.
 - AC4c: WHEN the workspace itself is found in a state the scheduler did not produce (a worker modified it, or a patch could not be rolled back) after an earlier plain failure, THE engine SHALL end the run as needing reconciliation; WHEN the later error is a project policy change, THE engine SHALL still end the run as failed with the first failure's error.
   - Test: packages/engine/tests/dag-streaming.test.ts :: ends needs-reconciliation when a worker dirties the workspace after an earlier plain failure
   - Test: packages/engine/tests/dag-streaming.test.ts :: still ends failed, not needs-reconciliation, when a policy change follows a plain failure
+- AC4d: IF a generation fails because of a policy change, run cancellation, a reconciliation error, a missing or changed provider, a failed plan-verification or live-generator check, or the run's cost or turn budget, THEN THE engine SHALL start no new step, SHALL apply each running step that does not depend on a failed step, and SHALL end the run failed. A reconciliation error keeps its precedence and status.
+  - Test: packages/engine/tests/dag-streaming.test.ts :: starts no step after a run-wide stop and marks the failure as one
+  - Test: packages/engine/tests/dag-streaming.test.ts :: starts no step after the policy changes during a generation
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: starts no further step once the shared turn budget is spent
+- AC4e: WHEN validating or applying a step's patch fails, THE engine SHALL cancel every running generation, start no further step and end the run at once.
+  - Test: packages/engine/tests/dag-streaming.test.ts :: stops at once on a validation error and never starts a later independent step
+- AC4f: WHEN a step's generation fails, THE engine SHALL record dag.step.failed with {kind, setup?, runStop?} and no error text. WHEN the run ends after a failure, THE engine SHALL record dag.step.skipped {kind} for each step it did not start because it depends on a failed step. Flags SHALL be omitted when false, so plans without a setup step or a failure keep their event payloads, and the plan schema, contracts and plan hashes SHALL NOT change.
+  - Test: packages/engine/tests/dag-streaming.test.ts :: labels ready, blocked and failed events without error text or extra keys
+  - Test: packages/engine/tests/dag-streaming.test.ts :: keeps event payloads unchanged for a plan without a setup step
+- AC4g: WHERE a plan includes the configured tester, THE engine SHALL NOT start a step that depends on the tester until the tester has applied, which keeps test-first: a failing tester skips its dependents, because withTester makes every step depend on it. Only steps a plan declares as independent of the tester can finish after a tester failure.
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: generates no product step when the tester fails, and shows them as skipped
+- AC4h: WHEN a run ends failed under AC4a, THE run error SHALL keep the first failure's redacted message and add how many steps were applied and never started out of the total, say that the applied steps are not verified, and name the `graph-engine resume RUN_ID --reconciled` command, which reruns the failed and skipped steps and then verifies the whole result. The status SHALL be failed, and overview SHALL show the failed and skipped steps of the current attempt.
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: applies the independent step, fails the run with counts and never verifies or repairs
+  - Test: packages/engine/tests/dag-streaming.test.ts :: tells the caller how many steps applied and never started
+  - Test: packages/engine/tests/overview.test.ts :: shows a failed step, its skipped dependent and an applied independent step for the current attempt
+  - Test: packages/engine/tests/overview.test.ts :: resets failed and skipped states when the run is resumed
+- AC4i: WHEN such a run is resumed with reconciliation, THE engine SHALL skip every applied step, including steps that applied after the failure, SHALL generate only the failed and skipped steps, and SHALL verify the whole retained result before the run can complete.
+  - Test: packages/engine/tests/dag.test.ts :: resumes a run that failed on one step by generating only that step
 - AC5: When the combined checks fail, a repair step receives the failure as feedback within the attempt budget; a single-attempt plan fails without repair. A resumed plan whose unchanged combined result fails verification or review goes on to repair without checking and reviewing that same snapshot again.
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: repairs a multi-step plan whose combined checks failed, with the failure as feedback
   - Test: packages/engine/tests/managed-dag-safety.test.ts :: keeps single-attempt plans failing without repair and reserves the repair step ID
@@ -93,6 +116,12 @@ Larger changes are made of steps, some independent and some depending on others.
   - Test: packages/engine/tests/retro.test.ts :: shows how many minutes each step was ready before it started, without its ID
 - AC13a: WHEN a run stops while a step is ready but not started, THE retro SHALL end that wait at the stop, so the time the run was stopped is never counted as a step's wait.
   - Test: packages/engine/tests/retro.test.ts :: does not count the time a run was stopped as a step's wait
+- AC13b: WHEN a step that depends, directly or through other steps, on a setup step first has an unapplied setup dependency in a scheduling segment, THE engine SHALL record dag.step.blocked {kind, waitingOnSetup}. WHEN that step becomes ready, THE retro SHALL record the minutes from blocked to ready as setup wait, by step kind, in total and as a median, per run and in the summary, with no step ID or content. The configured tester is the only setup step.
+  - Test: packages/engine/tests/retro.test.ts :: measures how long a step waited on setup, from blocked to ready, without its ID
+  - Test: packages/engine/tests/dag-streaming.test.ts :: labels ready, blocked and failed events without error text or extra keys
+- AC13c: WHEN a run stops while a step is blocked on setup, THE retro SHALL end that wait at the stop. A resumed segment announces its blocked steps again, so stopped time is never counted, and a step blocked only on a product step is not counted.
+  - Test: packages/engine/tests/retro.test.ts :: does not count a stop between blocked and ready, or a step blocked only on a product step, as setup wait
+  - Test: packages/engine/tests/retro.test.ts :: drops a blocked step that failed or was skipped
 
 ## Security considerations
 

@@ -12,6 +12,20 @@
 
 ### Changed
 
+- A failed generation in a multi-step plan now blocks only the steps that
+  depend on it, directly or through other steps. Independent steps keep
+  starting and applying within the parallel limit, and the run still ends as
+  failed with the first error. Nothing is verified or repaired, and the error
+  adds how many steps applied and never started, that the applied steps are not
+  verified, and that `graph-engine resume RUN_ID --reconciled` reruns the failed
+  and skipped steps and then verifies the whole result. A policy change,
+  cancellation, a missing or changed provider, a failed plan check or a spent
+  cost or turn budget still stops every start. A failing tester still skips
+  every step that depends on it. New `dag.step.failed`, `dag.step.skipped` and
+  `dag.step.blocked` events carry no error text; overview shows failed and
+  skipped steps. `graph-engine retro` adds the minutes steps waited on the
+  tester (`setupWaits`, and `setupWait` in the summary). #365, #164.
+
 - A multi-step plan starts each step as soon as its own dependencies have
   applied, with at most `maxParallel` generations running, instead of waiting
   for each whole wave to settle. Patches still apply one at a time, in plan
