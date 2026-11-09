@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_POLICY, type ExecutionStep } from "@agile-graph/contracts";
@@ -223,8 +230,15 @@ describe("dependency DAG execution", () => {
           proposal(current.id === "a" ? "same.txt" : "SAME.txt", current.id),
       }),
     ).rejects.toThrow("collide");
-    // The sibling that finished first has applied; the colliding one wrote nothing.
-    expect(await readFile(path.join(workspace, "same.txt"), "utf8")).toBe("a");
+    // Whichever sibling finished first has applied (a writes same.txt, b
+    // writes SAME.txt; they tie); the colliding one wrote nothing.
+    const written = (await readdir(workspace)).filter(
+      (name) => name.toLowerCase() === "same.txt",
+    );
+    expect(written).toHaveLength(1);
+    expect(await readFile(path.join(workspace, written[0]!), "utf8")).toBe(
+      written[0] === "same.txt" ? "a" : "b",
+    );
     expect(charged).toBe(2);
   });
   it("validates a step's preconditions before its own write", async () => {
