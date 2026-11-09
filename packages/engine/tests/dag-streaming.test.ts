@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_POLICY, type ExecutionStep } from "@agile-graph/contracts";
@@ -22,8 +31,11 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const workspace = await mkdtemp(path.join(os.tmpdir(), "graph-dag-stream-"));
-  roots.push(workspace);
+  // A per-test parent: snapshots are created beside the workspace.
+  const parent = await mkdtemp(path.join(os.tmpdir(), "graph-dag-stream-"));
+  roots.push(parent);
+  const workspace = path.join(parent, "ws");
+  await mkdir(workspace);
   await checked("git", ["init", "-b", "dev"], { cwd: workspace });
   await writeFile(path.join(workspace, "source.txt"), "original");
   return workspace;
@@ -398,5 +410,50 @@ describe("frozen generation snapshots", () => {
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(DagReconciliationError);
     expect((error as DagReconciliationError).workspaceState).toBe(false);
+  });
+
+  it("keeps a step's outcome and reports, not fails, when a snapshot cannot be removed", async () => {
+    const workspace = await fixture();
+    const events: string[] = [];
+    let snapshot = "";
+    const locked = () => path.join(snapshot, "locked");
+    try {
+      const result = await runDag({
+        workspace,
+        policy: DEFAULT_POLICY,
+        steps: [step("a")],
+        saveCheckpoint: async () => {},
+        onEvent: (current) => {
+          events.push(current.type);
+        },
+        generate: async (_current, state) => {
+          snapshot = state.workspace;
+          // A read-only folder with a file in it makes removal fail.
+          await mkdir(locked());
+          await writeFile(path.join(locked(), "f"), "x");
+          await chmod(locked(), 0o500);
+          return proposal("a.txt", "a");
+        },
+      });
+      expect(result.appliedStepIds).toEqual(["a"]);
+      expect(events).toContain("dag.snapshot.cleanup_failed");
+      expect(await exists(snapshot)).toBe(true);
+    } finally {
+      if (snapshot) await chmod(locked(), 0o700).catch(() => {});
+    }
+    // The next run of this workspace clears what a failed cleanup left.
+    await runDag({
+      workspace,
+      policy: DEFAULT_POLICY,
+      steps: [step("b")],
+      saveCheckpoint: async () => {},
+      generate: async () => proposal("b.txt", "b"),
+    });
+    expect(await exists(snapshot)).toBe(false);
+    expect(
+      (await readdir(path.dirname(workspace))).filter((name) =>
+        name.startsWith("ws-snapshot-"),
+      ),
+    ).toEqual([]);
   });
 });
