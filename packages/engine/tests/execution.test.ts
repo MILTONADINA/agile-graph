@@ -4402,15 +4402,26 @@ describe("code review gate", () => {
       }
     });
 
-    it("refuses without a numeric cap or an export authorization, sending nothing", async () => {
-      for (const configured of [
-        enable({ enabled: true, exportAuthorized: true }, null),
-        enable({ enabled: true, exportAuthorized: true }, 0),
-        enable({ enabled: true }),
-        enable({ enabled: true, exportAuthorized: false }),
-        // Authorized, but the changed files are outside exportPaths.
-        enable({ enabled: true, exportAuthorized: true }, 1, []),
-      ]) {
+    // One case per test: each is a full three-round run.
+    it.each([
+      ["no cap", () => enable({ enabled: true, exportAuthorized: true }, null)],
+      [
+        "a zero cap",
+        () => enable({ enabled: true, exportAuthorized: true }, 0),
+      ],
+      ["no export authorization", () => enable({ enabled: true })],
+      [
+        "export authorization false",
+        () => enable({ enabled: true, exportAuthorized: false }),
+      ],
+      // Authorized, but the changed files are outside exportPaths.
+      [
+        "unexportable paths",
+        () => enable({ enabled: true, exportAuthorized: true }, 1, []),
+      ],
+    ])("refuses with %s, sending nothing", async (_name, configure) => {
+      {
+        const configured = configure();
         const decide = fakeJev();
         const { events } = await setup({
           reviews: rejections(),
