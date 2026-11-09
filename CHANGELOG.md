@@ -16,7 +16,7 @@
   depend on it, directly or through other steps. Independent steps keep
   starting and applying within the parallel limit, and the run still ends as
   failed with the first error. Nothing is verified or repaired, and the error
-  adds how many steps applied and never started, that the applied steps are not
+  adds how many steps applied, failed and never started, that the applied steps are not
   verified, and that `graph-engine resume RUN_ID --reconciled` reruns the failed
   and skipped steps and then verifies the whole result. A policy change,
   cancellation, a missing or changed provider, a failed plan check or a spent

@@ -122,6 +122,7 @@ export interface DagOptions {
 }
 export interface DagIncomplete {
   applied: number;
+  failed: number;
   /** Steps that never started. */
   skipped: number;
   total: number;
@@ -855,6 +856,7 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       } catch {}
       options.onIncomplete?.({
         applied: completed.size,
+        failed: failed.size,
         skipped: dag.steps.filter((step) => !started.has(step.id)).length,
         total: dag.steps.length,
       });

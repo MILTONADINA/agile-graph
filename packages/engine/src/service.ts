@@ -5631,7 +5631,7 @@ export class GraphEngine {
       // Steps that did not depend on the failure were applied, but nothing was
       // verified: say so, and how a resume finishes the plan.
       if (dagIncomplete)
-        run.error += ` ${dagIncomplete.applied} of ${dagIncomplete.total} steps applied and ${dagIncomplete.skipped} never started; the applied steps are not verified. Resuming with \`graph-engine resume ${run.id} --reconciled\` reruns the failed and skipped steps and then verifies the whole result.`;
+        run.error += ` ${dagIncomplete.applied} of ${dagIncomplete.total} steps applied, ${dagIncomplete.failed} failed and ${dagIncomplete.skipped} never started; the applied steps are not verified. Resuming with \`graph-engine resume RUN_ID --reconciled\` reruns the failed and skipped steps and then verifies the whole result.`;
       // Only a succeeded run awaits a person's acceptance.
       delete run.completion;
       // Publication may have committed, pushed or opened a PR before a
