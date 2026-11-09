@@ -25,7 +25,13 @@
 - Each generation in a multi-step plan now reads a private frozen copy of the
   workspace at its snapshot hash (context, requested sources, patch checks and
   generator input), so a sibling's patch applying meanwhile cannot change what
-  it reads; the copy is removed when the generation ends. After an earlier
+  it reads. The copy is made beside the run workspace, where container views
+  are also made, and is removed when the generation ends; leftovers from a
+  crash are removed at the next start, and a copy that cannot be removed is
+  reported as an event without failing the run. A workspace edited while the
+  copy is taken ends the run as needing reconciliation. Managed Git calls no
+  longer honor `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and similar
+  variables that point at another repository. After an earlier
   plain failure, a later workspace-state error (a worker modified the
   workspace, or a rollback could not restore it) now ends the run as needing
   reconciliation; a policy change still ends it as failed. The retro no longer
