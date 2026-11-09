@@ -148,3 +148,23 @@ a database only when its version is newer than its own.
   fresh comparison.
 - **The feedback notice prints once per user data directory**, not on every
   command.
+
+## 0.8.0
+
+- **Multi-step plans stream steps and keep going past a failure.** A step
+  starts as soon as its own dependencies have applied, within `maxParallel`.
+  A failed step now blocks only the steps that depend on it; independent steps
+  still start and apply, and the run still ends as failed with the first
+  error. `graph-engine resume RUN_ID --reconciled` reruns the failed and
+  skipped steps and then verifies the whole result. Scripts that expected a
+  failure to stop every later step should read the new `dag.step.failed`,
+  `dag.step.skipped` and `dag.step.blocked` events.
+- **Each generation reads a frozen copy of the workspace.** The copy is made
+  beside the run workspace (`<workspace>-snapshot-*`), so the engine needs
+  write access to the workspace's parent folder. Copies are removed when the
+  generation ends, and leftovers from a crash at the next start.
+- **A verification that executes no check stops as blocked.** Configure at
+  least one check that runs, or the run stops naming "no checks".
+- **New optional policy field `reviewPrior`.** It is off when absent. An
+  older engine refuses a `.graph/project.json` that sets it, so remove the
+  field before rolling back to 0.7.x.
