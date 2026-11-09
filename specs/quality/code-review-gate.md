@@ -102,7 +102,7 @@ A team does not call work done because its author says so or because tests pass;
   - Test: packages/engine/tests/review-prior.test.ts :: fails open when the call throws or answers nothing
   - Test: packages/engine/tests/review-prior.test.ts :: sends redacted, bounded text and withholds paths outside exportPaths
   - Test: packages/engine/tests/execution.test.ts :: makes no decision call when the option is absent or disabled
-  - Test: packages/engine/tests/execution.test.ts :: refuses without a numeric cap or an export authorization, sending nothing
+  - Test: packages/engine/tests/execution.test.ts :: refuses with %s, sending nothing
   - Test: packages/engine/tests/execution.test.ts :: records advisory scores and never turns a rejection into an accept
   - Test: packages/engine/tests/execution.test.ts :: fails open to no prior when the decision call fails, and says so
 - AC19: A backtest on a synthetic review sequence whose rounds each fix one case of one defect class with differently worded findings shall show the `same_class` prior flagging the loop at least one round before the repeated-signature rule does: at round 2 where the signature rule never flags, and at least a round earlier where a finding finally recurs.
