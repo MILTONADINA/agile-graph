@@ -14,8 +14,10 @@ import path from "node:path";
 import { DEFAULT_POLICY, type ExecutionStep } from "@agile-graph/contracts";
 import {
   DagReconciliationError,
+  DagRunStop,
   runDag,
   type DagCheckpoint,
+  type DagEvent,
 } from "../src/execution/dag.js";
 import { checked } from "../src/util.js";
 import type { WorkerResult } from "../src/workers/api.js";
@@ -514,4 +516,220 @@ describe("frozen generation snapshots", () => {
       ).toEqual([]);
     },
   );
+
+  describe("a failed generation blocks only its dependents", () => {
+    const failedRun = async (
+      steps: ExecutionStep[],
+      generate: (
+        current: ExecutionStep,
+        events: DagEvent[],
+      ) => Promise<WorkerResult>,
+      extra: Partial<Parameters<typeof runDag>[0]> = {},
+    ) => {
+      const workspace = await fixture();
+      const generated: string[] = [];
+      const events: DagEvent[] = [];
+      let saved: DagCheckpoint | undefined;
+      const error = await runDag({
+        workspace,
+        policy: DEFAULT_POLICY,
+        steps,
+        saveCheckpoint: async (value) => {
+          saved = structuredClone(value);
+        },
+        generate: async (current) => {
+          generated.push(current.id);
+          return generate(current, events);
+        },
+        ...extra,
+        onEvent: (event) => {
+          events.push(event);
+          extra.onEvent?.(event);
+        },
+      }).catch((caught: unknown) => caught);
+      return { workspace, generated, events, saved, error };
+    };
+
+    it("keeps starting independent steps after a failure when one generation runs at a time", async () => {
+      const { workspace, generated, saved, error } = await failedRun(
+        [step("h"), step("p")],
+        async (current) => {
+          if (current.id === "h") throw new Error("h failed");
+          return proposal("p.txt", "p");
+        },
+        { maxParallel: 1 },
+      );
+      expect((error as Error).message).toBe("h failed");
+      expect(generated).toEqual(["h", "p"]);
+      expect(saved?.completed.map((item) => item.id)).toEqual(["p"]);
+      expect(await readFile(path.join(workspace, "p.txt"), "utf8")).toBe("p");
+    });
+
+    it("starts a step whose dependency applied after a sibling failed", async () => {
+      const aFailed = deferred();
+      const { generated, saved, error } = await failedRun(
+        [step("a"), step("b"), step("c", ["b"])],
+        async (current) => {
+          if (current.id === "a") throw new Error("a failed");
+          if (current.id === "b") {
+            await aFailed.promise;
+            return proposal("b.txt", "b");
+          }
+          return proposal("c.txt", "c");
+        },
+        {
+          maxParallel: 2,
+          onEvent: (event) => {
+            if (event.type === "dag.step.failed") aFailed.resolve();
+          },
+        },
+      );
+      expect((error as Error).message).toBe("a failed");
+      expect(generated.sort()).toEqual(["a", "b", "c"]);
+      expect(saved?.completed.map((item) => item.id)).toEqual(["b", "c"]);
+    });
+
+    it("never generates a step that depends on a failed step, directly or through another, and records it as skipped", async () => {
+      const { generated, events, saved, error } = await failedRun(
+        [step("a"), step("b", ["a"]), step("c", ["b"]), step("d")],
+        async (current) => {
+          if (current.id === "a") throw new Error("a failed");
+          return proposal(`${current.id}.txt`, current.id);
+        },
+        { maxParallel: 2 },
+      );
+      expect((error as Error).message).toBe("a failed");
+      expect(generated.sort()).toEqual(["a", "d"]);
+      expect(saved?.completed.map((item) => item.id)).toEqual(["d"]);
+      const skipped = events
+        .filter((event) => event.type === "dag.step.skipped")
+        .map((event) => [event.stepId, event.data]);
+      expect(skipped).toEqual([
+        ["b", { kind: "worker" }],
+        ["c", { kind: "worker" }],
+      ]);
+    });
+
+    it("keeps the first error when two independent steps fail", async () => {
+      const aFailed = deferred();
+      const { error, generated } = await failedRun(
+        [step("a"), step("b")],
+        async (current) => {
+          if (current.id === "a") throw new Error("first");
+          await aFailed.promise;
+          throw new Error("second");
+        },
+        {
+          maxParallel: 2,
+          onEvent: (event) => {
+            if (event.type === "dag.step.failed") aFailed.resolve();
+          },
+        },
+      );
+      expect((error as Error).message).toBe("first");
+      expect(generated.sort()).toEqual(["a", "b"]);
+    });
+
+    it("starts no step after a run-wide stop and marks the failure as one", async () => {
+      const { error, generated, events } = await failedRun(
+        [step("h"), step("p")],
+        async () => {
+          throw new DagRunStop("provider is gone");
+        },
+        { maxParallel: 1 },
+      );
+      expect((error as Error).message).toBe("provider is gone");
+      expect(generated).toEqual(["h"]);
+      expect(
+        events.find((event) => event.type === "dag.step.failed")?.data,
+      ).toEqual({ kind: "worker", runStop: true });
+    });
+
+    it("starts no step after the policy changes during a generation", async () => {
+      const policy = structuredClone(DEFAULT_POLICY);
+      const { error, generated } = await failedRun(
+        [step("h"), step("p")],
+        async () => {
+          policy.maxTurns = policy.maxTurns + 1;
+          throw new Error("h failed");
+        },
+        { maxParallel: 1, policy },
+      );
+      expect((error as Error).message).toBe("h failed");
+      expect(generated).toEqual(["h"]);
+    });
+
+    it("stops at once on a validation error and never starts a later independent step", async () => {
+      const { error, generated } = await failedRun(
+        [step("a"), step("b"), step("c")],
+        async (current) => proposal(`${current.id}.txt`, current.id),
+        { maxParallel: 1, writeScopes: { a: ["allowed.txt"] } },
+      );
+      expect((error as Error).message).toMatch(/outside its declared scope/);
+      // b took the slot a freed before a's patch was validated; c never starts.
+      expect(generated).toEqual(["a", "b"]);
+    });
+
+    it("tells the caller how many steps applied and never started", async () => {
+      let summary: unknown;
+      await failedRun(
+        [step("a"), step("b", ["a"]), step("c")],
+        async (current) => {
+          if (current.id === "a") throw new Error("a failed");
+          return proposal("c.txt", "c");
+        },
+        { maxParallel: 1, onIncomplete: (value) => (summary = value) },
+      );
+      expect(summary).toEqual({ applied: 1, skipped: 1, total: 3 });
+    });
+
+    it("labels ready, blocked and failed events without error text or extra keys", async () => {
+      const aFailed = deferred();
+      const { events } = await failedRun(
+        [step("t"), step("p", ["t"]), step("q", ["p"])],
+        async (current) => {
+          if (current.id === "t") return proposal("t.txt", "t");
+          if (current.id === "p") throw new Error("secret detail");
+          return proposal("q.txt", "q");
+        },
+        {
+          maxParallel: 1,
+          setupStepIds: ["t"],
+          onEvent: (event) => {
+            if (event.type === "dag.step.failed") aFailed.resolve();
+          },
+        },
+      );
+      const payloads = (type: string) =>
+        events
+          .filter((event) => event.type === type)
+          .map((event) => [event.stepId, event.data]);
+      expect(payloads("dag.step.ready")).toEqual([
+        ["t", { kind: "worker", setup: true }],
+        ["p", { kind: "worker", afterSetup: true }],
+      ]);
+      expect(payloads("dag.step.blocked")).toEqual([
+        ["p", { kind: "worker", waitingOnSetup: true }],
+        ["q", { kind: "worker", waitingOnSetup: true }],
+      ]);
+      expect(payloads("dag.step.failed")).toEqual([["p", { kind: "worker" }]]);
+      expect(JSON.stringify(events)).not.toContain("secret detail");
+    });
+
+    it("keeps event payloads unchanged for a plan without a setup step", async () => {
+      const { events } = await failedRun(
+        [step("a"), step("b", ["a"])],
+        async (current) => proposal(`${current.id}.txt`, current.id),
+      );
+      expect(
+        events.filter((event) => event.type === "dag.step.ready"),
+      ).toEqual([
+        { type: "dag.step.ready", stepId: "a", data: { kind: "worker" } },
+        { type: "dag.step.ready", stepId: "b", data: { kind: "worker" } },
+      ]);
+      expect(events.map((event) => event.type)).not.toContain(
+        "dag.step.blocked",
+      );
+    });
+  });
 });
