@@ -60,14 +60,17 @@ describe("workspace snapshot", () => {
     expect(await workspaceFingerprint(snapshot.path, DEFAULT_POLICY)).toBe(
       hash,
     );
-    expect((await stat(path.join(snapshot.path, "run.sh"))).mode & 0o111).toBe(
-      0o111,
-    );
+    // Windows has no POSIX mode bits to keep.
+    if (process.platform !== "win32")
+      expect(
+        (await stat(path.join(snapshot.path, "run.sh"))).mode & 0o111,
+      ).toBe(0o111);
     expect(
       await readFile(path.join(snapshot.path, "src", "nested.txt"), "utf8"),
     ).toBe("nested");
     expect(await gitFiles(snapshot.path)).toEqual(await gitFiles(workspace));
-    expect((await stat(snapshot.path)).mode & 0o777).toBe(0o700);
+    if (process.platform !== "win32")
+      expect((await stat(snapshot.path)).mode & 0o777).toBe(0o700);
     // Beside the workspace, where container views are made, not in tmp.
     expect(path.dirname(snapshot.path)).toBe(path.dirname(workspace));
     expect(path.basename(snapshot.path)).toMatch(/^ws-snapshot-/);
