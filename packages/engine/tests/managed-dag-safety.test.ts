@@ -41,6 +41,7 @@ import {
   type WorkerResult,
 } from "../src/workers/api.js";
 import { projectOverview } from "../src/overview.js";
+import { classifyError } from "../src/feedback.js";
 import * as installedWorkers from "../src/workers/installed.js";
 import { viewingEdits } from "./worker-view.js";
 
@@ -313,6 +314,16 @@ describe("managed DAG safety boundaries", () => {
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).toBe("failed");
     expect(run.error).toMatch(/Policy changed/i);
+    // A run-wide stop gets no resume advice, and classifies as before.
+    expect(run.error).not.toContain("not verified");
+    expect(
+      classifyError(
+        String(
+          engine.store.events(run.id).find((e) => e.type === "run.stopped")
+            ?.data.error,
+        ),
+      ),
+    ).toBe("policy-changed");
     expect(run.usage.inputTokens).toBe(20);
     expect(verify).not.toHaveBeenCalled();
     await assertUnchanged(run.workspace!);
@@ -5319,6 +5330,28 @@ describe("a failed generation in a managed plan", () => {
     expect(failed?.data).toEqual({ kind: "worker" });
   });
 
+  it("classifies an incomplete run by its own error, not the resume advice", async () => {
+    const { root } = await fixture();
+    const worker = vi.fn(async (input: WorkerInput) => {
+      if (input.objective === "one")
+        throw new Error(
+          "The next call exceeds the configured estimated cost budget",
+        );
+      return result(input.objective);
+    });
+    const engine = await open(root, { worker });
+    const planned = await plan(engine);
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(run.error).toContain("--reconciled");
+    const stopped = engine.store
+      .events(run.id)
+      .find((event) => event.type === "run.stopped");
+    expect(stopped?.data.error).toBe(
+      "The next call exceeds the configured estimated cost budget",
+    );
+    expect(classifyError(String(stopped?.data.error))).toBe("cost-cap");
+  });
+
   it("generates no product step when the tester fails, and shows them as skipped", async () => {
     const { root, config } = await fixture((value) => {
       value.policy.providers = ["local", "tester"];
@@ -5402,6 +5435,7 @@ describe("a failed generation in a managed plan", () => {
     const run = await engine.wait((await engine.start(planned.id)).id);
     expect(run.status).toBe("failed");
     expect(run.error).toMatch(/shared worker-turn budget/);
+    expect(run.error).not.toContain("--reconciled");
     expect(worker).toHaveBeenCalledTimes(1);
     const started = engine.store
       .events(run.id)
