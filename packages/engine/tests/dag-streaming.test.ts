@@ -19,6 +19,7 @@ import {
   type DagCheckpoint,
   type DagEvent,
 } from "../src/execution/dag.js";
+import { markRunWide } from "../src/execution/run-wide.js";
 import { checked } from "../src/util.js";
 import type { WorkerResult } from "../src/workers/api.js";
 
@@ -668,6 +669,97 @@ describe("frozen generation snapshots", () => {
       expect((error as Error).message).toMatch(/outside its declared scope/);
       // b took the slot a freed before a's patch was validated; c never starts.
       expect(generated).toEqual(["a", "b"]);
+    });
+
+    it("keeps an apply-stage error over an earlier generation failure and counts that step as failed", async () => {
+      const aFailed = deferred();
+      let summary: unknown;
+      const { error, events } = await failedRun(
+        [step("a"), step("b")],
+        async (current) => {
+          if (current.id === "a") throw new Error("a failed");
+          await aFailed.promise;
+          return proposal("b.txt", "b");
+        },
+        {
+          maxParallel: 2,
+          writeScopes: { b: ["allowed.txt"] },
+          onIncomplete: (value) => (summary = value),
+          onEvent: (event) => {
+            if (event.type === "dag.step.failed" && event.stepId === "a")
+              aFailed.resolve();
+          },
+        },
+      );
+      expect((error as Error).message).toMatch(/outside its declared scope/);
+      expect(summary).toBeUndefined();
+      expect(
+        events
+          .filter((event) => event.type === "dag.step.failed")
+          .map((event) => [event.stepId, event.data]),
+      ).toEqual([
+        ["a", { kind: "worker" }],
+        ["b", { kind: "worker" }],
+      ]);
+    });
+
+    it("gives no resume summary for a run-wide stop, a tagged run-wide error or a cancelled run", async () => {
+      const summaries: unknown[] = [];
+      const onIncomplete = (value: unknown) => summaries.push(value);
+      await failedRun(
+        [step("h"), step("p")],
+        async () => {
+          throw new DagRunStop("stopped");
+        },
+        { maxParallel: 1, onIncomplete },
+      );
+      await failedRun(
+        [step("h"), step("p")],
+        async () => {
+          throw markRunWide(new Error("budget spent"));
+        },
+        { maxParallel: 1, onIncomplete },
+      );
+      const controller = new AbortController();
+      await failedRun(
+        [step("h"), step("p")],
+        async (current) => {
+          if (current.id === "h") throw new Error("h failed");
+          controller.abort();
+          throw new Error("cancelled");
+        },
+        { maxParallel: 1, onIncomplete, signal: controller.signal },
+      );
+      expect(summaries).toEqual([]);
+    });
+
+    it("records skipped dependents even when a workspace-state error ends the run", async () => {
+      const aFailed = deferred();
+      const workspace = await fixture();
+      const events: DagEvent[] = [];
+      const error = await runDag({
+        workspace,
+        policy: DEFAULT_POLICY,
+        maxParallel: 2,
+        steps: [step("a"), step("b"), step("c", ["a"])],
+        saveCheckpoint: async () => {},
+        onEvent: (event) => {
+          events.push(event);
+          if (event.type === "dag.step.failed") aFailed.resolve();
+        },
+        generate: async (current) => {
+          if (current.id === "a") throw new Error("a failed");
+          await aFailed.promise;
+          await writeFile(path.join(workspace, "dirty.txt"), "worker wrote me");
+          return proposal("b.txt", "b");
+        },
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(DagReconciliationError);
+      expect(
+        events
+          .filter((event) => event.type === "dag.step.skipped")
+          .map((event) => event.stepId),
+      ).toEqual(["c"]);
     });
 
     it("tells the caller how many steps applied and never started", async () => {
