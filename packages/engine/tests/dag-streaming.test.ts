@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DEFAULT_POLICY, type ExecutionStep } from "@agile-graph/contracts";
-import { runDag, type DagCheckpoint } from "../src/execution/dag.js";
+import {
+  DagReconciliationError,
+  runDag,
+  type DagCheckpoint,
+} from "../src/execution/dag.js";
 import { checked } from "../src/util.js";
 import type { WorkerResult } from "../src/workers/api.js";
 
@@ -196,5 +200,203 @@ describe("streaming DAG scheduler", () => {
     expect(second).toEqual(first);
     expect(first.indexOf("a")).toBeLessThan(first.indexOf("c"));
     expect(first.indexOf("b")).toBeLessThan(first.indexOf("d"));
+  });
+});
+
+describe("frozen generation snapshots", () => {
+  const exists = (target: string) =>
+    stat(target).then(
+      () => true,
+      () => false,
+    );
+
+  it("keeps a running generation on the pre-patch content while a sibling's patch applies (#373)", async () => {
+    const workspace = await fixture();
+    const oldOne = "old-one\n".repeat(300_000);
+    const oldTwo = "old-two\n".repeat(300_000);
+    const newOne = "new-one\n".repeat(300_000);
+    const newTwo = "new-two\n".repeat(300_000);
+    await writeFile(path.join(workspace, "big1.txt"), oldOne);
+    await writeFile(path.join(workspace, "big2.txt"), oldTwo);
+    const applied = deferred();
+    const observed = new Set<string>();
+    let rounds = 0;
+    const result = await runDag({
+      workspace,
+      policy: DEFAULT_POLICY,
+      maxParallel: 2,
+      steps: [step("a"), step("b")],
+      saveCheckpoint: async () => {},
+      onEvent: (current) => {
+        if (current.type === "dag.step.completed" && current.stepId === "b")
+          applied.resolve();
+      },
+      generate: async (current, state) => {
+        if (current.id === "b")
+          return {
+            ...proposal("big1.txt", newOne),
+            proposal: {
+              summary: "rewrite both",
+              requests: [],
+              changes: [
+                { path: "big1.txt", before: oldOne, after: newOne },
+                { path: "big2.txt", before: oldTwo, after: newTwo },
+              ],
+            },
+          };
+        const read = async () => {
+          const one = await readFile(
+            path.join(state.workspace, "big1.txt"),
+            "utf8",
+          );
+          const two = await readFile(
+            path.join(state.workspace, "big2.txt"),
+            "utf8",
+          );
+          observed.add(
+            `${one === oldOne ? "old" : one === newOne ? "new" : "mixed"}/${two === oldTwo ? "old" : two === newTwo ? "new" : "mixed"}`,
+          );
+          rounds++;
+        };
+        let after = false;
+        void applied.promise.then(() => {
+          after = true;
+        });
+        const deadline = Date.now() + 5000;
+        while (!after && Date.now() < deadline) await read();
+        await read();
+        await read();
+        return proposal("a.txt", "a");
+      },
+    });
+    expect(result.appliedStepIds.slice().sort()).toEqual(["a", "b"]);
+    expect(await readFile(path.join(workspace, "big1.txt"), "utf8")).toBe(
+      newOne,
+    );
+    expect(rounds).toBeGreaterThan(2);
+    expect([...observed]).toEqual(["old/old"]);
+  });
+
+  it("gives each generation an existing private copy and removes it after success, failure and abort", async () => {
+    const paths: string[] = [];
+    const insideExisted: boolean[] = [];
+    const run = async (
+      generate: (
+        current: ExecutionStep,
+        state: { workspace: string; signal: AbortSignal },
+      ) => Promise<WorkerResult>,
+      options: { signal?: AbortSignal } = {},
+    ) => {
+      const workspace = await fixture();
+      return runDag({
+        workspace,
+        policy: DEFAULT_POLICY,
+        maxParallel: 2,
+        steps: [step("a"), step("b")],
+        signal: options.signal,
+        saveCheckpoint: async () => {},
+        generate: async (current, state) => {
+          paths.push(state.workspace);
+          insideExisted.push(await exists(state.workspace));
+          expect(state.workspace).not.toBe(workspace);
+          return generate(current, state);
+        },
+      });
+    };
+    await run(async (current) => proposal(`${current.id}.txt`, current.id));
+    await expect(
+      run(async (current) => {
+        if (current.id === "a") throw new Error("boom");
+        await guard(20);
+        return proposal("b.txt", "b");
+      }),
+    ).rejects.toThrow("boom");
+    const controller = new AbortController();
+    await expect(
+      run(
+        async (_current, state) => {
+          controller.abort();
+          await new Promise((_, reject) => {
+            if (state.signal.aborted) reject(new Error("aborted"));
+            else
+              state.signal.addEventListener("abort", () =>
+                reject(new Error("aborted")),
+              );
+          });
+          return proposal("x.txt", "x");
+        },
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow();
+    expect(paths.length).toBeGreaterThanOrEqual(6);
+    expect(insideExisted.every(Boolean)).toBe(true);
+    for (const target of paths) expect(await exists(target)).toBe(false);
+  });
+
+  it("ends needs-reconciliation when a worker dirties the workspace after an earlier plain failure", async () => {
+    const workspace = await fixture();
+    const failed = deferred();
+    const error = await runDag({
+      workspace,
+      policy: DEFAULT_POLICY,
+      maxParallel: 2,
+      steps: [step("a"), step("b")],
+      saveCheckpoint: async () => {},
+      generate: async (current) => {
+        if (current.id === "a") {
+          setTimeout(failed.resolve, 0);
+          throw new Error("first failure");
+        }
+        await failed.promise;
+        await guard(20);
+        await writeFile(path.join(workspace, "dirty.txt"), "worker wrote me");
+        return proposal("b.txt", "b");
+      },
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(DagReconciliationError);
+    expect((error as DagReconciliationError).workspaceState).toBe(true);
+    expect((error as Error).message).toMatch(/modified the workspace/);
+  });
+
+  it("still ends failed, not needs-reconciliation, when a policy change follows a plain failure", async () => {
+    const workspace = await fixture();
+    const policy = structuredClone(DEFAULT_POLICY);
+    const failed = deferred();
+    const error = await runDag({
+      workspace,
+      policy,
+      maxParallel: 2,
+      steps: [step("a"), step("b")],
+      saveCheckpoint: async () => {},
+      generate: async (current) => {
+        if (current.id === "a") {
+          setTimeout(failed.resolve, 0);
+          throw new Error("first failure");
+        }
+        await failed.promise;
+        await guard(20);
+        policy.maxTurns = policy.maxTurns + 1;
+        return proposal("b.txt", "b");
+      },
+    }).catch((caught: unknown) => caught);
+    expect((error as Error).message).toBe("first failure");
+    expect(error).not.toBeInstanceOf(DagReconciliationError);
+  });
+
+  it("reports a lone policy change as a reconciliation error that is not workspace state", async () => {
+    const workspace = await fixture();
+    const policy = structuredClone(DEFAULT_POLICY);
+    const error = await runDag({
+      workspace,
+      policy,
+      steps: [step("a")],
+      saveCheckpoint: async () => {},
+      generate: async () => {
+        policy.maxTurns = policy.maxTurns + 1;
+        return proposal("a.txt", "a");
+      },
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(DagReconciliationError);
+    expect((error as DagReconciliationError).workspaceState).toBe(false);
   });
 });
