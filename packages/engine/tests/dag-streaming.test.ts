@@ -233,6 +233,37 @@ describe("frozen generation snapshots", () => {
       () => false,
     );
 
+  it("starts no step after a run-wide stop that settles while a sibling's patch applies", async () => {
+    const workspace = await fixture();
+    const generated: string[] = [];
+    let bCopy = "";
+    const releaseB = deferred();
+    const error = await runDag({
+      workspace,
+      policy: DEFAULT_POLICY,
+      maxParallel: 2,
+      steps: [step("a"), step("b"), step("c", ["a"])],
+      saveCheckpoint: async () => {},
+      beforeApply: async (current) => {
+        if (current.id !== "a") return;
+        // b's run-wide stop settles while a's patch is being applied.
+        releaseB.resolve();
+        while (!bCopy || (await exists(bCopy))) await guard(5);
+        await guard(20);
+      },
+      generate: async (current, state) => {
+        generated.push(current.id);
+        if (current.id === "b") {
+          bCopy = state.workspace;
+          await releaseB.promise;
+          throw new DagRunStop("provider is gone");
+        }
+        return proposal(`${current.id}.txt`, current.id);
+      },
+    }).catch((caught: unknown) => caught);
+    expect((error as Error).message).toBe("provider is gone");
+    expect(generated.sort()).toEqual(["a", "b"]);
+  });
   it("keeps a running generation on the pre-patch content while a sibling's patch applies (#373)", async () => {
     const workspace = await fixture();
     const oldOne = "old-one\n".repeat(300_000);

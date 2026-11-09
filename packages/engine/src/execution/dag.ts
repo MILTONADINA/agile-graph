@@ -573,7 +573,12 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
       step.id,
       generation.then(
         (value): GenerationOutcome => ({ step, ok: true, value }),
-        (reason): GenerationOutcome => ({ step, ok: false, reason }),
+        (reason): GenerationOutcome => {
+          // Record a run-wide stop as soon as it settles, not when the loop
+          // later consumes it: an apply in between must not start new steps.
+          if (isRunStop(reason)) stopStarts = true;
+          return { step, ok: false, reason };
+        },
       ),
     );
   };
