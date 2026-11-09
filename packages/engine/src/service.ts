@@ -3090,10 +3090,13 @@ export class GraphEngine {
       // the plan names and the code they import (tester-read-budget spec).
       // Each packet built for workers is measured against sending the whole
       // files its excerpts came from (insights-context); counts only.
-      const recordPacket = async (delivered: ContextPacket) => {
+      const recordPacket = async (
+        delivered: ContextPacket,
+        root: string = workspace,
+      ) => {
         try {
           this.store.event(run.id, "context.packet", {
-            ...(await packetSavings(workspace, delivered)),
+            ...(await packetSavings(root, delivered)),
           });
         } catch {
           // A local measurement never stops a run.
@@ -3101,13 +3104,18 @@ export class GraphEngine {
       };
       // The code files the tester's focus named, for mutation analysis.
       let testerTargets: string[] = [];
-      const buildContext = async (tester?: {
-        writes: readonly string[];
-        exportOnly: boolean;
-      }) => {
+      const buildContext = async (
+        tester?: {
+          writes: readonly string[];
+          exportOnly: boolean;
+        },
+        root: string = workspace,
+      ) => {
         const latest = new ContextEngine({
           projectId: this.config.projectId,
-          root: workspace,
+          root,
+          // Shared knowledge is not in a policy-filtered snapshot copy.
+          knowledgeRoot: workspace,
           dataDir: path.join(this.dataDir, "run-context", run.id),
           policy: this.config.policy,
           ...(this.deps.now ? { now: this.deps.now } : {}),
@@ -3117,7 +3125,7 @@ export class GraphEngine {
           const focus = tester
             ? await testerFocus({
                 engine: latest,
-                files: await gitFiles(workspace),
+                files: await gitFiles(root),
                 testFiles: tester.writes.length
                   ? tester.writes
                   : DEFAULT_TEST_FILES,
@@ -3161,12 +3169,15 @@ export class GraphEngine {
           await latest.close();
         }
       };
-      const currentContext = async (tester?: {
-        writes: readonly string[];
-        exportOnly: boolean;
-      }) => {
-        const built = await buildContext(tester);
-        await recordPacket(built);
+      const currentContext = async (
+        tester?: {
+          writes: readonly string[];
+          exportOnly: boolean;
+        },
+        root: string = workspace,
+      ) => {
+        const built = await buildContext(tester, root);
+        await recordPacket(built, root);
         return built;
       };
       const packet = resuming ? await currentContext() : originalPacket;
@@ -4338,6 +4349,9 @@ export class GraphEngine {
           },
           onEvent: recordDagEvent,
           generate: async (step, state) => {
+            // Every read below uses this frozen copy at state.snapshotHash:
+            // a sibling's patch may apply to the live workspace meanwhile.
+            const frozen = state.workspace;
             await this.refresh();
             if (hash(this.config.policy) !== run.plan.policyHash)
               throw new Error("Policy changed during DAG execution");
@@ -4350,7 +4364,7 @@ export class GraphEngine {
               const result: GeneratorResult = await (
                 this.deps.generator ?? generateInContainer
               )(
-                workspace,
+                frozen,
                 registration,
                 this.config.policy,
                 state.snapshotHash,
@@ -4394,6 +4408,7 @@ export class GraphEngine {
                     exportOnly: provider.kind !== "local",
                   }
                 : undefined,
+              frozen,
             );
             const supplied = new SuppliedLines();
             const shown = new SuppliedLines();
@@ -4443,7 +4458,7 @@ export class GraphEngine {
               try {
                 result = await this.invokeWorker(
                   stepInput,
-                  workspace,
+                  frozen,
                   run,
                   step.id,
                 );
@@ -4487,7 +4502,7 @@ export class GraphEngine {
                 countRead(step.id, result.proposal);
                 try {
                   stepPacket = await requestedSourcePacket({
-                    workspace,
+                    workspace: frozen,
                     input: stepInput,
                     requests: result.proposal.requests,
                     snapshotId: stepPacket.snapshotId,
@@ -4517,7 +4532,7 @@ export class GraphEngine {
                 // Before anything reads the files it names (below, or
                 // prepareProposal): see assertExportablePatch.
                 const unexportable = await this.unexportablePatch(
-                  workspace,
+                  frozen,
                   result.proposal,
                   provider,
                   ++unexportablePatches,
@@ -4529,7 +4544,7 @@ export class GraphEngine {
                 }
                 unexportablePatches = 0;
                 const unseen = await unseenPatchLocation(
-                  workspace,
+                  frozen,
                   result.proposal,
                   shown,
                   this.config.policy,
@@ -4558,7 +4573,7 @@ export class GraphEngine {
                   let staged: Awaited<ReturnType<typeof prepareProposal>>;
                   try {
                     staged = await prepareProposal(
-                      workspace,
+                      frozen,
                       result.proposal,
                       this.config.policy,
                     );
@@ -4573,7 +4588,7 @@ export class GraphEngine {
                       returnedPatch.feedback +
                         (returnedPatch.reason === "missing-file"
                           ? await similarFilesNote(
-                              workspace,
+                              frozen,
                               errorMessage(error),
                               provider,
                               this.config.policy,
@@ -4610,7 +4625,7 @@ export class GraphEngine {
                         run,
                         stepId: step.id,
                         round,
-                        workspace,
+                        workspace: frozen,
                         staged,
                         targets: testerTargets,
                         snapshotHash: state.snapshotHash,
