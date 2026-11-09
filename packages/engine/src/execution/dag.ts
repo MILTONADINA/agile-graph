@@ -29,7 +29,11 @@ import {
   type Originals,
   workspaceFingerprint,
 } from "./workspace.js";
-import { createWorkspaceSnapshot } from "./snapshot.js";
+import {
+  createWorkspaceSnapshot,
+  removeStaleSnapshots,
+  SnapshotMismatchError,
+} from "./snapshot.js";
 
 /** The engine's repair step after a plan's combined checks fail; plans may not use its ID. */
 export const DAG_REPAIR_STEP = "dag-repair";
@@ -312,6 +316,8 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
     policy,
     writeScopes: options.writeScopes ?? {},
   });
+  // Snapshots a crashed earlier run of this workspace left beside it.
+  await removeStaleSnapshots(workspace);
   const snapshotHash = await workspaceFingerprint(workspace, policy);
   let checkpoint: DagCheckpoint = options.checkpoint
     ? checkpointSchema.parse(options.checkpoint)
@@ -497,8 +503,12 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
               : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
         });
       } finally {
-        snapshots.delete(snapshot);
-        await snapshot.dispose();
+        // A cleanup failure never changes the step's outcome; the snapshot
+        // stays in the set and the end-of-run cleanup tries again.
+        try {
+          await snapshot.dispose();
+          snapshots.delete(snapshot);
+        } catch {}
       }
     })();
     inflight.set(
@@ -652,15 +662,40 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
               "Workspace changed outside the DAG scheduler",
               { workspaceState: true },
             );
-          for (const step of starting) {
-            const snapshot = await createWorkspaceSnapshot(
-              workspace,
-              policy,
-              before,
+          // All copies are taken here, before any apply can run.
+          const made = await Promise.allSettled(
+            starting.map(() =>
+              createWorkspaceSnapshot(workspace, policy, before),
+            ),
+          );
+          const refused = made.find((item) => item.status === "rejected");
+          if (refused) {
+            await Promise.allSettled(
+              made.flatMap((item) =>
+                item.status === "fulfilled" ? [item.value.dispose()] : [],
+              ),
             );
-            started.add(step.id);
-            launch(step, before, snapshot);
+            const reason = (refused as PromiseRejectedResult).reason;
+            // The workspace changed between the check and the copy.
+            if (reason instanceof SnapshotMismatchError)
+              throw new DagReconciliationError(reason.message, {
+                cause: reason,
+                workspaceState: true,
+              });
+            throw reason;
           }
+          starting.forEach((step, index) => {
+            started.add(step.id);
+            launch(
+              step,
+              before,
+              (
+                made[index] as PromiseFulfilledResult<
+                  Awaited<ReturnType<typeof createWorkspaceSnapshot>>
+                >
+              ).value,
+            );
+          });
         }
       }
       if (queued.length) {
@@ -704,9 +739,20 @@ export async function runDag(options: DagOptions): Promise<DagResult> {
     // Cancel what is still generating: nothing from it can apply now.
     controller.abort();
     await Promise.allSettled(inflight.values());
-    await Promise.allSettled([...snapshots].map((item) => item.dispose()));
-    snapshots.clear();
   }
+  // Whatever a generation's own cleanup could not remove. A failure here is
+  // reported, never a reason to fail the run.
+  const leftover = [...snapshots];
+  snapshots.clear();
+  const undisposed = (
+    await Promise.allSettled(leftover.map((item) => item.dispose()))
+  ).filter((item) => item.status === "rejected").length;
+  if (undisposed)
+    try {
+      await event("dag.snapshot.cleanup_failed", undefined, {
+        count: undisposed,
+      });
+    } catch {}
   if (workspaceError) throw workspaceError;
   if (failure) throw failure.error;
   return { checkpoint: structuredClone(checkpoint), appliedStepIds };
