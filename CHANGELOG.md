@@ -22,6 +22,14 @@
   before a slower sibling's proposal exists, so a colliding or invalid
   proposal is refused before its own patch is written, not before any patch
   is written. #365.
+- Each generation in a multi-step plan now reads a private frozen copy of the
+  workspace at its snapshot hash (context, requested sources, patch checks and
+  generator input), so a sibling's patch applying meanwhile cannot change what
+  it reads; the copy is removed when the generation ends. After an earlier
+  plain failure, a later workspace-state error (a worker modified the
+  workspace, or a rollback could not restore it) now ends the run as needing
+  reconciliation; a policy change still ends it as failed. The retro no longer
+  counts time a run was stopped as step wait. #373.
 
 ### Fixed
 
