@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-10
+
 ### Security
 
 - A cloud worker step now reads mandatory-memory export consent again
