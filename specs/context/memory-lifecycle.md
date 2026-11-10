@@ -84,6 +84,8 @@ A team wants durable project knowledge (requirements, constraints, observations)
   - Test: packages/engine/tests/mcp-call-definition.test.ts :: adds the memory ID column to an existing call log in place and keeps older entries readable (#295)
 - AC19: When several context engines on one database import the same shared memory file at the same time, as parallel plan steps do, the system shall store that memory once, and none of the imports shall fail. (#379)
   - Test: packages/engine/tests/context.test.ts :: imports one shared memory once when engines on the same database import it at the same time
+- AC20: When a cloud worker step waits for a worker slot and the operator withdraws a mandatory memory's export authorization during that wait, the system shall refuse the step before it reserves an inference call. (#375)
+  - Test: packages/engine/tests/managed-dag-safety.test.ts :: refuses a cloud step whose consent is revoked while it waits for a worker slot, before reserving a call
 
 ## Security considerations
 

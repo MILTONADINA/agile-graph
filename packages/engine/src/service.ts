@@ -1302,6 +1302,19 @@ export class GraphEngine {
       // Slot acquisition can await another process. Refuse drift before the
       // reservation, and again in the adapter immediately before each probe.
       await beforeInstalledCommand();
+      // The slot wait can outlast consent. Read the authorization again and
+      // refuse before reserving, so a withdrawn export costs nothing.
+      if (input.provider.kind !== "local") {
+        input = {
+          ...input,
+          context: await this.context.withCurrentExportAuthorization(
+            input.context,
+          ),
+        };
+        assertMandatoryExport(input.context, input.policy, {
+          attributedOnly: false,
+        });
+      }
       try {
         this.store.reserveCall(
           run.plan.id,

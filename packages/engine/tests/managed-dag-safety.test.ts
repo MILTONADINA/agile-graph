@@ -1694,6 +1694,74 @@ describe("workspace knowledge during managed runs", () => {
     expect(run.status).toBe("failed");
     expect(run.error).toMatch(/not been authorized for export/);
   });
+
+  it("refuses a cloud step whose consent is revoked while it waits for a worker slot, before reserving a call", async () => {
+    const { root, data } = await fixture((config) => {
+      config.policy.inference = "allowlisted";
+      config.policy.network = "allowlisted";
+      config.policy.allowedHosts = ["api.openai.com"];
+      config.policy.exportPaths = ["first.js"];
+      config.policy.providers = ["cloud"];
+      config.policy.maxWorkers = 1;
+    });
+    await configureProvider(data, {
+      id: "cloud",
+      kind: "openai",
+      model: "fixture",
+    });
+    const seen: string[][] = [];
+    const engine: GraphEngine = await open(root, {
+      worker: async (input) => {
+        seen.push(input.context.mandatory);
+        return result(input.objective);
+      },
+    });
+    await engine.context.index();
+    const memory = await engine.context.createMemory({
+      kind: "constraint",
+      text: reviewed,
+      sources: [(await engine.context.searchSymbols("first.js"))[0]!.source],
+    });
+    await engine.context.acceptMemory(memory.id);
+    await engine.context.promoteMemory(memory.id);
+    await engine.context.authorizeMemoryExport(
+      memory.id,
+      createHash("sha256").update(reviewed).digest("hex"),
+    );
+    await checked("git", ["add", "."], { cwd: root });
+    await checked("git", ["commit", "-m", "test: share constraint"], {
+      cwd: root,
+    });
+    const planned = await engine.createPlan({
+      objective: "Update the first export",
+      acceptance: ["The constant is updated"],
+      providerId: "cloud",
+      steps: [step("one", [], "cloud")],
+    });
+    // Another process holds the only worker slot. While this run waits for
+    // it, the operator withdraws consent, then the other process finishes.
+    expect(await engine.store.tryAcquireWorker("other-process", 1)).toBe(true);
+    const acquire = engine.store.tryAcquireWorker.bind(engine.store);
+    let revoked = false;
+    vi.spyOn(engine.store, "tryAcquireWorker").mockImplementation(
+      async (callId, limit) => {
+        const acquired = await acquire(callId, limit);
+        if (!acquired && !revoked) {
+          revoked = true;
+          await engine.context.revokeMemoryExport(memory.id);
+          engine.store.releaseWorker("other-process");
+        }
+        return acquired;
+      },
+    );
+    const reserve = vi.spyOn(engine.store, "reserveCall");
+    const run = await engine.wait((await engine.start(planned.id)).id);
+    expect(revoked).toBe(true);
+    expect(seen).toHaveLength(0);
+    expect(reserve).not.toHaveBeenCalled();
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatch(/not been authorized for export/);
+  });
 });
 
 describe("code review of a multi-step plan", () => {
