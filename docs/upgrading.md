@@ -168,3 +168,16 @@ a database only when its version is newer than its own.
 - **New optional policy field `reviewPrior`.** It is off when absent. An
   older engine refuses a `.graph/project.json` that sets it, so remove the
   field before rolling back to 0.7.x.
+
+## 0.8.1
+
+- **No action needed.** A patch release: no configuration, MCP tool hash or
+  run-store change, and rolling back to 0.8.0 needs nothing.
+- **Cloud steps refuse withdrawn export consent sooner.** A cloud worker step
+  that waited for a worker slot reads mandatory-memory export consent again
+  and is refused before it reserves an inference call, so a withdrawn consent
+  no longer uses budget or a turn.
+- **The Laya sidecar needs new Python packages.** If you run it, reinstall
+  its environment from `sidecars/laya/requirements.txt` so it gets `torch`
+  2.15.0 and `transformers` 5.22.2. The checkpoint and its provisioned
+  directory are unchanged, so there is nothing to provision again.
