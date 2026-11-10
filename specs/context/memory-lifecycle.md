@@ -82,6 +82,8 @@ A team wants durable project knowledge (requirements, constraints, observations)
   - Test: packages/engine/tests/mcp-memory-origin.test.ts :: a local client's proposal records proposedBy local
   - Test: packages/engine/tests/mcp-memory-origin.test.ts :: a memory a person adds directly has no proposedBy
   - Test: packages/engine/tests/mcp-call-definition.test.ts :: adds the memory ID column to an existing call log in place and keeps older entries readable (#295)
+- AC19: When several context engines on one database import the same shared memory file at the same time, as parallel plan steps do, the system shall store that memory once, and none of the imports shall fail. (#379)
+  - Test: packages/engine/tests/context.test.ts :: imports one shared memory once when engines on the same database import it at the same time
 
 ## Security considerations
 

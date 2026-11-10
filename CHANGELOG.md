@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Parallel steps of a multi-step plan no longer fail with `UNIQUE constraint
+failed: memories.id` when they import the same shared memory from
+  `.graph/knowledge/` at the same time. #379.
+
 ## [0.8.0] - 2026-11-09
 
 ### Added

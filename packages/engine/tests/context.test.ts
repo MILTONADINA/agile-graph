@@ -838,6 +838,34 @@ describe("local context indexing", () => {
 });
 
 describe("durable memory", () => {
+  it("imports one shared memory once when engines on the same database import it at the same time", async () => {
+    const { engine, root, directory } = await fixture();
+    const memory = await engine.createMemory({
+      kind: "constraint",
+      text: "Uploads reject dot-dot segments.",
+    });
+    await engine.acceptMemory(memory.id);
+    await engine.promoteMemory(memory.id);
+    // Parallel plan steps each open their own engine on one run database
+    // and import the committed knowledge as they index.
+    for (let round = 0; round < 8; round++) {
+      const shared = join(directory, `run-data-${round}`);
+      const racers = Array.from({ length: 8 }, () => {
+        const racer = new ContextEngine({
+          projectId: "test-project",
+          root,
+          dataDir: shared,
+          policy: structuredClone(DEFAULT_POLICY),
+        });
+        engines.push(racer);
+        return racer;
+      });
+      await Promise.all(racers.map((racer) => racer.importSharedMemories()));
+      const listed = await racers[0]!.listMemories();
+      expect(listed.filter((item) => item.id === memory.id)).toHaveLength(1);
+    }
+  });
+
   it("proposes privately, requires acceptance, shares explicitly and preserves supersession", async () => {
     const { engine, root } = await fixture();
     const first = await engine.createMemory({
