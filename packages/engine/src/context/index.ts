@@ -2127,8 +2127,11 @@ export class ContextEngine {
       }
       // Shared files are explicit reviewed project knowledge. Imported records
       // retain their accepted status; they never silently overwrite local text.
+      // Engines on one database (parallel plan steps) can import the same
+      // file at once: a row inserted since the check above came from that
+      // same file, so the later insert keeps it rather than failing.
       await this.db.run(
-        "INSERT INTO memories(id,project_id,status,payload) VALUES(?,?,?,?)",
+        "INSERT INTO memories(id,project_id,status,payload) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING",
         [record.id, this.projectId, record.status, JSON.stringify(record)],
       );
       imported++;
