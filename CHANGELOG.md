@@ -4,6 +4,11 @@
 
 ### Security
 
+- A cloud worker step now reads mandatory-memory export consent again
+  after it gets a worker slot, and refuses before reserving an inference
+  call. Consent withdrawn while the step waited for a slot held by another
+  process used to reserve a call (budget and a turn) before the worker
+  adapter refused it; nothing was ever sent (#375).
 - The Laya sidecar now pins `torch` 2.15.0, `transformers` 5.22.2,
   `safetensors` 0.8.0 and `huggingface-hub` 2.4.0, up from 2.8.0, 4.57.6,
   0.6.2 and 0.36.2. This clears the dismissed `torch` and `transformers`
