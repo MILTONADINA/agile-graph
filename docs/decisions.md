@@ -152,7 +152,8 @@ python3 sidecars/laya/server.py provision \
   --checkpoint english \
   --allow-host huggingface.co \
   --allow-host cas-bridge.xethub.hf.co \
-  --allow-host cas-bridge.xethub-eu.hf.co
+  --allow-host cas-bridge.xethub-eu.hf.co \
+  --allow-host us.aws.cdn.hf.co
 ```
 
 The English weights are roughly 1.7 GB. Downloads validate HTTPS and each
